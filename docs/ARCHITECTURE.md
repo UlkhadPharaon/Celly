@@ -1,182 +1,338 @@
-# Architecture — Cell-Mastering
+# Architecture — Celly v0.2
 
-Interactive 3D biology lab: a cell you manipulate with bare hands, tracked by webcam
-(MediaPipe Hand Landmarker), rendered with three.js in a Vite + TypeScript app.
+How the shipped application is put together. For *why* each choice was made, see
+[`../DECISIONS.md`](../DECISIONS.md); for the research that preceded it, see
+[`RESEARCH.md`](RESEARCH.md).
 
-## 1. Module map
+## 1. Principles
+
+1. **One renderer, one scene, one camera.** Pages are groups inside a single `THREE.Scene`; the 3D
+   hands and the environment persist across navigation. Switching sections never re-creates the
+   WebGL context.
+2. **Pure logic is DOM-free.** Pinch detection, the gesture state machine, side resolution,
+   filtering, scoring and the Leitner scheduler are plain TypeScript with no DOM/Three imports, so
+   they run under Vitest in Node.
+3. **DOM for text, WebGL for space.** Organelle overlays, quizzes, the HUD and labels are HTML:
+   selectable, translatable, announced by screen readers and cheap to lay out. Only the cell,
+   graph, hands and particles are rendered in 3D.
+4. **The frame loop is the only clock.** Tweens, damping, camera moves and quality updates are all
+   driven by the same `dt`; nothing schedules its own `setTimeout` for animation.
+5. **Tracking never blocks rendering.** Inference runs once per camera frame; the render loop reuses
+   the latest result.
+
+## 2. Module map
 
 ```
 src/
-  main.ts                  # entry: boots App, wires panels
-  app/App.ts               # orchestrator: owns subsystems, frame loop, state machine
+  main.ts                 boot: fonts, CSS, CellyApp, window.__celly
+  types.ts                shared domain types (no DOM, no Three)
   core/
-    EventEmitter.ts        # tiny typed bus — modules talk through events, not imports
-    Settings.ts            # persisted user settings (quality, language, gains, thresholds)
-    Quality.ts             # low/high presets applied to renderer + scene + particles
+    app.ts                orchestrator: loop, frames, hover, intents, pages, settings, HUD
+    store.ts              reactive Store<T> + versioned localStorage helpers
+    tween.ts              cancellable numeric/vector tweens with easing
+    math.ts               clamp, lerp, damp, distances, seeded RNG helpers
+    events.ts             tiny typed emitter used by UI and pages
+    replayHand.ts         synthetic 21-landmark hand for tests and screenshots
+  tracking/
+    handTracker.ts        getUserMedia, HandLandmarker (GPU→CPU), detect(), axis conversion
+    landmarkFilter.ts     One-Euro filter per landmark
+    handSide.ts           MediaPipe label flip, manual swap, slot matching, 150 ms debounce
+    quality.ts            0–100 score from confidence, size, margin and jitter
+  gestures/
+    pinch.ts              ratio-based pinch value, fist rejection, hysteresis, 70 ms hold
+    gestureEngine.ts      state machine → Intent[]; knows nothing about pages or Three
+    cursor.ts             cursor descriptors shared by the engine and the UI
   scene/
-    SceneManager.ts        # renderer/scene/camera/resize/DPR, XR-ready hook (stub)
-    Lighting.ts            # PBR lights, shadows, optional HDRI (PMREM)
-    LabEnvironment.ts      # procedural bench, microscope, shelves, whiteboard, beakers
-    Beakers.ts             # 3 labelled beakers, concentration metadata, drop-zone volumes
-  cell/
-    CellModel.ts           # builds a named-mesh cell from a CellSpec; parts API
-    cells/animalCell.ts    # procedural animal cell parts
-    cells/plantCell.ts     # cell wall, chloroplasts, large central vacuole
-    cells/redBloodCell.ts  # biconcave disc (osmosis star)
-    PartEditor.ts          # show/hide, isolate, opacity, color, explode slider, reset
-    Deformer.ts            # per-vertex morphs: osmotic volume, crenation, burst
-  data/
-    organelles.json        # ALL organelle metadata (id, name{en,fr}, function, facts, size, analogy)
-    cellTypes.json         # which organelle ids each cell type contains + layout hints
-  hand/
-    HandTracker.ts         # getUserMedia + lifecycle/errors (permission, no cam, in use)
-    TrackingWorker.ts      # worker: HandLandmarker (VIDEO, GPU→CPU fallback) + transfer bitmaps
-    LandmarkBuffer.ts      # shared typed-array protocol main<->worker, fps stats
-    Smooth.ts              # OneEuroFilter (per landmark x,y,z + hand center)
-    Depth.ts               # apparent-size depth + worldLandmarks meters + calibration params
-    gestures.ts            # PURE state machine: pinch/grab/point/palm/two-hand (hysteresis)
-    HandPose.ts            # 21-joint skeleton, bone vectors, hand frame (orientation)
-    HandMesh.ts            # procedural articulated hand (capsules+spheres), per-hand
-    InteractionManager.ts  # gestures + depth -> intents: grab(part), move, rotate, scale, select
-    PipOverlay.ts          # mirrored webcam PiP + landmark canvas overlay (toggleable)
-    Calibration.ts         # 3-step wizard: neutral, pinch, two-hands -> S0, gains, offsets
-    MouseFallback.ts       # orbit/pointer raycast when no webcam (always available)
+    sceneManager.ts       renderer, camera, bloom, framings, environment, dust, quality modes
+    cellModel.ts          procedural cell, 15 organelles, picking, isolation, selection halo
+    knowledgeScene.ts     nodes, labels, edges, focus transform, picking
+    knowledgeLayout.ts    deterministic seeded 3D force layout
+    handRig.ts            GLB retargeting, procedural fallback, DrivenHand interface
+    handLayer.ts          screen→world placement, mirroring, pinch-midpoint anchoring
+    shapes.ts             geometry factories shared by organelles
+    textures.ts           procedural canvases (speckle, glow, cristae, grain…)
+    types.ts              scene-side shared types
+  pages/
+    page.ts               Page / PageContext / PageActions contracts
+    interactiveLab.ts     lab page: rail, selection, overlay, scale clamps
+    knowledge.ts          graph page: focus, hops, camera framing, cross-links
+    testing/
+      testingPage.ts      home, MCQ, flashcards, results, review
+      leitner.ts          1–5 box scheduler + persistence
+      progress.ts         best score / attempts + grading labels
   ui/
-    InfoPanel.ts           # organelle overlay: outline + leader line + follow panel
-    Hud.ts                 # tracking status, fps, hand count, delegate (GPU/CPU)
-    ControlsPanel.ts       # cell type switch, part editor, experiments, settings
-    ExperimentPanel.ts     # play/pause/reset/speed, concentration slider, explanation text
-    i18n.ts                # EN/FR dictionary + t() + language toggle
-    StatusOverlay.ts       # camera error cards with recovery instructions
-  experiments/
-    OsmosisSim.ts          # dV/dt = Lp·A(V)·ΔΨ ODE, states: swell/lyse/crenate/turgid/plasmolyse
-    Particles.ts           # water + solute animated particles, density ∝ concentration
-    VolumeChart.ts         # live canvas graph V(t)
-  types.ts                 # shared interfaces
+    shell.ts              top bar, legend, toast, page layer, auto-rotate control
+    tabs.ts               3-section navigation
+    hud.ts                telemetry panel (hands, pinch, quality, FPS)
+    overlay.ts            anchored info card + placement logic
+    controlPanel.ts       webcam preview, mirror/swap, language, quality, accessibility
+    onboarding.ts         3-step first-run flow + camera error states
+    cursorLayer.ts        virtual cursors, pinch rings, hints (DOM)
+    webcamPreview.ts      mirrored preview + landmark debug canvas
+    buttons.ts            registry: gesture hit-testing, hover/press/dwell state
+    dom.ts                el(), escapeHtml(), inline SVG icon set
+  data/
+    catalog.ts            typed exports + lookups + question helpers
+    organelles.json       15 organelles, bilingual
+    knowledge.json        36 nodes, bilingual
+    questions.json        48 MCQ + 36 flashcards + 3 sets, bilingual
+    cells.json            v0.1 cell metadata retained for reference
+  styles/main.css         tokens, glass, grain, layout, cursor, responsive rules
 ```
 
-Rules:
-- `gestures.ts`, `Smooth.ts`, `Depth.ts`, `OsmosisSim.ts` are **pure, DOM-free** → unit-testable.
-- Rendering never awaits inference: worker posts results into a buffer; main loop reads latest.
-- Adding an organelle = edit `organelles.json` + add its mesh builder in `cells/*.ts`. Nothing else.
-
-## 2. Data flow
-
-```mermaid
-flowchart LR
-  subgraph capture [Capture thread]
-    CAM[Webcam getUserMedia]
-  end
-  subgraph worker [Tracking Web Worker]
-    HL[HandLandmarker VIDEO mode GPU→CPU]
-    OE[OneEuro smoothing]
-  end
-  subgraph main [Main rAF loop]
-    G[Gesture engine hysteresis]
-    D[Depth estimation + calibration]
-    I[InteractionManager]
-    OS[OsmosisSim ODE]
-    SC[three.js scene: cell, lab, hand mesh, particles]
-  end
-  subgraph ui [UI layer]
-    HUD[Hud + status cards]
-    IP[InfoPanel i18n EN/FR]
-    CP[Controls + Experiment panel]
-    PIP[Webcam PiP overlay]
-  end
-  CAM -->|ImageBitmap transfer| HL
-  HL -->|landmarks + worldLandmarks typed arrays| G
-  HL --> OE --> G
-  G --> I
-  D --> I
-  CAM --> PIP
-  I --> SC
-  OS -->|volume + state| SC
-  CP -->|concentration, speed| OS
-  I -->|selected organelle id| IP
-  G --> HUD
-  SC -->|60fps render| OUT[(Screen)]
-```
-
-## 3. Scene graph
+## 3. Boot
 
 ```
-Scene
-├── LabEnvironment (merged static meshes: bench, shelves, microscope, whiteboard)
-│   └── Beakers ×3 (hypotonic 0.2% | isotonic 0.9% | hypertonic 3% NaCl) [drop zones]
-├── CellRig (group, positioned center-bench; hand-grab moves/rotates/scales this)
-│   └── CellModel (active cell type)
-│       ├── parts: Map<organelleId, Mesh|Group>   # membrane, nucleus, ER, Golgi, mito...
-│       ├── Deformer (applies osmotic volume + shape morph to membrane/cytoplasm)
-│       └── OsmosisParticles (water + solute Points, instanced)
-├── HandLayer
-│   ├── HandMesh left/right (procedural capsules + joints)
-│   └── LaserPointer (index ray) + Reticle
-├── Lights (key directional+shadow, fill, rim, ambient/HDRI IBL)
-└── InfoAnchor (leader line start, world-space, panel projected to screen)
+main.ts
+  └─ new CellyApp(#app)
+       ├─ Shell (top bar, tabs, HUD, legend, control panel, cursor layer, overlay)
+       ├─ SceneManager (renderer, camera, environment, bloom)
+       ├─ HandTracker (lazy: only after the user enables the camera)
+       ├─ HandLayer → loadHands() (GLB async, procedural fallback)
+       ├─ pages: InteractiveLab, KnowledgePage, TestingPage
+       ├─ setPage('interactive', animate: false)
+       └─ start(): requestAnimationFrame(loop)
 ```
 
-## 4. Interaction model (hand → world)
+On a first visit, `Onboarding.open()` runs before the camera is requested. The onboarding "Enable
+camera" path calls `startCamera()`; the "Continue with mouse" path skips the tracker entirely. The
+camera is also started automatically after onboarding if permission was already granted.
 
-1. Worker emits per-hand: 21 normalized landmarks, 21 world landmarks (meters), handedness.
-2. `Smooth`: OneEuro per scalar channel (minCutoff 1.0 Hz, beta 0.05 scale-tuned; dCutoff 1 Hz).
-3. `Depth`: hand scale s = |wrist→middleMCP|; d = f(s/S0) clamped to interaction slab; S0 from
-   calibration. Two-hand distance uses worldLandmarks (meters) — more stable.
-4. `gestures.ts` (Schmitt triggers, min hold 80 ms):
-   - pinch enter 0.28 / exit 0.45 (thumb-index distance ÷ hand scale)
-   - open palm (all 4 tips > 1.9× their MCP distance from wrist, pinch false) = release
-   - index-point: tip8 extended, tips 12/16/20 curled → laser
-   - dwell 700 ms on a part OR pinch while pointing = select
-   - two-hand: both pinched → Δ distance = scale (gain slider), Δ angle of hand-axis = twist rotate
-5. `InteractionManager` maps intents:
-   - one-hand grab cell → attach CellRig to hand world position; wrist-forward drag;
-     forearm yaw/pitch rotates cell (with smoothing so rotation ≠ position jitter)
-   - grab organelle (ray under pinch) → detach visually along explode vector, hold in hand
-6. Every numeric above is exposed in Settings (hence sliders) — tuning is a UI action, not a rebuild.
-
-## 5. Camera error state machine
+## 4. Frame loop
 
 ```
-idle → requesting → live
-requesting → denied(NotAllowedError)         → "Enable camera in browser settings…"
-requesting → not-found(NotFoundError)        → "No camera detected. Plug in / check privacy shutter."
-requesting → in-use(NotReadableError)        → "Camera busy: close Zoom/OBS… then Retry."
-requesting → insecure-context                 → "Webcam needs localhost or HTTPS — open the Pages URL."
-live → lost → auto-retry ×3 → manual retry card
+loop(now)
+  dt = clamp((now - lastTime) / 1000, 0.0001, 0.05)
+  tick()
+    if synthetic hands are injected:
+      frames = replay frames; updateHover(); stepGestures(); clear pinch edges
+    else:
+      raw    = tracker.ready ? tracker.detect() : null
+      frames = buildFrames(raw, dt)
+      updateHover()
+      stepGestures(raw?.tMs ?? now)
+      update dwell state on the button registry
+  hands.update(frames, settings, dt, camera)
+  currentPage.update(dt, elapsed)
+  webcamPreview.draw(frames, settings)
+  updateCursors()
+  updateHud(now)          // throttled to ~10 Hz
+  scene.render(dt)
 ```
 
-## 6. Osmosis physics (see RESEARCH.md §4 for sources)
+`buildFrames()` is where raw detections become `HandFrame`s:
 
-State per sim tick (fixed dt = 1/120 s, speed multiplier, accumulator):
+1. side resolution (`HandSideResolver`) with the label flip and user swap;
+2. per-landmark One-Euro filtering (normalized and world);
+3. pinch value, fist check and hysteresis (`updatePinch`);
+4. cursor (thumb/index midpoint) in CSS pixels and NDC, palm point for rotation;
+5. presence and a 250 ms tolerance for momentary detection drops.
+
+`updateHover()` resolves two independent targets: a DOM button id from the `ButtonRegistry`
+(hit-testing the real button rectangles) and a scene id from `page.pick(x, y)`. UI wins: while the
+cursor is over a button, the scene under it is not hovered.
+
+`stepGestures()` builds a `GestureContext` and calls `GestureEngine.step()`. The returned `Intent[]`
+is dispatched to the active page, except `click`, which goes through the button registry, and
+`hover`, which only updates chrome.
+
+## 5. Tracking
+
+| Stage | Detail |
+|---|---|
+| Camera | `getUserMedia({ video: 1280×720 ideal, 30–60 fps, facingMode: 'user' })` |
+| Model | `HandLandmarker`, `runningMode: 'VIDEO'`, `numHands: 2`, GPU delegate → CPU retry |
+| Runtime | `public/mediapipe-wasm`, `public/models/hand_landmarker.task` (self-hosted) |
+| Timing | `requestVideoFrameCallback` when available, otherwise `requestAnimationFrame` |
+| Axes | MediaPipe world landmarks are image-aligned (y down, z toward −camera); converted once to y-up / +z toward the viewer |
+| Filter | One-Euro with per-axis min-cutoff and beta; raw values stay available to the debug view |
+| Sides | `Left`/`Right` flipped once (selfie assumption), then `handsSwap`; slots matched by nearest wrist; label changes debounced 150 ms; a lost hand starts a fresh slot |
+| Quality | weighted confidence, hand size, frame margin and motion jitter → 0–100 + Good/Medium/Poor |
+
+Callback latency, not inference, dominates perceived lag; the filter's beta is tuned so a deliberate
+pinch is not rounded away.
+
+## 6. Gestures
+
+`pinch.ts` computes a dead-zoned palm-width ratio
+
 ```
-Ψ_out  = -i·C_out·R·T          (i=1.9 NaCl, C mol/L, R=8.314, T=310 K)
-Ψ_in   = -i·C_in·R·T·(V0/V)    (internal solute amount conserved ⇒ concentration ∝ 1/V)
-Ψ_p    = 0 (animal/RBC) | k_wall·(V-V_wall)^1.5 clamp (plant wall elasticity)
-ΔΨ     = (Ψ_in + Ψ_p) - Ψ_out
-dV/dt  = Lp · A(V) · ΔΨ · v̄w   (A(V)=A0·(V/V0)^(2/3); water molar volume converts flux→dV)
-Animal/RBC: V ≥ V_lyse ⇒ status=LYSED (burst visual, sim freezes)
-Plant: V ≥ V_wall ⇒ turgid plateau (never lyses); protoplast volume < wall void ⇒ PLASMOLYSED
+r     = |tip[4] - tip[8]| / |mcp[5] - mcp[17]|
+pinch = 1 - smoothstep(0.10k, 0.55k, r)
 ```
-Visual mapping: membrane + cytoplasm scale ∝ (V/V0)^(1/3); RBC/animal crenation = noise-amplitude
-morph when V/V0 < 0.85; turgid = membrane presses wall; plasmolysis = protoplast group shrinks
-inside rigid wall mesh. Water particle count crossing membrane ∝ |dV/dt|, direction by sign;
-solute outside density ∝ C_out.
 
-## 7. Rendering & performance budget
+The normalized image landmarks drive the ratio; world landmarks are averaged in only when their
+ratio is within 0.18 of the image ratio, so a noisy metric z can never break the gesture. `k` is the
+user's sensitivity (0.7–1.5, Firm 0.8 / Normal 1.0 / Light 1.3), stored with the other settings.
+Real pads touch with the landmark centres still ~2 cm apart, which is why the dead zone exists. A
+fist (each fingertip closer to the wrist than its MCP) is rejected. `updatePinch()` implements enter
+`> 0.55`, exit `< 0.38` and a 70 ms minimum hold; it returns `start`/`end` edges. `candidateSince`
+uses **−1** as "no candidate" so a clock starting at 0 works.
 
-- Target: 60 fps on a laptop-class iGPU/RTX3050. DPR clamp: high 2.0, low 1.0.
-- Shadows: high = one directional light with 1k map + PCFSoft; low = off (baked-look ambient).
-- HDRI (CC0, ≤2 MB env) only in high; low uses 3-light rig.
-- Draw calls: static lab merged into ≤3 meshes; ribosomes/mitochondria instanced; ≤80 calls total.
-- Textures: procedural canvas textures ≤512²; no binary image assets besides model+wasm.
-- Quality toggle rebuilds light/shadow/particle config at runtime (no reload).
-- WebXR seam: `SceneManager.enableXR(stub)` — renderer.xr left disabled; camera control is an
-  interface (`CameraRigController`) so a future XR rig replaces only that class.
+Cursor mapping applies a reach gain before NDC conversion: the middle 84 % of the camera frame is
+mapped to the full screen (`reach()`, 8 % → 0, 92 % → 1), with `unreach()` as its inverse for
+synthetic hands. This keeps the edges of the UI reachable without leaving the frame; the 3D hand is
+anchored to the same mapped cursor, so hand and pointer stay together.
 
-## 8. Testing strategy
+`gestureEngine.ts` is a pure reducer. It receives hands, hover targets, page capabilities (swipe,
+rotate, scale, dwell) and time; it returns the state, a hint, dwell progress, cursor descriptors and
+intents. Rules:
 
-- vitest: gestures (hysteresis no-flicker with noisy synthetic landmarks), two-hand scale/rotation
-  math, OneEuro convergence, depth calibration monotonicity, osmosis ODE (lysis threshold, plant
-  turgor plateau, plasmolysis flag, isotonic stability, energy sanity = volume never negative).
-- Playwright smoke: fake camera flags, page load, WebGL context, zero console errors, HUD present.
-- Manual (user only): real-hand ergonomics — thresholds/gains shipped adjustable.
+- **Right pinch on a scene id** → `select`; on empty space → `unselect`.
+- **Right pinch on a UI id** → click candidate; on release within 500 ms and 24 px → `click`.
+- **Pinch + horizontal drag in empty space** → `swipe` move/end when the page enables it.
+- **Left pinch + palm movement** → `rotate` (gain 7); active even while the right hand hovers.
+- **Both hands pinching** → `scale`, ratio against the distance at gesture start, 0.35 lerp,
+  clamped by the page. Two hands override rotate and suppress select.
+- **Cooldown** — 150 ms after a two-hand gesture, no select/click can fire.
+- **Hand loss** — when the primary hand disappears, click/swipe/rotate state is cleared and the
+  engine returns to `IDLE`.
+
+Intents are a closed union (`select`, `unselect`, `click`, `rotate`, `scale`, `swipe`, `hover`,
+`state`), so pages implement `onIntent()` without importing the engine.
+
+## 7. Scene
+
+`SceneManager` owns the renderer (`antialias`, ACES tone mapping, sRGB), the perspective camera, the
+composer (`RenderPass` → `UnrealBloomPass` → `OutputPass`), a procedural PMREM environment, the lab
+floor/rings and the ambient dust. It exposes three framings and tweens between them when pages
+change:
+
+| Page | Camera position | Target | FOV |
+|---|---|---|---|
+| Interactive | `(0, 0.14, 7.15)` | origin | 42° |
+| Knowledge | `(0, 0.85, 16.4)` | slightly above origin | 42° |
+| Test | `(0, 0.4, 10.6)` | origin | 42° |
+
+The cell rig is a nested transform:
+
+```
+rig (user rotation)
+ └─ zoom (user scale)
+     └─ focus (selection position tween)
+         └─ contentRoot (selection scale tween)
+             └─ organelle groups (named, raycastable)
+```
+
+Selection sets `focus`/`contentRoot` so the chosen organelle sits at the origin at a comfortable
+size; unselect tweens back to the saved transform. Non-selected parts are ghosted through material
+opacity, not hidden, so the cell keeps its spatial context.
+
+Picking is a single raycast down the cell tree. Hits are ranked by specificity
+(`membrane 0 … nucleus 4, ribosome 5, everything else 6`) with the nearest hit breaking ties, which
+prevents the membrane and nuclear envelope from swallowing every pick.
+
+The knowledge graph has its own root (`knowledgeGroup`), nodes as emissive spheres, billboard label
+sprites and a single `LineSegments` buffer for edges with an animated time uniform. Focus tweens the
+root, dims non-neighbours and restricts picking to the focused node's neighbours.
+
+## 8. Pages
+
+Every page implements `Page` (`src/pages/page.ts`):
+
+```ts
+interface Page {
+  id: PageId;
+  root: HTMLElement;
+  enter(): void;                 // show the DOM, start tweens, set page capabilities
+  exit(): void;                  // hide, cancel tweens, close overlay
+  update(dt, elapsed): void;     // per-frame page animation
+  onIntent(intent): void;        // select / unselect / rotate / scale / swipe
+  pick(x, y): string | null;     // raycast from CSS pixels
+  setHovered(id): void;          // highlight
+  setLanguage(lang): void;
+  setAutoRotate?(value): void;
+  closeOverlay(): void;
+  dispose(): void;
+}
+```
+
+Pages receive a `PageContext` with the scene, button registry, shared overlay, shell, settings and
+cross-section actions (`openLab`, `openKnowledge`, `openTest`, `toast`). The router is
+`CellyApp.setPage()`: it calls `exit()` on the old page, `enter()` on the new one, tweens the camera,
+updates the tabs and the auto-rotate control, and keeps the hands mounted.
+
+## 9. Hands
+
+`HandLayer` owns one `DrivenHand` per side. Each frame it
+
+1. maps the wrist's normalized position to a world point on the `z = 1.95` plane;
+2. damps the container position and scale (hand size cue);
+3. mirrors the world landmarks for display (`mirrorX`/`mirrorY`) and retargets the rig;
+4. projects the **pinch midpoint** (bones 4/8) through the camera and corrects the container by the
+   screen-space error, so the fingertips meet the virtual cursor;
+5. places the pinch glow at the same midpoint and shows/hides landmark markers.
+
+The GLB path maps bone names `00_WRIST … 20_PINKY_TIP` to the 21 MediaPipe indices, solves each
+bone direction in the hand-local frame and damps the wrist rotation. The procedural fallback builds
+capsules and joints from the same landmarks; both implement `DrivenHand`, so nothing above the layer
+knows which one is active.
+
+## 10. Data and persistence
+
+Content is JSON imported at build time and typed in `catalog.ts`, which also exposes maps
+(`ORGANELLE_BY_ID`, `KNOWLEDGE_BY_ID`, `MCQ_BY_ID`), localization (`loc`), and question helpers
+(`shuffled`, `prepareQuestion`). There is no runtime fetch and no content CMS.
+
+| Key | Contents |
+|---|---|
+| `celly:v02:leitner` | `{ [flashcardId]: { box, lastSeen, correct, wrong } }` |
+| `celly:v02:progress` | `{ best: { [quizKey]: ratio }, attempts, lastPlayed }` |
+| `celly:v02:settings` | language, mirror, swap, quality, reduced motion, high contrast, auto-rotate, dwell |
+| `celly:v02:onboarded` | onboarding completed flag |
+
+`loadJSON`/`saveJSON` swallow storage failures (private mode, quota), so the app degrades to a
+session-only experience instead of throwing.
+
+## 11. DOM layering and input ownership
+
+```
+#app
+ └─ .stage            canvas (WebGL)
+    ├─ .grain / .vignette
+    ├─ .page-layer     page DOM (lab rail, knowledge hints, test cards)
+    ├─ .topbar         brand, tabs, auto-rotate, help
+    ├─ .left-rail      HUD + gesture legend  pointer-events: none
+    ├─ .controls       preview + settings
+    ├─ .overlay-anchor info card
+    ├─ .onboarding     first-run flow
+    └─ .cursor-layer   cursors + hints    pointer-events: none
+```
+
+Only real controls receive pointer events. The HUD and legend opt out entirely, so they can overlap
+the scene — or a page card — without stealing a click. They share one flex-column rail so the legend
+follows the HUD when it grows instead of being pinned at 50 % of the viewport; on viewports shorter
+than 860 px and on the Test page the legend collapses to its header. The cursor layer is purely
+visual.
+
+Mouse fallback: pointer movement drives the same hover/raycast path; clicks are dispatched through
+the button registry; drag rotates and the wheel scales. Gesture and pointer input therefore share
+one intent pipeline.
+
+## 12. Test hooks
+
+`window.__celly` exposes the app for Playwright and the screenshot harness:
+
+| Member | Purpose |
+|---|---|
+| `injectHand(side, x, y, pinch, present)` | Build a synthetic 21-landmark hand and run it through the real pipeline |
+| `clearInjectedHands()` | Remove synthetic hands and reset gesture state |
+| `sceneAnchor(id)` | Project a scene element's world position to CSS pixels |
+| `debugHand(side)` | Container/wrist/scale diagnostics |
+| `state` | Page, hands, hover, pinch, tracker and renderer snapshot |
+
+Injected hands are built in `replayHand.ts` from the same anatomical model the filter and rig expect,
+including the inverse mirror transform, so the cursor lands exactly on the requested pixel. E2E and
+screenshots therefore exercise real hover, real pinch hysteresis and real intents.
+
+## 13. Extension points
+
+- **New organelle**: add a builder in `cellModel.ts`, an entry in `organelles.json`, a colour and a
+  pick priority if it is a shell.
+- **New knowledge node**: append to `knowledge.json` with links; the layout is seeded and will place
+  it deterministically. No code change.
+- **New quiz mode**: implement `onIntent` + a render function in `testingPage.ts`; scoring helpers
+  and persistence already exist.
+- **New gesture**: extend the `Intent` union, handle it in `gestureEngine.ts`, and implement it in
+  the pages that support it. The engine stays page-agnostic.
+- **New renderer effect**: add a pass in `sceneManager.ts`; quality modes can skip it.

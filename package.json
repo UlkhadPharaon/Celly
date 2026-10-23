@@ -1,8 +1,8 @@
 {
-  "name": "cell-mastering",
-  "version": "0.1.0",
+  "name": "celly",
+  "version": "0.2.1",
   "private": true,
-  "description": "Interactive 3D biology lab: control a cell with your bare hands (webcam hand tracking + three.js)",
+  "description": "Celly v0.2 — a touch-free 3D cell biology laboratory, knowledge network and quiz, controlled by your bare hands",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -11,18 +11,25 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,css}\" \"*.{md,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.5",
+    "@fontsource/space-grotesk": "^5.2.5",
     "@mediapipe/tasks-vision": "1.1.0",
     "three": "0.186.1"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
     "@types/three": "0.186.0",
-    "typescript": "7.0.2",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.22.0",
     "vite": "8.3.4",
     "vitest": "5.0.4"
   }

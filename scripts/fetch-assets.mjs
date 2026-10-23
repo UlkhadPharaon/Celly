@@ -1,7 +1,9 @@
-// Copies the MediaPipe wasm files out of the pinned npm package into /public
-// (so the app runs offline, no CDN) and downloads the hand_landmarker.task model.
+// Prepares the local-only runtime assets:
+//  1. copies the MediaPipe wasm files out of the pinned npm package into /public
+//  2. downloads hand_landmarker.task (offline inference, no CDN)
+//  3. copies the rigged hand meshes into /public if they are vendored at the repo root
 // Idempotent: skips anything already present at the expected size.
-import { cpSync, existsSync, mkdirSync, statSync, createWriteStream } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, statSync, createWriteStream, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { get } from 'node:https';
@@ -58,3 +60,25 @@ if (existsSync(modelDst) && statSync(modelDst).size > 1_000_000) {
   };
   dl(MODEL_URL, 0);
 }
+
+// 3) hand meshes — vendored at the repo root, served from /public at runtime.
+//    When they are missing the app swaps in a procedural hand, so this is best-effort.
+const publicDir = join(root, 'public');
+let handCount = 0;
+for (const dir of [root, join(root, '3d models'), join(root, 'Handtracking systems', 'Handtracking systems')]) {
+  if (!existsSync(dir)) continue;
+  for (const f of readdirSync(dir)) {
+    if (!f.startsWith('hands_') || !f.endsWith('.glb')) continue;
+    const src = join(dir, f);
+    const dst = join(publicDir, f);
+    if (existsSync(dst) && statSync(dst).size === statSync(src).size) continue;
+    try {
+      cpSync(src, dst);
+      handCount++;
+    } catch {
+      /* locked or unreadable — the procedural fallback covers it */
+    }
+  }
+}
+if (handCount) console.log(`[fetch-assets] ${handCount} hand mesh(es) -> public/`);
+else console.log('[fetch-assets] hand meshes present (or absent — procedural fallback active)');

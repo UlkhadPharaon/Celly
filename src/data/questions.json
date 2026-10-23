@@ -1,0 +1,926 @@
+{
+  "mcq": [
+    {
+      "id": "q01",
+      "question": { "en": "Which organelle contains the cell's DNA?", "fr": "Quel organite contient l'ADN de la cellule ?" },
+      "options": [
+        { "en": "Nucleus", "fr": "Le noyau" },
+        { "en": "Ribosome", "fr": "Le ribosome" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Lysosome", "fr": "Le lysosome" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "The nucleus stores the chromosomes and protects them behind a double membrane.",
+        "fr": "Le noyau stocke les chromosomes et les protège derrière une double membrane."
+      },
+      "category": "Organelles",
+      "difficulty": "easy",
+      "linkedIds": ["nucleus", "dna"]
+    },
+    {
+      "id": "q02",
+      "question": { "en": "Which organelle is the site of protein synthesis?", "fr": "Quel organite est le siège de la synthèse des protéines ?" },
+      "options": [
+        { "en": "Vacuole", "fr": "La vacuole" },
+        { "en": "Ribosome", "fr": "Le ribosome" },
+        { "en": "Peroxisome", "fr": "Le peroxysome" },
+        { "en": "Nucleolus", "fr": "Le nucléole" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Ribosomes translate messenger RNA into chains of amino acids.",
+        "fr": "Les ribosomes traduisent l'ARN messager en chaînes d'acides aminés."
+      },
+      "category": "Organelles",
+      "difficulty": "easy",
+      "linkedIds": ["ribosome", "translation"]
+    },
+    {
+      "id": "q03",
+      "question": { "en": "Which organelle modifies, sorts and packages proteins?", "fr": "Quel organite modifie, trie et emballe les protéines ?" },
+      "options": [
+        { "en": "Smooth ER", "fr": "Le réticulum lisse" },
+        { "en": "Lysosome", "fr": "Le lysosome" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "The Golgi receives proteins from the ER, tags them and ships them in vesicles.",
+        "fr": "L'appareil de Golgi reçoit les protéines du réticulum, les étiquette et les expédie dans des vésicules."
+      },
+      "category": "Organelles",
+      "difficulty": "easy",
+      "linkedIds": ["golgi", "protein"]
+    },
+    {
+      "id": "q04",
+      "question": { "en": "Which organelle produces most of the cell's ATP?", "fr": "Quel organite produit l'essentiel de l'ATP de la cellule ?" },
+      "options": [
+        { "en": "Nucleus", "fr": "Le noyau" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Ribosome", "fr": "Le ribosome" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" }
+      ],
+      "answerIndex": 3,
+      "explanation": {
+        "en": "The electron transport chain on the inner mitochondrial membrane generates most ATP.",
+        "fr": "La chaîne de transport d'électrons de la membrane interne génère l'essentiel de l'ATP."
+      },
+      "category": "Organelles",
+      "difficulty": "easy",
+      "linkedIds": ["mitochondrion", "atp"]
+    },
+    {
+      "id": "q05",
+      "question": { "en": "Which organelle contains hydrolytic enzymes at an acidic pH?", "fr": "Quel organite contient des enzymes hydrolytiques à pH acide ?" },
+      "options": [
+        { "en": "Lysosome", "fr": "Le lysosome" },
+        { "en": "Ribosome", "fr": "Le ribosome" },
+        { "en": "Smooth ER", "fr": "Le réticulum lisse" },
+        { "en": "Nucleolus", "fr": "Le nucléole" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Lysosomes keep their digestive enzymes at pH 4.5–5, which is optimal for them.",
+        "fr": "Les lysosomes maintiennent leurs enzymes digestives à pH 4,5–5, optimal pour elles."
+      },
+      "category": "Organelles",
+      "difficulty": "medium",
+      "linkedIds": ["lysosome", "enzyme"]
+    },
+    {
+      "id": "q06",
+      "question": { "en": "Which structure controls what enters and leaves the cell?", "fr": "Quelle structure contrôle ce qui entre et sort de la cellule ?" },
+      "options": [
+        { "en": "Cell wall", "fr": "La paroi cellulaire" },
+        { "en": "Cell membrane", "fr": "La membrane plasmique" },
+        { "en": "Cytoskeleton", "fr": "Le cytosquelette" },
+        { "en": "Nucleolus", "fr": "Le nucléole" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "The plasma membrane is the selectively permeable barrier of every cell.",
+        "fr": "La membrane plasmique est la barrière sélectivement perméable de toute cellule."
+      },
+      "category": "Organelles",
+      "difficulty": "easy",
+      "linkedIds": ["membrane", "diffusion"]
+    },
+    {
+      "id": "q07",
+      "question": { "en": "Which organelle makes lipids and detoxifies drugs?", "fr": "Quel organite fabrique les lipides et détoxifie les médicaments ?" },
+      "options": [
+        { "en": "Rough ER", "fr": "Le réticulum rugueux" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Smooth ER", "fr": "Le réticulum lisse" },
+        { "en": "Lysosome", "fr": "Le lysosome" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "The smooth ER has no ribosomes; it produces lipids and detoxifies harmful molecules.",
+        "fr": "Le réticulum lisse n'a pas de ribosomes ; il produit des lipides et détoxifie les molécules nocives."
+      },
+      "category": "Organelles",
+      "difficulty": "medium",
+      "linkedIds": ["smooth-er", "lipid"]
+    },
+    {
+      "id": "q08",
+      "question": { "en": "What is the main job of the nucleolus?", "fr": "Quel est le rôle principal du nucléole ?" },
+      "options": [
+        { "en": "DNA replication", "fr": "La réplication de l'ADN" },
+        { "en": "ATP synthesis", "fr": "La synthèse d'ATP" },
+        { "en": "Lipid storage", "fr": "Le stockage des lipides" },
+        { "en": "Ribosome assembly", "fr": "L'assemblage des ribosomes" }
+      ],
+      "answerIndex": 3,
+      "explanation": {
+        "en": "The nucleolus builds ribosomal RNA and assembles ribosome subunits.",
+        "fr": "Le nucléole fabrique l'ARN ribosomal et assemble les sous-unités ribosomiques."
+      },
+      "category": "Organelles",
+      "difficulty": "medium",
+      "linkedIds": ["nucleolus", "ribosome"]
+    },
+    {
+      "id": "q09",
+      "question": { "en": "Which organelle is surrounded by a double membrane?", "fr": "Quel organite est entouré d'une double membrane ?" },
+      "options": [
+        { "en": "Lysosome", "fr": "Le lysosome" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" },
+        { "en": "Vacuole", "fr": "La vacuole" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "Mitochondria have an outer and an inner membrane; the inner one forms the cristae.",
+        "fr": "Les mitochondries ont une membrane externe et une interne ; l'interne forme les crêtes."
+      },
+      "category": "Organelles",
+      "difficulty": "medium",
+      "linkedIds": ["mitochondrion"]
+    },
+    {
+      "id": "q10",
+      "question": { "en": "Which cytoskeletal filaments form the mitotic spindle?", "fr": "Quels filaments du cytosquelette forment le fuseau mitotique ?" },
+      "options": [
+        { "en": "Microtubules", "fr": "Les microtubules" },
+        { "en": "Actin filaments", "fr": "Les filaments d'actine" },
+        { "en": "Intermediate filaments", "fr": "Les filaments intermédiaires" },
+        { "en": "Cellulose fibres", "fr": "Les fibres de cellulose" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Microtubules grow from the centrosome and pull chromosomes apart.",
+        "fr": "Les microtubules poussent depuis le centrosome et séparent les chromosomes."
+      },
+      "category": "Organelles",
+      "difficulty": "hard",
+      "linkedIds": ["cytoskeleton", "mitosis"]
+    },
+    {
+      "id": "q11",
+      "question": { "en": "Which organelle neutralises hydrogen peroxide?", "fr": "Quel organite neutralise le peroxyde d'hydrogène ?" },
+      "options": [
+        { "en": "Lysosome", "fr": "Le lysosome" },
+        { "en": "Peroxisome", "fr": "Le peroxysome" },
+        { "en": "Ribosome", "fr": "Le ribosome" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Peroxisomes contain catalase, which splits hydrogen peroxide into water and oxygen.",
+        "fr": "Les peroxysomes contiennent de la catalase, qui décompose le peroxyde d'hydrogène en eau et en oxygène."
+      },
+      "category": "Organelles",
+      "difficulty": "hard",
+      "linkedIds": ["peroxisome", "enzyme"]
+    },
+    {
+      "id": "q12",
+      "question": { "en": "Which structure gives plant cells their rigidity?", "fr": "Quelle structure donne leur rigidité aux cellules végétales ?" },
+      "options": [
+        { "en": "Cell membrane", "fr": "La membrane plasmique" },
+        { "en": "Cytoskeleton", "fr": "Le cytosquelette" },
+        { "en": "Vacuole", "fr": "La vacuole" },
+        { "en": "Cell wall", "fr": "La paroi cellulaire" }
+      ],
+      "answerIndex": 3,
+      "explanation": {
+        "en": "The cellulose cell wall resists turgor pressure and keeps the cell's shape.",
+        "fr": "La paroi de cellulose résiste à la pression de turgescence et conserve la forme de la cellule."
+      },
+      "category": "Organelles",
+      "difficulty": "easy",
+      "linkedIds": ["plant-cell", "vacuole"]
+    },
+    {
+      "id": "q13",
+      "question": { "en": "Where are ribosomes attached on the rough ER?", "fr": "Où les ribosomes sont-ils fixés sur le réticulum rugueux ?" },
+      "options": [
+        { "en": "On the cytoplasmic face", "fr": "Sur la face cytoplasmique" },
+        { "en": "Inside the lumen", "fr": "À l'intérieur de la lumière" },
+        { "en": "On the nuclear face", "fr": "Sur la face nucléaire" },
+        { "en": "They are not attached", "fr": "Ils ne sont pas fixés" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Ribosomes dock on the cytosolic side and feed new proteins into the ER lumen.",
+        "fr": "Les ribosomes s'arriment côté cytosol et injectent les nouvelles protéines dans la lumière du réticulum."
+      },
+      "category": "Organelles",
+      "difficulty": "medium",
+      "linkedIds": ["rough-er", "ribosome"]
+    },
+    {
+      "id": "q14",
+      "question": { "en": "Which organelle maintains turgor pressure in plant cells?", "fr": "Quel organite maintient la pression de turgescence des cellules végétales ?" },
+      "options": [
+        { "en": "Lysosome", "fr": "Le lysosome" },
+        { "en": "Peroxisome", "fr": "Le peroxysome" },
+        { "en": "Central vacuole", "fr": "La vacuole centrale" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "Water entering the central vacuole presses the membrane against the wall, creating turgor.",
+        "fr": "L'eau qui entre dans la vacuole centrale presse la membrane contre la paroi, créant la turgescence."
+      },
+      "category": "Organelles",
+      "difficulty": "medium",
+      "linkedIds": ["vacuole", "osmosis"]
+    },
+    {
+      "id": "q15",
+      "question": { "en": "Movement of water across a selectively permeable membrane is called…", "fr": "Le déplacement de l'eau à travers une membrane sélectivement perméable s'appelle…" },
+      "options": [
+        { "en": "Osmosis", "fr": "L'osmose" },
+        { "en": "Diffusion of solutes", "fr": "La diffusion des solutés" },
+        { "en": "Active transport", "fr": "Le transport actif" },
+        { "en": "Phagocytosis", "fr": "La phagocytose" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Osmosis is the diffusion of water specifically, across a selectively permeable membrane.",
+        "fr": "L'osmose est la diffusion de l'eau spécifiquement, à travers une membrane sélectivement perméable."
+      },
+      "category": "Processes",
+      "difficulty": "easy",
+      "linkedIds": ["osmosis", "water"]
+    },
+    {
+      "id": "q16",
+      "question": { "en": "Which process requires ATP?", "fr": "Quel processus nécessite de l'ATP ?" },
+      "options": [
+        { "en": "Diffusion", "fr": "La diffusion" },
+        { "en": "Osmosis", "fr": "L'osmose" },
+        { "en": "Active transport", "fr": "Le transport actif" },
+        { "en": "Facilitated diffusion", "fr": "La diffusion facilitée" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "Active transport pumps molecules against their gradient, which costs ATP.",
+        "fr": "Le transport actif pompe des molécules contre leur gradient, ce qui coûte de l'ATP."
+      },
+      "category": "Processes",
+      "difficulty": "easy",
+      "linkedIds": ["active-transport", "atp"]
+    },
+    {
+      "id": "q17",
+      "question": { "en": "Water moves by osmosis toward…", "fr": "L'eau se déplace par osmose vers…" },
+      "options": [
+        { "en": "The lower solute concentration", "fr": "La concentration de soluté la plus faible" },
+        { "en": "The higher solute concentration", "fr": "La concentration de soluté la plus élevée" },
+        { "en": "The nucleus", "fr": "Le noyau" },
+        { "en": "The warmer side", "fr": "Le côté le plus chaud" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Water moves down its own gradient — toward more dissolved particles, i.e. lower water potential.",
+        "fr": "L'eau suit son propre gradient — vers davantage de particules dissoutes, donc un potentiel hydrique plus bas."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["osmosis", "water"]
+    },
+    {
+      "id": "q18",
+      "question": { "en": "A cell placed in a hypertonic solution will…", "fr": "Une cellule placée dans une solution hypertonique va…" },
+      "options": [
+        { "en": "Swell", "fr": "Gonfler" },
+        { "en": "Burst", "fr": "Éclater" },
+        { "en": "Shrink", "fr": "Se rétracter" },
+        { "en": "Stay exactly the same", "fr": "Rester exactement identique" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "The outside is saltier, so water leaves the cell and it shrinks (crenation in animal cells).",
+        "fr": "L'extérieur est plus salé : l'eau quitte la cellule qui se rétracte (cré nation chez les cellules animales)."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["osmosis", "membrane"]
+    },
+    {
+      "id": "q19",
+      "question": { "en": "A red blood cell placed in pure water will…", "fr": "Un globule rouge placé dans de l'eau pure va…" },
+      "options": [
+        { "en": "Swell and lyse", "fr": "Gonfler et se lyser" },
+        { "en": "Shrink and crenate", "fr": "Se rétracter et se créneler" },
+        { "en": "Stay unchanged", "fr": "Rester inchangé" },
+        { "en": "Become turgid", "fr": "Devenir turgescent" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Pure water is strongly hypotonic; the cell has no wall, so it swells until the membrane ruptures.",
+        "fr": "L'eau pure est fortement hypotonique ; la cellule n'a pas de paroi, elle gonfle jusqu'à la rupture de la membrane."
+      },
+      "category": "Processes",
+      "difficulty": "hard",
+      "linkedIds": ["osmosis", "membrane"]
+    },
+    {
+      "id": "q20",
+      "question": { "en": "A plant cell in pure water becomes…", "fr": "Une cellule végétale dans de l'eau pure devient…" },
+      "options": [
+        { "en": "Plasmolysed", "fr": "Plasmolysée" },
+        { "en": "Turgid", "fr": "Turgescente" },
+        { "en": "Lysed", "fr": "Lysée" },
+        { "en": "Crenated", "fr": "Crénelée" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Water enters, the vacuole expands and presses the membrane against the wall: the cell is turgid and cannot burst.",
+        "fr": "L'eau entre, la vacuole se dilate et presse la membrane contre la paroi : la cellule est turgescente et ne peut pas éclater."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["osmosis", "plant-cell", "vacuole"]
+    },
+    {
+      "id": "q21",
+      "question": { "en": "What distinguishes osmosis from diffusion?", "fr": "Qu'est-ce qui distingue l'osmose de la diffusion ?" },
+      "options": [
+        { "en": "Osmosis moves water across a membrane; diffusion moves any molecule", "fr": "L'osmose déplace l'eau à travers une membrane ; la diffusion déplace toute molécule" },
+        { "en": "Osmosis uses ATP", "fr": "L'osmose utilise de l'ATP" },
+        { "en": "Diffusion needs a membrane", "fr": "La diffusion exige une membrane" },
+        { "en": "They are the same thing", "fr": "Ce sont exactement la même chose" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Osmosis is a special case of diffusion: water only, across a selectively permeable membrane.",
+        "fr": "L'osmose est un cas particulier de diffusion : uniquement de l'eau, à travers une membrane sélectivement perméable."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["osmosis", "diffusion"]
+    },
+    {
+      "id": "q22",
+      "question": { "en": "Which transport uses a carrier protein but no ATP?", "fr": "Quel transport utilise une protéine transporteuse mais pas d'ATP ?" },
+      "options": [
+        { "en": "Active transport", "fr": "Le transport actif" },
+        { "en": "Facilitated diffusion", "fr": "La diffusion facilitée" },
+        { "en": "Osmosis", "fr": "L'osmose" },
+        { "en": "Endocytosis", "fr": "L'endocytose" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Facilitated diffusion follows the gradient through a channel or carrier, so it needs no energy.",
+        "fr": "La diffusion facilitée suit le gradient via un canal ou un transporteur : elle ne demande pas d'énergie."
+      },
+      "category": "Processes",
+      "difficulty": "hard",
+      "linkedIds": ["diffusion", "membrane", "active-transport"]
+    },
+    {
+      "id": "q23",
+      "question": { "en": "What happens during plasmolysis?", "fr": "Que se passe-t-il pendant la plasmolyse ?" },
+      "options": [
+        { "en": "The membrane pulls away from the cell wall", "fr": "La membrane se détache de la paroi" },
+        { "en": "The cell wall bursts", "fr": "La paroi éclate" },
+        { "en": "The nucleus divides", "fr": "Le noyau se divise" },
+        { "en": "The cell swells", "fr": "La cellule gonfle" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "In a hypertonic solution the protoplast shrinks while the rigid wall keeps its shape.",
+        "fr": "En solution hypertonique, le protoplaste se rétracte tandis que la paroi rigide conserve sa forme."
+      },
+      "category": "Processes",
+      "difficulty": "hard",
+      "linkedIds": ["osmosis", "plant-cell"]
+    },
+    {
+      "id": "q24",
+      "question": { "en": "Which is a passive transport process?", "fr": "Lequel est un processus de transport passif ?" },
+      "options": [
+        { "en": "Sodium–potassium pump", "fr": "La pompe sodium–potassium" },
+        { "en": "Phagocytosis", "fr": "La phagocytose" },
+        { "en": "Diffusion", "fr": "La diffusion" },
+        { "en": "Protein synthesis", "fr": "La synthèse des protéines" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "Diffusion needs no ATP; it is driven by the concentration gradient alone.",
+        "fr": "La diffusion ne nécessite pas d'ATP ; seul le gradient de concentration la motive."
+      },
+      "category": "Processes",
+      "difficulty": "easy",
+      "linkedIds": ["diffusion", "membrane"]
+    },
+    {
+      "id": "q25",
+      "question": { "en": "What does the sodium–potassium pump move?", "fr": "Que déplace la pompe sodium–potassium ?" },
+      "options": [
+        { "en": "3 Na⁺ out and 2 K⁺ in", "fr": "3 Na⁺ vers l'extérieur et 2 K⁺ vers l'intérieur" },
+        { "en": "3 K⁺ out and 2 Na⁺ in", "fr": "3 K⁺ vers l'extérieur et 2 Na⁺ vers l'intérieur" },
+        { "en": "2 Na⁺ out and 3 K⁺ in", "fr": "2 Na⁺ vers l'extérieur et 3 K⁺ vers l'intérieur" },
+        { "en": "Only water", "fr": "Uniquement de l'eau" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Each cycle pumps three sodium ions out and two potassium ions in, using one ATP.",
+        "fr": "Chaque cycle expulse trois ions sodium et fait entrer deux ions potassium, au prix d'un ATP."
+      },
+      "category": "Processes",
+      "difficulty": "hard",
+      "linkedIds": ["active-transport", "atp"]
+    },
+    {
+      "id": "q26",
+      "question": { "en": "Which process brings large particles into the cell?", "fr": "Quel processus fait entrer de grosses particules dans la cellule ?" },
+      "options": [
+        { "en": "Diffusion", "fr": "La diffusion" },
+        { "en": "Osmosis", "fr": "L'osmose" },
+        { "en": "Endocytosis", "fr": "L'endocytose" },
+        { "en": "Exocytosis", "fr": "L'exocytose" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "Endocytosis folds the membrane inward to engulf material in a vesicle.",
+        "fr": "L'endocytose replie la membrane vers l'intérieur pour englober la matière dans une vésicule."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["membrane", "lysosome"]
+    },
+    {
+      "id": "q27",
+      "question": { "en": "Which organelle is most active in a cell that secretes digestive enzymes?", "fr": "Quel organite est le plus actif dans une cellule qui sécrète des enzymes digestives ?" },
+      "options": [
+        { "en": "Rough ER", "fr": "Le réticulum rugueux" },
+        { "en": "Vacuole", "fr": "La vacuole" },
+        { "en": "Peroxisome", "fr": "Le peroxysome" },
+        { "en": "Nucleolus only", "fr": "Le nucléole uniquement" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Secretory cells are packed with rough ER to fold and ship the enzymes.",
+        "fr": "Les cellules sécrétrices sont remplies de réticulum rugueux pour replier et expédier les enzymes."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["rough-er", "protein-synthesis"]
+    },
+    {
+      "id": "q28",
+      "question": { "en": "Crenation is…", "fr": "La crénation est…" },
+      "options": [
+        { "en": "Shrivelling of animal cells in a hypertonic solution", "fr": "Le ratatinement des cellules animales en solution hypertonique" },
+        { "en": "Bursting in a hypotonic solution", "fr": "L'éclatement en solution hypotonique" },
+        { "en": "Turgor in plant cells", "fr": "La turgescence des cellules végétales" },
+        { "en": "Cell division", "fr": "La division cellulaire" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Water loss makes the membrane scallop inward — the classic crenated red blood cell.",
+        "fr": "La perte d'eau fait onduler la membrane vers l'intérieur — le globule rouge crénelé classique."
+      },
+      "category": "Processes",
+      "difficulty": "medium",
+      "linkedIds": ["osmosis", "membrane"]
+    },
+    {
+      "id": "q29",
+      "question": { "en": "Cellular respiration converts glucose into…", "fr": "La respiration cellulaire convertit le glucose en…" },
+      "options": [
+        { "en": "ATP", "fr": "ATP" },
+        { "en": "DNA", "fr": "ADN" },
+        { "en": "Protein", "fr": "Protéine" },
+        { "en": "Lipid", "fr": "Lipide" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Respiration releases energy from glucose and stores it as ATP.",
+        "fr": "La respiration libère l'énergie du glucose et la stocke sous forme d'ATP."
+      },
+      "category": "Energy",
+      "difficulty": "easy",
+      "linkedIds": ["cellular-respiration", "atp"]
+    },
+    {
+      "id": "q30",
+      "question": { "en": "Where does most ATP production occur?", "fr": "Où se produit l'essentiel de la production d'ATP ?" },
+      "options": [
+        { "en": "Nucleus", "fr": "Le noyau" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" },
+        { "en": "Ribosome", "fr": "Le ribosome" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "The inner mitochondrial membrane hosts the electron transport chain and ATP synthase.",
+        "fr": "La membrane interne de la mitochondrie porte la chaîne de transport d'électrons et l'ATP synthase."
+      },
+      "category": "Energy",
+      "difficulty": "easy",
+      "linkedIds": ["mitochondrion", "atp", "cellular-respiration"]
+    },
+    {
+      "id": "q31",
+      "question": { "en": "Which gas is used in aerobic respiration?", "fr": "Quel gaz est utilisé par la respiration aérobie ?" },
+      "options": [
+        { "en": "Oxygen", "fr": "L'oxygène" },
+        { "en": "Carbon dioxide", "fr": "Le dioxyde de carbone" },
+        { "en": "Nitrogen", "fr": "L'azote" },
+        { "en": "Hydrogen", "fr": "L'hydrogène" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Oxygen is the final electron acceptor, which is why aerobic respiration makes so much ATP.",
+        "fr": "L'oxygène est l'accepteur final d'électrons, ce qui explique le fort rendement de la respiration aérobie."
+      },
+      "category": "Energy",
+      "difficulty": "easy",
+      "linkedIds": ["oxygen", "cellular-respiration"]
+    },
+    {
+      "id": "q32",
+      "question": { "en": "Which process releases oxygen?", "fr": "Quel processus libère de l'oxygène ?" },
+      "options": [
+        { "en": "Cellular respiration", "fr": "La respiration cellulaire" },
+        { "en": "Photosynthesis", "fr": "La photosynthèse" },
+        { "en": "Osmosis", "fr": "L'osmose" },
+        { "en": "Mitosis", "fr": "La mitose" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Photosynthesis splits water and releases oxygen as a by-product.",
+        "fr": "La photosynthèse décompose l'eau et libère de l'oxygène comme sous-produit."
+      },
+      "category": "Energy",
+      "difficulty": "easy",
+      "linkedIds": ["photosynthesis", "oxygen", "chloroplast"]
+    },
+    {
+      "id": "q33",
+      "question": { "en": "Which pigment captures light inside chloroplasts?", "fr": "Quel pigment capture la lumière dans les chloroplastes ?" },
+      "options": [
+        { "en": "Haemoglobin", "fr": "L'hémoglobine" },
+        { "en": "Melanin", "fr": "La mélanine" },
+        { "en": "Chlorophyll", "fr": "La chlorophylle" },
+        { "en": "Catalase", "fr": "La catalase" }
+      ],
+      "answerIndex": 2,
+      "explanation": {
+        "en": "Chlorophyll absorbs red and blue light, reflecting green — which is why leaves look green.",
+        "fr": "La chlorophylle absorbe le rouge et le bleu et réfléchit le vert — d'où la couleur des feuilles."
+      },
+      "category": "Energy",
+      "difficulty": "easy",
+      "linkedIds": ["photosynthesis", "chloroplast"]
+    },
+    {
+      "id": "q34",
+      "question": { "en": "The overall equation for photosynthesis is…", "fr": "L'équation globale de la photosynthèse est…" },
+      "options": [
+        { "en": "CO₂ + water + light → glucose + O₂", "fr": "CO₂ + eau + lumière → glucose + O₂" },
+        { "en": "Glucose + O₂ → CO₂ + water", "fr": "Glucose + O₂ → CO₂ + eau" },
+        { "en": "ATP → ADP + phosphate", "fr": "ATP → ADP + phosphate" },
+        { "en": "DNA → RNA", "fr": "ADN → ARN" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Photosynthesis stores light energy in glucose; respiration is essentially the reverse.",
+        "fr": "La photosynthèse stocke l'énergie lumineuse dans le glucose ; la respiration en est quasiment l'inverse."
+      },
+      "category": "Energy",
+      "difficulty": "medium",
+      "linkedIds": ["photosynthesis", "glucose", "oxygen"]
+    },
+    {
+      "id": "q35",
+      "question": { "en": "Which organelle carries its own DNA?", "fr": "Quel organite possède son propre ADN ?" },
+      "options": [
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" },
+        { "en": "Lysosome", "fr": "Le lysosome" },
+        { "en": "Ribosome", "fr": "Le ribosome" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Mitochondria (and chloroplasts) carry their own circular DNA — evidence of an endosymbiotic origin.",
+        "fr": "Les mitochondries (et les chloroplastes) ont leur propre ADN circulaire — trace d'une origine endosymbiotique."
+      },
+      "category": "Energy",
+      "difficulty": "medium",
+      "linkedIds": ["mitochondrion", "dna", "chloroplast"]
+    },
+    {
+      "id": "q36",
+      "question": { "en": "Anaerobic respiration in muscle produces…", "fr": "La respiration anaérobie dans le muscle produit…" },
+      "options": [
+        { "en": "Lactic acid", "fr": "De l'acide lactique" },
+        { "en": "Glucose", "fr": "Du glucose" },
+        { "en": "Oxygen", "fr": "De l'oxygène" },
+        { "en": "DNA", "fr": "De l'ADN" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Without oxygen, muscle converts pyruvate to lactate and produces very little ATP.",
+        "fr": "Sans oxygène, le muscle transforme le pyruvate en lactate et produit très peu d'ATP."
+      },
+      "category": "Energy",
+      "difficulty": "medium",
+      "linkedIds": ["cellular-respiration", "atp"]
+    },
+    {
+      "id": "q37",
+      "question": { "en": "DNA replication occurs during which phase of the cell cycle?", "fr": "La réplication de l'ADN a lieu pendant quelle phase du cycle cellulaire ?" },
+      "options": [
+        { "en": "S phase", "fr": "La phase S" },
+        { "en": "G1 phase", "fr": "La phase G1" },
+        { "en": "G2 phase", "fr": "La phase G2" },
+        { "en": "M phase", "fr": "La phase M" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "The S (synthesis) phase duplicates each chromosome before division.",
+        "fr": "La phase S (synthèse) duplique chaque chromosome avant la division."
+      },
+      "category": "Genetics",
+      "difficulty": "hard",
+      "linkedIds": ["dna", "mitosis"]
+    },
+    {
+      "id": "q38",
+      "question": { "en": "Mitosis produces…", "fr": "La mitose produit…" },
+      "options": [
+        { "en": "Four haploid cells", "fr": "Quatre cellules haploïdes" },
+        { "en": "Two identical diploid cells", "fr": "Deux cellules diploïdes identiques" },
+        { "en": "Two haploid cells", "fr": "Deux cellules haploïdes" },
+        { "en": "One cell only", "fr": "Une seule cellule" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Mitosis is growth and repair: two genetically identical diploid daughter cells.",
+        "fr": "La mitose sert à la croissance et à la réparation : deux cellules filles diploïdes génétiquement identiques."
+      },
+      "category": "Genetics",
+      "difficulty": "easy",
+      "linkedIds": ["mitosis", "dna"]
+    },
+    {
+      "id": "q39",
+      "question": { "en": "Meiosis produces…", "fr": "La méiose produit…" },
+      "options": [
+        { "en": "Two diploid cells", "fr": "Deux cellules diploïdes" },
+        { "en": "Four haploid cells", "fr": "Quatre cellules haploïdes" },
+        { "en": "Two haploid cells", "fr": "Deux cellules haploïdes" },
+        { "en": "Eight diploid cells", "fr": "Huit cellules diploïdes" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Two consecutive divisions yield four haploid gametes.",
+        "fr": "Deux divisions successives donnent quatre gamètes haploïdes."
+      },
+      "category": "Genetics",
+      "difficulty": "medium",
+      "linkedIds": ["meiosis", "dna"]
+    },
+    {
+      "id": "q40",
+      "question": { "en": "Crossing-over occurs during…", "fr": "Le brassage (crossing-over) a lieu pendant…" },
+      "options": [
+        { "en": "Prophase I of meiosis", "fr": "La prophase I de la méiose" },
+        { "en": "Metaphase of mitosis", "fr": "La métaphase de la mitose" },
+        { "en": "G1 phase", "fr": "La phase G1" },
+        { "en": "Telophase", "fr": "La télophase" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Homologous chromosomes exchange segments during prophase I, creating genetic variation.",
+        "fr": "Les chromosomes homologues échangent des segments en prophase I, créant de la variation génétique."
+      },
+      "category": "Genetics",
+      "difficulty": "hard",
+      "linkedIds": ["meiosis", "dna"]
+    },
+    {
+      "id": "q41",
+      "question": { "en": "Which is the correct DNA base-pairing rule?", "fr": "Quelle est la règle d'appariement des bases de l'ADN ?" },
+      "options": [
+        { "en": "A–T and G–C", "fr": "A–T et G–C" },
+        { "en": "A–G and T–C", "fr": "A–G et T–C" },
+        { "en": "A–C and G–T", "fr": "A–C et G–T" },
+        { "en": "A–U and G–C", "fr": "A–U et G–C" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Adenine pairs with thymine, guanine with cytosine. RNA uses uracil instead of thymine.",
+        "fr": "L'adénine s'apparie à la thymine, la guanine à la cytosine. L'ARN utilise l'uracile au lieu de la thymine."
+      },
+      "category": "Genetics",
+      "difficulty": "easy",
+      "linkedIds": ["dna", "rna"]
+    },
+    {
+      "id": "q42",
+      "question": { "en": "Transcription produces…", "fr": "La transcription produit…" },
+      "options": [
+        { "en": "mRNA", "fr": "De l'ARNm" },
+        { "en": "Protein", "fr": "Une protéine" },
+        { "en": "DNA", "fr": "De l'ADN" },
+        { "en": "ATP", "fr": "De l'ATP" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "RNA polymerase copies a gene into messenger RNA, which then leaves the nucleus.",
+        "fr": "L'ARN polymérase copie un gène en ARN messager, qui quitte ensuite le noyau."
+      },
+      "category": "Genetics",
+      "difficulty": "easy",
+      "linkedIds": ["transcription", "rna"]
+    },
+    {
+      "id": "q43",
+      "question": { "en": "Translation occurs at the…", "fr": "La traduction se déroule au niveau…" },
+      "options": [
+        { "en": "Ribosome", "fr": "Du ribosome" },
+        { "en": "Nucleus", "fr": "Du noyau" },
+        { "en": "Golgi apparatus", "fr": "De l'appareil de Golgi" },
+        { "en": "Lysosome", "fr": "Du lysosome" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Ribosomes read mRNA codons and join amino acids into a polypeptide.",
+        "fr": "Les ribosomes lisent les codons de l'ARNm et assemblent les acides aminés en polypeptide."
+      },
+      "category": "Genetics",
+      "difficulty": "easy",
+      "linkedIds": ["translation", "ribosome"]
+    },
+    {
+      "id": "q44",
+      "question": { "en": "Which of these is a prokaryote?", "fr": "Lequel de ces organismes est un procaryote ?" },
+      "options": [
+        { "en": "Bacterium", "fr": "Une bactérie" },
+        { "en": "Yeast", "fr": "Une levure" },
+        { "en": "Plant cell", "fr": "Une cellule végétale" },
+        { "en": "Animal cell", "fr": "Une cellule animale" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Bacteria have no membrane-bound nucleus or organelles; yeast is a eukaryote.",
+        "fr": "Les bactéries n'ont ni noyau ni organites membraneux ; la levure est un eucaryote."
+      },
+      "category": "Cell types",
+      "difficulty": "easy",
+      "linkedIds": ["prokaryote", "eukaryote"]
+    },
+    {
+      "id": "q45",
+      "question": { "en": "Which structure do plant cells have that animal cells do not?", "fr": "Quelle structure les cellules végétales ont-elles et pas les cellules animales ?" },
+      "options": [
+        { "en": "Nucleus", "fr": "Le noyau" },
+        { "en": "Cell wall", "fr": "La paroi cellulaire" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" },
+        { "en": "Ribosome", "fr": "Le ribosome" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Plant cells have a cellulose wall, chloroplasts and a large central vacuole.",
+        "fr": "Les cellules végétales possèdent une paroi de cellulose, des chloroplastes et une grande vacuole centrale."
+      },
+      "category": "Cell types",
+      "difficulty": "easy",
+      "linkedIds": ["plant-cell", "animal-cell"]
+    },
+    {
+      "id": "q46",
+      "question": { "en": "Which organelle is absent from animal cells?", "fr": "Quel organite est absent des cellules animales ?" },
+      "options": [
+        { "en": "Chloroplast", "fr": "Le chloroplaste" },
+        { "en": "Mitochondrion", "fr": "La mitochondrie" },
+        { "en": "Golgi apparatus", "fr": "L'appareil de Golgi" },
+        { "en": "Ribosome", "fr": "Le ribosome" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Animal cells cannot photosynthesise; they have no chloroplasts (and no cell wall).",
+        "fr": "Les cellules animales ne font pas de photosynthèse : pas de chloroplastes (ni de paroi)."
+      },
+      "category": "Cell types",
+      "difficulty": "easy",
+      "linkedIds": ["animal-cell", "chloroplast"]
+    },
+    {
+      "id": "q47",
+      "question": { "en": "Which is NOT found in prokaryotes?", "fr": "Qu'est-ce qui n'existe PAS chez les procaryotes ?" },
+      "options": [
+        { "en": "A membrane-bound nucleus", "fr": "Un noyau délimité par une membrane" },
+        { "en": "Ribosomes", "fr": "Des ribosomes" },
+        { "en": "DNA", "fr": "De l'ADN" },
+        { "en": "A cell membrane", "fr": "Une membrane plasmique" }
+      ],
+      "answerIndex": 0,
+      "explanation": {
+        "en": "Prokaryotes keep their DNA in a nucleoid region, not inside a nucleus.",
+        "fr": "Les procaryotes conservent leur ADN dans une région appelée nucléoïde, pas dans un noyau."
+      },
+      "category": "Cell types",
+      "difficulty": "medium",
+      "linkedIds": ["prokaryote", "nucleus"]
+    },
+    {
+      "id": "q48",
+      "question": { "en": "Which cell type has membrane-bound organelles?", "fr": "Quel type de cellule possède des organites membraneux ?" },
+      "options": [
+        { "en": "Prokaryote", "fr": "Le procaryote" },
+        { "en": "Eukaryote", "fr": "L'eucaryote" },
+        { "en": "Bacterium", "fr": "La bactérie" },
+        { "en": "Archaeon", "fr": "L'archée" }
+      ],
+      "answerIndex": 1,
+      "explanation": {
+        "en": "Eukaryotes compartmentalise their chemistry inside membrane-bound organelles.",
+        "fr": "Les eucaryotes compartimentent leur chimie dans des organites membraneux."
+      },
+      "category": "Cell types",
+      "difficulty": "easy",
+      "linkedIds": ["eukaryote", "prokaryote"]
+    }
+  ],
+  "flashcards": [
+    { "id": "f01", "front": { "en": "What does the nucleus do?", "fr": "Que fait le noyau ?" }, "back": { "en": "Stores DNA and directs the cell's activity.", "fr": "Il stocke l'ADN et dirige l'activité de la cellule." }, "category": "Organelles", "linkedIds": ["nucleus"] },
+    { "id": "f02", "front": { "en": "What does the ribosome do?", "fr": "Que fait le ribosome ?" }, "back": { "en": "Assembles proteins by translating mRNA.", "fr": "Il assemble les protéines en traduisant l'ARNm." }, "category": "Organelles", "linkedIds": ["ribosome"] },
+    { "id": "f03", "front": { "en": "What does the Golgi apparatus do?", "fr": "Que fait l'appareil de Golgi ?" }, "back": { "en": "Modifies, sorts and packages proteins for delivery.", "fr": "Il modifie, trie et emballe les protéines pour la livraison." }, "category": "Organelles", "linkedIds": ["golgi"] },
+    { "id": "f04", "front": { "en": "What does the mitochondrion do?", "fr": "Que fait la mitochondrie ?" }, "back": { "en": "Produces ATP by aerobic cellular respiration.", "fr": "Elle produit de l'ATP par respiration cellulaire aérobie." }, "category": "Organelles", "linkedIds": ["mitochondrion"] },
+    { "id": "f05", "front": { "en": "What does the lysosome do?", "fr": "Que fait le lysosome ?" }, "back": { "en": "Digests waste and worn-out cell parts with acidic enzymes.", "fr": "Il digère les déchets et les parties usées grâce à des enzymes acides." }, "category": "Organelles", "linkedIds": ["lysosome"] },
+    { "id": "f06", "front": { "en": "What does the smooth ER do?", "fr": "Que fait le réticulum lisse ?" }, "back": { "en": "Makes lipids and detoxifies harmful molecules.", "fr": "Il fabrique des lipides et détoxifie les molécules nocives." }, "category": "Organelles", "linkedIds": ["smooth-er"] },
+    { "id": "f07", "front": { "en": "What does the rough ER do?", "fr": "Que fait le réticulum rugueux ?" }, "back": { "en": "Folds and modifies proteins made by its attached ribosomes.", "fr": "Il replie et modifie les protéines fabriquées par ses ribosomes." }, "category": "Organelles", "linkedIds": ["rough-er"] },
+    { "id": "f08", "front": { "en": "What is the nucleolus?", "fr": "Qu'est-ce que le nucléole ?" }, "back": { "en": "A dense body in the nucleus that builds ribosome subunits.", "fr": "Un corps dense du noyau qui assemble les sous-unités ribosomiques." }, "category": "Organelles", "linkedIds": ["nucleolus"] },
+    { "id": "f09", "front": { "en": "What is the function of the cell membrane?", "fr": "Quelle est la fonction de la membrane plasmique ?" }, "back": { "en": "A selective barrier controlling what enters and leaves.", "fr": "Une barrière sélective qui contrôle les entrées et sorties." }, "category": "Organelles", "linkedIds": ["membrane"] },
+    { "id": "f10", "front": { "en": "What is the cytoskeleton?", "fr": "Qu'est-ce que le cytosquelette ?" }, "back": { "en": "A protein scaffold for shape, movement and transport.", "fr": "Un échafaudage protéique pour la forme, le mouvement et le transport." }, "category": "Organelles", "linkedIds": ["cytoskeleton"] },
+    { "id": "f11", "front": { "en": "What is a peroxisome?", "fr": "Qu'est-ce qu'un peroxysome ?" }, "back": { "en": "A sac that neutralises peroxide and oxidises fatty acids.", "fr": "Un sac qui neutralise le peroxyde et oxyde les acides gras." }, "category": "Organelles", "linkedIds": ["peroxisome"] },
+    { "id": "f12", "front": { "en": "What is the central vacuole for?", "fr": "À quoi sert la vacuole centrale ?" }, "back": { "en": "Stores water and maintains turgor pressure in plants.", "fr": "Elle stocke l'eau et maintient la turgescence chez les plantes." }, "category": "Organelles", "linkedIds": ["vacuole"] },
+    { "id": "f13", "front": { "en": "Define osmosis.", "fr": "Définir l'osmose." }, "back": { "en": "Diffusion of water across a selectively permeable membrane.", "fr": "La diffusion de l'eau à travers une membrane sélectivement perméable." }, "category": "Processes", "linkedIds": ["osmosis"] },
+    { "id": "f14", "front": { "en": "Define diffusion.", "fr": "Définir la diffusion." }, "back": { "en": "Passive movement from high to low concentration.", "fr": "Un mouvement passif du milieu concentré vers le milieu dilué." }, "category": "Processes", "linkedIds": ["diffusion"] },
+    { "id": "f15", "front": { "en": "What is active transport?", "fr": "Qu'est-ce que le transport actif ?" }, "back": { "en": "Pumping molecules against their gradient using ATP.", "fr": "Pomper des molécules contre leur gradient en utilisant de l'ATP." }, "category": "Processes", "linkedIds": ["active-transport"] },
+    { "id": "f16", "front": { "en": "What happens to an animal cell in a hypotonic solution?", "fr": "Que devient une cellule animale en solution hypotonique ?" }, "back": { "en": "Water enters, it swells and may lyse.", "fr": "L'eau entre, elle gonfle et peut se lyser." }, "category": "Processes", "linkedIds": ["osmosis"] },
+    { "id": "f17", "front": { "en": "What happens to an animal cell in a hypertonic solution?", "fr": "Que devient une cellule animale en solution hypertonique ?" }, "back": { "en": "Water leaves, it shrinks and crenates.", "fr": "L'eau sort, elle se rétracte et se crénèle." }, "category": "Processes", "linkedIds": ["osmosis"] },
+    { "id": "f18", "front": { "en": "What is plasmolysis?", "fr": "Qu'est-ce que la plasmolyse ?" }, "back": { "en": "The protoplast shrinking away from the cell wall in a hypertonic solution.", "fr": "Le protoplaste se rétracte loin de la paroi en solution hypertonique." }, "category": "Processes", "linkedIds": ["osmosis", "plant-cell"] },
+    { "id": "f19", "front": { "en": "What is turgor pressure?", "fr": "Qu'est-ce que la pression de turgescence ?" }, "back": { "en": "The outward pressure of water pushing the membrane against the wall.", "fr": "La pression de l'eau qui pousse la membrane contre la paroi." }, "category": "Processes", "linkedIds": ["osmosis", "plant-cell"] },
+    { "id": "f20", "front": { "en": "What is facilitated diffusion?", "fr": "Qu'est-ce que la diffusion facilitée ?" }, "back": { "en": "Gradient-driven transport through a channel or carrier, without ATP.", "fr": "Un transport selon le gradient via un canal ou un transporteur, sans ATP." }, "category": "Processes", "linkedIds": ["diffusion"] },
+    { "id": "f21", "front": { "en": "What is endocytosis?", "fr": "Qu'est-ce que l'endocytose ?" }, "back": { "en": "The membrane folds inward to engulf material in a vesicle.", "fr": "La membrane se replie vers l'intérieur pour englober la matière dans une vésicule." }, "category": "Processes", "linkedIds": ["membrane"] },
+    { "id": "f22", "front": { "en": "What is autophagy?", "fr": "Qu'est-ce que l'autophagie ?" }, "back": { "en": "The cell digests and recycles its own damaged parts.", "fr": "La cellule digère et recycle ses propres composants endommagés." }, "category": "Processes", "linkedIds": ["autophagy", "lysosome"] },
+    { "id": "f23", "front": { "en": "What is cellular respiration?", "fr": "Qu'est-ce que la respiration cellulaire ?" }, "back": { "en": "Harvesting energy from glucose to make ATP.", "fr": "Extraire l'énergie du glucose pour fabriquer de l'ATP." }, "category": "Energy", "linkedIds": ["cellular-respiration"] },
+    { "id": "f24", "front": { "en": "What is photosynthesis?", "fr": "Qu'est-ce que la photosynthèse ?" }, "back": { "en": "Using light, CO₂ and water to build glucose and release oxygen.", "fr": "Utiliser la lumière, le CO₂ et l'eau pour fabriquer du glucose et libérer de l'oxygène." }, "category": "Energy", "linkedIds": ["photosynthesis"] },
+    { "id": "f25", "front": { "en": "Why is ATP called the energy currency?", "fr": "Pourquoi l'ATP est-il la monnaie énergétique ?" }, "back": { "en": "It is produced and spent continuously, transferring energy to any reaction that needs it.", "fr": "Il est produit et dépensé en continu, transférant de l'énergie à toute réaction qui en a besoin." }, "category": "Energy", "linkedIds": ["atp"] },
+    { "id": "f26", "front": { "en": "Where do the light reactions occur?", "fr": "Où se déroulent les réactions lumineuses ?" }, "back": { "en": "In the thylakoid membranes of the chloroplast.", "fr": "Dans les membranes des thylakoïdes du chloroplaste." }, "category": "Energy", "linkedIds": ["photosynthesis", "chloroplast"] },
+    { "id": "f27", "front": { "en": "What is the role of oxygen in respiration?", "fr": "Quel est le rôle de l'oxygène dans la respiration ?" }, "back": { "en": "It is the final electron acceptor at the end of the transport chain.", "fr": "C'est l'accepteur final d'électrons au bout de la chaîne de transport." }, "category": "Energy", "linkedIds": ["oxygen", "cellular-respiration"] },
+    { "id": "f28", "front": { "en": "What is transcription?", "fr": "Qu'est-ce que la transcription ?" }, "back": { "en": "Copying a gene from DNA into messenger RNA.", "fr": "Copier un gène de l'ADN en ARN messager." }, "category": "Genetics", "linkedIds": ["transcription"] },
+    { "id": "f29", "front": { "en": "What is translation?", "fr": "Qu'est-ce que la traduction ?" }, "back": { "en": "Building a protein from an mRNA message at the ribosome.", "fr": "Construire une protéine à partir d'un ARNm au niveau du ribosome." }, "category": "Genetics", "linkedIds": ["translation"] },
+    { "id": "f30", "front": { "en": "What is the difference between mitosis and meiosis?", "fr": "Quelle est la différence entre mitose et méiose ?" }, "back": { "en": "Mitosis makes two identical diploid cells; meiosis makes four genetically varied haploid cells.", "fr": "La mitose produit deux cellules diploïdes identiques ; la méiose quatre cellules haploïdes variées." }, "category": "Genetics", "linkedIds": ["mitosis", "meiosis"] },
+    { "id": "f31", "front": { "en": "Which bases pair in DNA?", "fr": "Quelles bases s'apparient dans l'ADN ?" }, "back": { "en": "Adenine–thymine and guanine–cytosine.", "fr": "Adénine–thymine et guanine–cytosine." }, "category": "Genetics", "linkedIds": ["dna"] },
+    { "id": "f32", "front": { "en": "What is a prokaryote?", "fr": "Qu'est-ce qu'un procaryote ?" }, "back": { "en": "A cell with no membrane-bound nucleus — bacteria and archaea.", "fr": "Une cellule sans noyau membraneux — bactéries et archées." }, "category": "Cell types", "linkedIds": ["prokaryote"] },
+    { "id": "f33", "front": { "en": "What is a eukaryote?", "fr": "Qu'est-ce qu'un eucaryote ?" }, "back": { "en": "A cell with a nucleus and membrane-bound organelles.", "fr": "Une cellule avec un noyau et des organites membraneux." }, "category": "Cell types", "linkedIds": ["eukaryote"] },
+    { "id": "f34", "front": { "en": "Name three features unique to plant cells.", "fr": "Citez trois caractéristiques propres aux cellules végétales." }, "back": { "en": "Cellulose wall, chloroplasts and a large central vacuole.", "fr": "Paroi de cellulose, chloroplastes et grande vacuole centrale." }, "category": "Cell types", "linkedIds": ["plant-cell"] },
+    { "id": "f35", "front": { "en": "Why do animal cells need lysosomes but plant cells rely less on them?", "fr": "Pourquoi les cellules animales ont-elles besoin de lysosomes, moins les végétales ?" }, "back": { "en": "Plant cells use the vacuole for much of the same storage and breakdown work.", "fr": "Les cellules végétales confient une grande partie de ce stockage et de cette dégradation à la vacuole." }, "category": "Cell types", "linkedIds": ["lysosome", "vacuole"] },
+    { "id": "f36", "front": { "en": "What is the endosymbiotic theory?", "fr": "Qu'est-ce que la théorie endosymbiotique ?" }, "back": { "en": "Mitochondria and chloroplasts descend from free-living bacteria engulfed by an ancestral cell.", "fr": "Les mitochondries et chloroplastes descendent de bactéries libres englouties par une cellule ancestrale." }, "category": "Cell types", "linkedIds": ["mitochondrion", "chloroplast", "eukaryote"] }
+  ],
+  "questionnaires": [
+    {
+      "id": "set-basics",
+      "title": { "en": "Cell basics", "fr": "Les bases de la cellule" },
+      "description": { "en": "The organelles and what each one is for.", "fr": "Les organites et le rôle de chacun." },
+      "questionIds": ["q01", "q02", "q03", "q04", "q05", "q06", "q07", "q08", "q09", "q10"]
+    },
+    {
+      "id": "set-transport",
+      "title": { "en": "Energy & transport", "fr": "Énergie et transport" },
+      "description": { "en": "How molecules cross membranes, and how cells make ATP.", "fr": "Comment les molécules traversent les membranes et comment les cellules produisent de l'ATP." },
+      "questionIds": ["q15", "q16", "q17", "q18", "q19", "q20", "q29", "q30", "q31", "q32"]
+    },
+    {
+      "id": "set-genetics",
+      "title": { "en": "Genetics & cell types", "fr": "Génétique et types cellulaires" },
+      "description": { "en": "DNA, division and the difference between cell types.", "fr": "ADN, division et différence entre types cellulaires." },
+      "questionIds": ["q37", "q38", "q39", "q40", "q41", "q42", "q43", "q44", "q45", "q47"]
+    }
+  ]
+}

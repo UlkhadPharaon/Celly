@@ -1,290 +1,336 @@
-# Cell-Mastering
+# Celly v0.2
 
-**An interactive 3D biology lab that runs in your browser.** You look at a living cell model on a
-virtual laboratory bench — and soon you will grab, rotate, scale and dissect it with your **bare
-hands**, tracked through your webcam (no gloves, no controllers, no headset). Pull an organelle out
-to read what it does, then drop the cell into a beaker of hypotonic, isotonic or hypertonic saline
-and watch osmosis happen in real time. A web app that lets you learn about cells, run experiments,
-and develop deeper knowledge and understanding of biology.
+**A touch-free 3D cell biology lab.** Celly puts a living, procedural cell in front of you and lets
+you explore it with your **bare hands** — no controller, no headset, no gloves. A webcam and a pinch
+are the entire interface, with the mouse and keyboard kept as a first-class fallback.
 
-> **Current status:** Phase 1 (3D cells) and Phase 2 (laboratory environment) are **built and
-> verified working**. Phases 3–5 (hand tracking, info overlays, osmosis experiments) are planned —
-> the architecture, physics model and gesture design are fully specified in
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). What runs today is controlled with the **mouse and
-> keyboard** (which is also the permanent no-webcam fallback).
+The app has three sections:
 
-| Animal cell | Plant cell | Red blood cell | Explode view |
-|---|---|---|---|
-| ![animal](docs/screenshots/animal.png) | ![plant](docs/screenshots/plant.png) | ![rbc](docs/screenshots/rbc.png) | ![explode](docs/screenshots/animal-explode.png) |
+| Section | What you do |
+|---|---|
+| **Interactive Lab** | Rotate, scale, isolate and read 15 organelles on a ray-marched-looking 3D cell. |
+| **Knowledge** | Fly through a 36-node graph of cell-biology concepts and hop between related ideas. |
+| **Test** | Quick quiz, full exam, guided questionnaire sets and Leitner flashcards, all gesture-driven. |
+
+![The Interactive Lab](docs/screenshots/04-lab.png)
 
 ---
 
-## 1. Overview
+## Contents
 
-Cell-Mastering renders a complete laboratory in 3D (Three.js): a wooden bench, a microscope,
-shelves of reagent jars, a whiteboard, and **three labelled beakers** — 0.2 % NaCl (hypotonic),
-0.9 % NaCl (isotonic), 3.0 % NaCl (hypertonic). On the bench sits a procedurally generated cell you
-can inspect part by part.
+- [Quick start](#quick-start)
+- [The gesture vocabulary](#the-gesture-vocabulary)
+- [What is in the box](#what-is-in-the-box)
+- [How hand tracking works](#how-hand-tracking-works)
+- [Architecture](#architecture)
+- [Testing](#testing)
+- [Privacy](#privacy)
+- [Accessibility](#accessibility)
+- [Performance and browser support](#performance-and-browser-support)
+- [Scripts](#scripts)
+- [Documentation](#documentation)
+- [Licence](#licence)
 
-There are three cell types, each with every organelle as its **own named, selectable, editable
-mesh**:
+---
 
-- **Animal cell** — translucent membrane, cytoplasm, nucleus with nucleolus, rough & smooth
-  endoplasmic reticulum, Golgi stack, mitochondria (with cristae), lysosomes, ~120 ribosomes,
-  centriole pair, small vacuoles.
-- **Plant cell** — rigid rounded-box cell wall, plasma membrane, large central vacuole, peripheral
-  nucleus, green chloroplasts (with grana stacks), mitochondria, Golgi, ribosomes.
-- **Red blood cell** — biconcave disc filled with haemoglobin (the clearest osmosis demo).
+## Quick start
 
-Every organelle carries bilingual metadata (English + French): name, function, key facts,
-approximate size and an everyday analogy, all stored as data in JSON — never hardcoded.
+```bash
+npm install
+npm run dev          # http://localhost:5173
+```
 
-## 2. Features
+Requirements: **Node 20+**, a browser with **WebGL2** and **WASM**, and a webcam for gesture mode.
+Chrome or Edge give the most predictable MediaPipe performance; Safari 17+ also works.
 
-**Shipped today**
+`npm install` runs `scripts/fetch-assets.mjs`, which
 
-- Procedural animal / plant / red-blood-cell models, one named mesh group per organelle.
-- Part editor API (`src/cell/CellModel.ts`): show/hide, isolate, opacity, color override, highlight,
-  **explode view**, full reset.
-- Organelle + cell definitions loaded from `src/data/organelles.json` and `src/data/cells.json` —
-  adding an organelle means editing only JSON (see §10).
-- Full laboratory environment: bench, microscope, shelves with jars, whiteboard, 3 labelled
-  beakers with colored liquids.
-- PBR lighting: key + fill + rim + hemisphere, two accent spots, procedural studio environment map
-  (PMREM) for reflections, soft shadows.
-- **Low / high quality toggle** (`Q` key) that rebuilds lights, shadows, textures and geometry
-  density at runtime — targets 60 fps on a mid-range laptop.
-- Beaker **drop detection**: move the cell onto a beaker and the liquid reacts (hook ready for the
-  osmosis simulation).
-- Mouse-orbit camera fallback (drag to rotate, wheel to zoom) — always available.
-- Research + architecture documentation with sources (`docs/`).
+1. copies the MediaPipe WASM runtime out of the pinned npm package into `public/mediapipe-wasm/`,
+2. downloads `public/models/hand_landmarker.task` (7.8 MB) once if it is missing, and
+3. copies any vendored `hands_*.glb` files into `public/`.
 
-**Planned (design finalized, see docs/ARCHITECTURE.md)**
+Everything is served locally after that — no CDN, no per-frame network calls.
 
-- Webcam hand tracking via MediaPipe Hand Landmarker (2 hands, VIDEO mode, GPU delegate with CPU
-  fallback) running in a Web Worker, One Euro filter smoothing, pinch-grab / two-hand scale & twist
-  / laser-point gestures with hysteresis, articulated 3D hand mesh, mirrored webcam PiP, calibration
-  wizard.
-- Info overlay panels (highlight + leader line + bilingual card) on selection/hover.
-- Scientifically grounded osmosis simulator (`dV/dt = Lp·A(V)·ΔΨ`, van't Hoff potentials): animal
-  cell swelling & lysis, crenation, plant turgor & plasmolysis, RBC haemolysis — with animated
-  water/solute particles and a live volume graph.
-- WebXR headset mode (architectural seam prepared, not built).
+> **No camera?** Choose **Continue with mouse** on the welcome card. Every gesture has a pointer
+> equivalent (click = pinch, drag = rotate, wheel = scale), so the app is fully usable without one.
 
-## 3. Tech stack
+### Production build
 
-| Layer | Choice | Version (pinned) |
+```bash
+npm run build        # type-check + Vite build -> dist/
+npm run preview      # serve dist/ locally
+```
+
+The build is static. Serve `dist/` behind HTTPS (or `localhost`) — browsers only grant camera access
+in a secure context.
+
+---
+
+## The gesture vocabulary
+
+| Gesture | Result |
+|---|---|
+| **Right pinch** on an organelle or node | **Select** — isolate, centre, open the info overlay |
+| **Right pinch** on empty space | **Unselect** — restore the cell |
+| **Right pinch** on a button | **Click** (release within 500 ms and 24 px) |
+| **Left pinch + move** | **Rotate** the cell / graph |
+| **Both hands pinch** | **Scale** — ratio-based, clamped per page |
+| **Pinch + horizontal drag** | **Swipe** — next/previous (Knowledge and Test) |
+
+Pinch strength is a dead-zoned ratio of tip gap to **palm width**, not to wrist length:
+
+```
+r     = |tip(4) - tip(8)| / |mcp(5) - mcp(17)|
+pinch = 1 - smoothstep(0.10k, 0.55k, r)
+```
+
+`k` is the sensitivity chosen in the control panel — **Firm 0.8 / Normal 1.0 / Light 1.3** — so
+the same hand can be tuned to a camera, a hand size or a lighting setup without touching code. The
+image-space ratio is the primary signal; metric world landmarks are blended in only when they agree
+with it, because MediaPipe's z is the noisiest axis at arm's length. Real finger pads touch while
+the marker centres stay a centimetre or two apart, so the dead zone makes a natural pinch read 1
+instead of stalling in the 0.5–0.6 range.
+
+A pinch becomes active above **0.55**, releases below **0.38** (hysteresis), and must be held for
+**70 ms**. Fists and incomplete hands are rejected. Losing the hand for less than **250 ms** does
+not cancel a gesture.
+
+Pointer movement maps the middle **84 %** of the camera frame (8 % → 92 %) onto the full viewport, a
+~1.19× gain clamped at the edges, so every corner of the screen is reachable without leaning out of
+frame. Sit **60–80 cm** back at eye level; the webcam preview and the onboarding hands check show the
+usable frame as a dashed box.
+
+The gesture state machine is `IDLE → HOVER_UI / SELECTING / ROTATING / SCALING / SWIPING`, with a
+**150 ms cooldown** after a two-hand scale so the release cannot fire a stray select. A two-hand
+pinch always overrides a rotate in progress.
+
+The **HUD** (top-left) reports hands seen, L/R chips, live pinch value and bar, landmark count,
+tracking quality (`Good / Medium / Poor` + %), mirror state, and both tracker and render FPS. The
+gesture legend sits directly beneath it in the same left rail; it collapses automatically on short
+viewports and on the Test page so telemetry never covers the question cards.
+
+| Welcome | Hands check | Gesture primer |
 |---|---|---|
-| Build/dev server | Vite | `8.3.4` |
-| Language | TypeScript (strict) | `7.0.2` |
-| 3D engine | three.js | `0.186.1` |
-| Hand tracking | @mediapipe/tasks-vision (HandLandmarker, 21 landmarks, 2 hands) | `1.1.0` |
-| Unit tests | Vitest | `5.0.4` |
-| E2E smoke tests | Playwright (Chromium fake-camera flags) | `1.64.0` |
+| ![welcome](docs/screenshots/01-onboarding-welcome.png) | ![hands](docs/screenshots/02-onboarding-hands.png) | ![gestures](docs/screenshots/03-onboarding-gestures.png) |
 
-MediaPipe **wasm binaries and the `hand_landmarker.task` model are hosted locally** under
-`public/` (copied by `scripts/fetch-assets.mjs` on install) — the app does not depend on a CDN at
-runtime and works offline.
+---
 
-## 4. Architecture
+## What is in the box
 
-Data flow — webcam pixels never reach the render loop; inference lives in a worker:
+### Interactive Lab
 
-```mermaid
-flowchart LR
-  CAM[Webcam getUserMedia] -->|ImageBitmap transfer| W[Web Worker: HandLandmarker VIDEO GPU->CPU]
-  W -->|21 landmarks + world landmarks| S[OneEuro smoothing]
-  S --> G[Gesture engine with hysteresis]
-  G --> I[InteractionManager]
-  I --> SC[three.js scene: cell rig, hand meshes, particles]
-  SC --> OUT[(60fps render)]
-  I --> IP[Info panel EN/FR]
-  OS[Osmosis ODE] --> SC
+![Selected organelle](docs/screenshots/05-lab-selected.png)
+
+- **15 organelles**, every one a separate, named, raycastable group: membrane, cytoplasm, nucleus,
+  nuclear envelope, nucleolus, mitochondrion, rough ER, smooth ER, Golgi, ribosome, lysosome,
+  vacuole, centriole, cytoskeleton, peroxisome.
+- Auto-rotation on by default with a **Stop** control (top-right); the left hand rotates, two hands
+  scale, and a pinch isolates.
+- Selecting tweens the whole rig so the chosen part sits at the origin; everything else ghosts to
+  8 % (opaque) / 3 % (translucent) instead of disappearing, so spatial context survives.
+- A bottom **structure rail** lists all 15 parts for direct selection, in gesture or mouse mode.
+- Per-organelle overlay: summary, functions, structure, fun fact, related parts, and a link to the
+  matching knowledge node. The card docks to the side that fits between the HUD rail and the
+  control panel, so it never covers either.
+
+### Knowledge
+
+![Knowledge graph](docs/screenshots/06-knowledge.png)
+
+- **36 authored nodes** (Organelles, Processes, Molecules, Techniques, Genetics) and ~90 edges in a
+  deterministic 3D force layout — the same graph every load.
+- Billboarding labels, category colours, travelling-light edges, hover focus.
+- Pinching a node flies the camera in, dims non-neighbours and opens the overlay; related chips hop
+  to adjacent concepts. The focused node can still be rotated and scaled.
+- "Open in Lab" and "Test me" carry the concept across sections.
+
+### Test
+
+| Quiz | Flashcard |
+|---|---|
+| ![quiz](docs/screenshots/09-quiz-question.png) | ![flashcard](docs/screenshots/10-flashcard-revealed.png) |
+
+- **48 multiple-choice questions** with explanations, difficulty tags and links back to the graph.
+- **36 flashcards** on a Leitner schedule (boxes 1–5). Each back restates the question above the
+  answer. Swipe **right = "I knew it"**, **left = "I didn't"**; retrieval state persists in
+  `localStorage` under `celly:v02:leitner`.
+- **3 guided questionnaire sets** of 10 questions each: *Cell basics*, *Energy & transport*,
+  *Genetics & division*.
+- Progress, best score and attempts persist under `celly:v02:progress`.
+- Review screen lists every mistake with the correct answer and an explanation.
+
+| Two-hand scale | Result |
+|---|---|
+| ![scale](docs/screenshots/11-two-hands-scale.png) | ![focus](docs/screenshots/07-knowledge-focus.png) |
+
+---
+
+## How hand tracking works
+
+- **Model:** MediaPipe Tasks Vision `HandLandmarker` (float16, 1.1.0), `numHands: 2`, running on the
+  **main thread** via `requestVideoFrameCallback` when available (falling back to
+  `requestAnimationFrame`). There is no worker and no server round-trip.
+- **Assets:** WASM and the `.task` model are served from `public/` — the app is offline-capable
+  after its first load and never sends a frame anywhere.
+- **Landmarks:** 21 per hand in normalized image space plus metric **world** landmarks. MediaPipe's
+  world axes are image-aligned (y down, z negative toward the camera); Celly converts once in
+  `handTracker.detect()` to a y-up, +z-toward-viewer frame.
+- **Smoothing:** a One-Euro filter (`landmarkFilter.ts`) removes jitter without adding perceptible
+  lag; the raw stream stays available in the debug view.
+- **Sides:** MediaPipe's handedness assumes a mirrored selfie image, so the label is flipped once,
+  then the user's **Swap L/R** correction is applied. Assignments are matched to the nearest wrist
+  and debounced for 150 ms so the labels never flicker.
+- **Quality:** a 0–100 score from landmark confidence, hand size and frame coverage drives the
+  Good/Medium/Poor readout.
+- **Mirroring:** `Mirror X` (on by default) and `Mirror Y` (off) are display-only; the raw tracking
+  frame is never rewritten.
+- **3D hands:** the rigged GLB (21 bones per hand, bone names `00_WRIST` … `20_PINKY_TIP`) is
+  retargeted with a hand-local-frame solve, then damped. The container is anchored on the **pinch
+  midpoint**, not the wrist, so the fingertips meet the cursor instead of floating next to it.
+  Without the GLB, a procedural glass hand takes over with the same interface.
+
+The synthetic-hand path used by the screenshots and e2e tests (`window.__celly.injectHand`) feeds a
+full 21-landmark hand through the exact same pipeline — hover, state machine, intents — so what the
+tests exercise is what a camera produces.
+
+---
+
+## Architecture
+
+```
+src/
+  core/        app shell, render loop, page router, tween engine, store, math, replay hand
+  tracking/    camera, HandLandmarker, One-Euro filter, side resolver, quality
+  gestures/    pinch hysteresis, gesture state machine, virtual cursors
+  scene/       one renderer/scene: cellModel, knowledgeScene, handRig, handLayer, textures, shapes
+  ui/          shell, tabs, HUD, overlay, control panel, onboarding, cursor layer, webcam preview
+  pages/       interactiveLab, knowledge, testing/{testingPage, leitner, progress, session}
+  data/        organelles.json, knowledge.json, questions.json, catalog helpers
+  styles/      design tokens, glass/grain, layout, cursor, responsive rules
+tests/
+  unit/        pinch, side resolution, gesture engine, Leitner/progress, data integrity
+  e2e/         smoke + synthetic-hand replay (Playwright)
+scripts/
+  fetch-assets.mjs   local WASM/model/GLB provisioning
+  shots.mjs          11 docs screenshots via synthetic hands
 ```
 
-Key modules (each one small, documented, testable):
+- **One** `WebGLRenderer` and **one** `Scene` for the whole app. Pages are groups
+  (`labGroup`, `knowledgeGroup`, `testGroup`) toggled by the router; the 3D hands live in
+  `handGroup` and persist across pages, so navigating never re-initialises the GPU.
+- **State** is a tiny typed store with explicit subscriptions — no framework.
+- **Animation** is a custom tween engine (easing, cancellation, completion) plus a per-frame damp
+  for continuous input. No animation library.
+- **Text** is DOM, not canvas: selection, screen readers, i18n and responsive layout come for free.
+  Only the cell, graph and hands are WebGL.
+- **Content** is typed JSON behind `src/data/catalog.ts`; the unit tests enforce the content
+  minimums and referential integrity.
 
-| Module | Role |
-|---|---|
-| `src/scene/SceneManager.ts` | renderer/camera/resize/DPR, quality presets, `MouseOrbit` fallback; `enableXR()` stub = WebXR seam |
-| `src/scene/Lighting.ts` | PBR rig + procedural PMREM environment |
-| `src/scene/LabEnvironment.ts` | bench, microscope, shelves, whiteboard, beakers + drop zones |
-| `src/cell/shapes.ts` | geometry factories (body shapes + per-organelle shapes) |
-| `src/cell/CellModel.ts` | assembles a cell from a spec; part API (visibility, opacity, color, explode, isolate, highlight, raycast targets) |
-| `src/data/*.json` | **all** organelle/cell metadata and layout — data-driven |
-| `src/app/App.ts` | orchestrator: owns scene, lab, cell, input, frame loop |
+A detailed rationale for every structural choice is in [`DECISIONS.md`](DECISIONS.md); the original
+research and asset audit are in [`docs/RESEARCH.md`](docs/RESEARCH.md) and
+[`ASSET_INVENTORY.md`](ASSET_INVENTORY.md).
 
-Design rules: pure/DOM-free logic (`gestures`, `OneEuro`, `OsmosisSim`) is unit-testable; the
-render loop reads the **latest** tracking result and never awaits inference; static lab geometry is
-kept to a low draw-call budget. Full spec: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+---
 
-## 5. Requirements
-
-- Node.js ≥ 20 (developed against v24), npm ≥ 10.
-- A WebGL2 browser (Chrome/Edge/Firefox recent).
-- **Webcam** (Phase 3 only) — requires `localhost` or **HTTPS** (works on the GitHub Pages build).
-- ~50 MB disk for `node_modules` + ~25 MB for MediaPipe assets (auto-downloaded once).
-- Tested on Windows; runs on anything Vite/Chromium runs on.
-
-## 6. Quick start
+## Testing
 
 ```bash
-git clone https://github.com/UlkhadPharaon/Cell-Mastering.git
-cd Cell-Mastering
-npm install        # also fetches MediaPipe wasm + model into public/ (postinstall)
-npm run dev        # http://localhost:5173
+npm test             # Vitest: 53 unit tests
+npm run test:e2e     # Playwright: 8 specs (smoke + gesture replay)
+npm run lint         # ESLint (flat config, typescript-eslint)
+npm run typecheck    # tsc --noEmit, strict
+npm run build        # typecheck + production bundle
 ```
 
-Other commands:
+Unit coverage:
+
+- pinch value, fist rejection, enter/exit hysteresis, minimum hold, invalid input;
+- MediaPipe side flip, manual swap, nearest-wrist slot matching, 150 ms debounce, loss handling;
+- every gesture-state transition: select/unselect, click budget, swipe, rotate, two-hand scale,
+  cooldown, hand-loss reset, dwell-to-click;
+- Leitner promotion/demotion, ordering, persistence and corrupt-storage sanitising;
+- scoring labels, best-ratio persistence;
+- content minimums and integrity: 15 organelles, 36 nodes, 48 MCQs, 36 cards, 3 sets, bilingual
+  coverage, valid links, four distinct options per question.
+
+E2E runs with a fake camera (Chrome's test pattern) so MediaPipe initialises, then injects synthetic
+21-landmark hands through the real pipeline; it selects an organelle, opens and closes the overlay,
+navigates the knowledge graph and verifies the two-hand scale state. No physical webcam is required.
+
+Regenerate the documentation images with the dev server running:
 
 ```bash
-npm run build      # typecheck + production build to dist/
-npm run preview    # serve the built app locally
-npm run typecheck  # tsc --noEmit only
-npm test           # vitest unit tests (gesture engine, filters, osmosis)
-npm run test:e2e   # Playwright smoke test (fake camera)
+node scripts/shots.mjs
 ```
 
-## 7. Controls
+The harness boots Chrome with ANGLE SwiftShader (`--use-angle=swiftshader`, not `--disable-gpu`) and
+a matching 1600×1000 window. Software compositing produced stale, rescaled page copies; pinning ANGLE
+keeps composition normal. Stills also disable `backdrop-filter`, transitions and keyframes, freeze
+the camera at the configured framing, and wait for the overlay's computed visibility, so a slow
+compositor cannot capture a half-faded card.
 
-**Current (mouse + keyboard — this is also the permanent fallback):**
+---
 
-| Input | Action |
+## Privacy
+
+- Camera frames are processed **on this device** in WebAssembly. Nothing is uploaded, recorded or
+  persisted.
+- The only network requests are the initial page assets; the model and WASM are self-hosted.
+- No analytics, no cookies, no accounts. Learning state lives in `localStorage` and can be cleared
+  from the control panel.
+
+## Accessibility
+
+- Full **mouse + keyboard** path; the onboarding offers it before the camera is ever requested.
+- **Reduce motion** and **high contrast** toggles in the control panel; both persist.
+- All interactive UI is real `<button>` / `<summary>` elements with labels and focus styles.
+- Live regions announce the selected organelle and quiz feedback.
+- Interface language **EN / FR**, switching instantly without a reload.
+- The HUD and gesture legend are `pointer-events: none` so telemetry can never swallow a click.
+
+## Performance and browser support
+
+Rendering is capped at the display refresh; tracking runs at camera rate (30/60 fps). The scene
+budget is ~120 draw calls in the Lab and ~160 in Knowledge, with instanced ribosomes and a single
+bloom pass. `renderer.info` is available in the debug panel.
+
+| Browser | Status |
 |---|---|
-| Drag (left button) | Orbit camera around the lab |
-| Mouse wheel | Zoom in / out |
-| `1` / `2` / `3` | Switch cell type: animal / plant / red blood cell |
-| `E` | Cycle explode-view amount |
-| `R` | Reset all parts (visibility, color, explode) |
-| `Q` | Toggle low / high graphics quality |
-| `C` | Re-center the cell on the bench |
+| Chrome / Edge 111+ | Recommended |
+| Safari 17+ | Supported (WebGL2 + WASM SIMD) |
+| Firefox 121+ | Supported; MediaPipe CPU delegate can be slower |
 
-**Planned (Phase 3 hand gestures — will replace the mouse, same semantics):**
+A discrete or modern integrated GPU is recommended. The app degrades to the CPU delegate if GPU
+delegate creation fails, and to mouse mode if no camera is available.
 
-| Gesture | Action |
+---
+
+## Scripts
+
+| Script | Description |
 |---|---|
-| Pinch (thumb + index) | Grab the cell / an organelle |
-| One hand, drag | Move the cell; wrist rotation turns it |
-| Two-hand pinch, move apart/together | Scale the cell |
-| Two-hand twist | Rotate the cell around its axis |
-| Index pointing | Laser ray for hover/selection |
-| Pinch while pointing / hover-dwell | Select an organelle |
-| Open palm | Release |
+| `npm run dev` | Vite dev server with HMR |
+| `npm run build` | `tsc --noEmit && vite build` |
+| `npm run preview` | Serve the production build |
+| `npm run typecheck` | Strict type-check only |
+| `npm run lint` | ESLint over `src`, `tests`, configs |
+| `npm run format` | Prettier write for TS/CSS/Markdown/JSON |
+| `npm test` | Vitest unit suite |
+| `npm run test:watch` | Vitest in watch mode |
+| `npm run test:e2e` | Playwright smoke + gesture replay |
+| `node scripts/shots.mjs` | Regenerate `docs/screenshots` |
 
-## 8. The experiments (the science)
+## Documentation
 
-> Shipped as interactive sims in Phase 5; the full model is specified in `docs/ARCHITECTURE.md §6`
-> and research sources in `docs/RESEARCH.md §4`. Here is what will run and why it's correct.
+- [`PLAN.md`](PLAN.md) — milestones and completion state
+- [`DECISIONS.md`](DECISIONS.md) — every architectural ruling (D-01 … D-31)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — scene graph, data flow, module contracts
+- [`docs/RESEARCH.md`](docs/RESEARCH.md) — prior-art and asset research
+- [`ASSET_INVENTORY.md`](ASSET_INVENTORY.md) — what ships, where it came from, licence audit
+- [`CREDITS.md`](CREDITS.md) — attribution for models, fonts, WASM and code
+- [`CHANGELOG.md`](CHANGELOG.md) — v0.1 → v0.2
 
-Water crosses the cell membrane **down its own concentration gradient** — from the side with fewer
-dissolved particles to the side with more. The driving force is the water-potential difference:
+## Licence
 
-```
-Ψs = −i·C·R·T          (van't Hoff solute potential; i ≈ 1.9 for NaCl)
-dV/dt = Lp · A(V) · ΔΨ  (membrane hydraulic conductivity Lp, surface A grows as V^(2/3))
-```
-
-- **Hypotonic (0.2 % NaCl)** — outside has *fewer* solutes than the cytoplasm ⇒ water rushes **in**.
-  Animal cell & RBC **swell and lyse** past ~1.45–1.6× volume (no wall). Plant cell becomes
-  **turgid**: the wall's elastic pressure exactly cancels the osmotic gradient, so it *cannot burst*.
-- **Isotonic (0.9 % NaCl)** — equal concentrations ⇒ dynamic equilibrium, volume **stable**.
-  (This is physiological saline — the same reason IV drips use it.)
-- **Hypertonic (3.0 % NaCl)** — outside is saltier ⇒ water leaves the cell. Animal cell & RBC
-  **crenate** (shrink and scallop). Plant cell undergoes **plasmolysis**: the membrane and
-  protoplast visibly pull away from the rigid wall, which keeps its shape.
-
-The simulator integrates that ODE with a fixed timestep and drives everything from it — membrane
-volume, crenation/plasmolysis morphs, particle traffic across the membrane, and a live V(t) graph —
-so the visuals are literally a plot of the physics.
-
-## 9. Project structure
-
-```
-Cell-Mastering/
-├── index.html                 # app shell
-├── public/
-│   ├── mediapipe-wasm/        # wasm binaries (fetched on npm install, gitignored)
-│   └── models/
-│       └── hand_landmarker.task  # MediaPipe model, 7.8 MB, committed → offline by default
-├── scripts/
-│   ├── fetch-assets.mjs       # postinstall: copy wasm from package, download model
-│   └── probe.mjs              # headless render check
-├── src/
-│   ├── app/App.ts             # orchestrator + frame loop
-│   ├── scene/                 # SceneManager, Lighting, LabEnvironment
-│   ├── cell/                  # shapes.ts (factories), CellModel.ts (assembly + part API)
-│   ├── data/                  # organelles.json, cells.json, catalog.ts (loader)
-│   ├── util/                  # math.ts (seeded RNG, geometry helpers)
-│   ├── types.ts               # shared interfaces (CellSpec, OrganelleMeta, Intent…)
-│   └── main.ts                # entry
-├── docs/
-│   ├── RESEARCH.md            # sources + every technical decision with rationale
-│   ├── ARCHITECTURE.md        # modules, data flow, Mermaid, physics, testing plan
-│   └── screenshots/           # rendered previews
-├── tests/                     # vitest unit tests + Playwright e2e (Phase 3+)
-├── vite.config.ts  vitest.config.ts  tsconfig.json  package.json
-├── README.md  CREDITS.md  LICENSE  .gitignore
-```
-
-## 10. How to add an organelle (or a whole cell type)
-
-**Add a new cell type:** create an entry in `src/data/cells.json` (id, kind, radius, osmosis
-parameters, part list referencing existing organelle ids). Done — press the matching number key.
-
-**Add a new organelle to an existing cell:**
-
-1. **`src/data/organelles.json`** — add an entry: `id`, bilingual `name/function/facts/size/analogy`,
-   `color`, optional `translucent`, `explodeDir`, optional `group`.
-2. **`src/data/cells.json`** — add `{ "organelleId": "your-id", "count": N, "placement":
-   "scatter|cluster|shell|nucleus-center", "radiusRange": [min,max], "baseSize": s }` to the cell's
-   `parts` array.
-3. *(Optional)* **`src/cell/shapes.ts`** — register a custom geometry factory in `SHAPES`. Skip it
-   and the part automatically gets a generic organelle-like shape (the extensibility guarantee).
-
-No TypeScript in the app itself changes: the metadata loader, the part editor, the exploder and the
-picker all work from the data.
-
-## 11. Assets, credits and licenses
-
-See **[`CREDITS.md`](CREDITS.md)** for the full table. Summary:
-
-- **Application code:** MIT.
-- **All cell and lab geometry:** generated procedurally at runtime by this repo — no third-party
-  3D models are shipped. NIH 3D / open-model alternatives were evaluated and their licenses or
-  fused-print geometry didn't fit (rationale in `docs/RESEARCH.md §3`).
-- **MediaPipe wasm + Hand Landmarker model:** Google, Apache-2.0 (redistributed locally, not modified).
-- **three.js:** MIT. Fonts: system only.
-
-## 12. Performance tips & troubleshooting
-
-- **Low fps** → press `Q` for low quality (no shadows, no env map, cheaper geometry, DPR 1). On
-  integrated GPUs this alone usually doubles frame rate.
-- **White/grey translucent parts** → the PMREM environment failed to init on your driver (old
-  Firefox/strict privacy flags); lights still work, reflections are dropped automatically.
-- **Camera permission denied (Phase 3)** → browsers only allow webcam on `localhost` or HTTPS;
-  on the GitHub Pages build use the Pages URL, on a LAN dev server use a tunnel or the Pages site.
-- **Camera in use** → another app (Zoom/OBS/Teams) holds the device; close it and press Retry.
-- **Blank dark scene** → WebGL2 unsupported or GPU blocklisted; try `--ignore-gpu-blocklist` in
-  Chrome or another browser.
-- The page pauses rendering when hidden automatically (`setAnimationLoop` semantics).
-
-## 13. Roadmap
-
-1. **Phase 3 — hand tracking:** MediaPipe worker pipeline, One Euro smoothing, gesture engine with
-   hysteresis (+ unit tests with synthetic landmarks), depth from apparent hand size + world
-   landmarks, procedural articulated hand mesh, mirrored PiP debug overlay, calibration wizard.
-2. **Phase 4 — info overlay:** selection outline, leader line, following bilingual panel.
-3. **Phase 5 — osmosis experiments:** volume ODE, lysis/crenation/turgor/plasmolysis morphs,
-   water & solute particles, live graph, drag-into-beaker + slider controls.
-4. **WebXR:** headset mode via `renderer.xr` (seam already in SceneManager).
-5. More cell types (bacterium, neuron, palisade mesophyll) — data-only additions, plus mitosis
-   explainer mode.
-
-## 14. Contributing & license
-
-- Fork, branch off `main`, keep commits conventional (`feat(cell): …`, `fix(gestures): …`).
-- Run `npm run typecheck && npm test && npm run build` before opening a PR.
-- Record any new asset (author, URL, license) in `CREDITS.md` — PRs adding third-party binaries
-  without a license line won't pass review.
-- **License: MIT** (see [`LICENSE`](LICENSE)). Third-party components keep their own licenses as
-  listed in `CREDITS.md`.
+MIT © 2026 Ulkhad Pharaon and Celly contributors. Third-party licences are listed in
+[`CREDITS.md`](CREDITS.md).

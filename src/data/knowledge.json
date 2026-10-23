@@ -1,0 +1,484 @@
+[
+  {
+    "id": "nucleus",
+    "label": { "en": "Nucleus", "fr": "Noyau" },
+    "category": "Organelles",
+    "summary": { "en": "Stores DNA and directs the cell's activity.", "fr": "Stocke l'ADN et dirige l'activité de la cellule." },
+    "details": {
+      "en": ["Enclosed by a double membrane with nuclear pores.", "Contains chromatin: DNA wound around histones.", "Transcribes genes into messenger RNA."],
+      "fr": ["Entouré d'une double membrane percée de pores.", "Contient la chromatine : de l'ADN enroulé sur des histones.", "Transcrit les gènes en ARN messager."]
+    },
+    "color": "#8b6cff",
+    "size": 5,
+    "links": ["dna", "transcription", "ribosome", "mitosis", "eukaryote"],
+    "organelleId": "nucleus"
+  },
+  {
+    "id": "mitochondrion",
+    "label": { "en": "Mitochondrion", "fr": "Mitochondrie" },
+    "category": "Organelles",
+    "summary": { "en": "Converts nutrients into ATP by aerobic respiration.", "fr": "Convertit les nutriments en ATP par respiration aérobie." },
+    "details": {
+      "en": ["Inner membrane folds into cristae.", "Has its own circular DNA.", "Inherited mostly from the mother."],
+      "fr": ["La membrane interne forme des crêtes.", "Possède son propre ADN circulaire.", "Hérité principalement de la mère."]
+    },
+    "color": "#ff8a3d",
+    "size": 5,
+    "links": ["atp", "cellular-respiration", "glucose", "oxygen", "peroxisome"],
+    "organelleId": "mitochondrion"
+  },
+  {
+    "id": "ribosome",
+    "label": { "en": "Ribosome", "fr": "Ribosome" },
+    "category": "Organelles",
+    "summary": { "en": "Assembles proteins from messenger RNA.", "fr": "Assemble les protéines à partir de l'ARN messager." },
+    "details": {
+      "en": ["Two subunits made of rRNA and protein.", "Catalyses the peptide bond — a ribozyme.", "Free in the cytoplasm or docked on the rough ER."],
+      "fr": ["Deux sous-unités d'ARNr et de protéines.", "Catalyse la liaison peptidique — un ribozyme.", "Libre dans le cytoplasme ou fixé au réticulum rugueux."]
+    },
+    "color": "#ffd166",
+    "size": 4,
+    "links": ["translation", "protein-synthesis", "rna", "nucleus", "rough-er"],
+    "organelleId": "ribosome"
+  },
+  {
+    "id": "rough-er",
+    "label": { "en": "Rough ER", "fr": "Réticulum rugueux" },
+    "category": "Organelles",
+    "summary": { "en": "Folds and modifies newly made proteins.", "fr": "Replie et modifie les protéines nouvelles." },
+    "details": {
+      "en": ["Flattened cisternae continuous with the nuclear envelope.", "Studded with ribosomes.", "Ships proteins to the Golgi."],
+      "fr": ["Citernes aplaties en continuité avec l'enveloppe nucléaire.", "Garni de ribosomes.", "Expédie les protéines vers l'appareil de Golgi."]
+    },
+    "color": "#e9a0ff",
+    "size": 4,
+    "links": ["protein-synthesis", "golgi", "ribosome", "protein"],
+    "organelleId": "rough-er"
+  },
+  {
+    "id": "smooth-er",
+    "label": { "en": "Smooth ER", "fr": "Réticulum lisse" },
+    "category": "Organelles",
+    "summary": { "en": "Makes lipids and detoxifies harmful molecules.", "fr": "Fabrique des lipides et détoxifie les molécules nocives." },
+    "details": {
+      "en": ["Tubular network with no ribosomes.", "Produces phospholipids and steroid hormones.", "Stores calcium ions."],
+      "fr": ["Réseau tubulaire sans ribosomes.", "Produit des phospholipides et des hormones stéroïdiennes.", "Stocke les ions calcium."]
+    },
+    "color": "#c77dff",
+    "size": 3,
+    "links": ["lipid", "golgi", "enzyme"],
+    "organelleId": "smooth-er"
+  },
+  {
+    "id": "golgi",
+    "label": { "en": "Golgi apparatus", "fr": "Appareil de Golgi" },
+    "category": "Organelles",
+    "summary": { "en": "Sorts, modifies and packages proteins for delivery.", "fr": "Trie, modifie et emballe les protéines pour la livraison." },
+    "details": {
+      "en": ["Stack of four to eight curved cisternae.", "Cis face receives, trans face ships.", "Builds lysosomes and secretory vesicles."],
+      "fr": ["Empilement de quatre à huit citernes courbes.", "La face cis reçoit, la face trans expédie.", "Fabrique les lysosomes et les vésicules de sécrétion."]
+    },
+    "color": "#ffc23d",
+    "size": 4,
+    "links": ["lysosome", "protein", "membrane", "rough-er"],
+    "organelleId": "golgi"
+  },
+  {
+    "id": "lysosome",
+    "label": { "en": "Lysosome", "fr": "Lysosome" },
+    "category": "Organelles",
+    "summary": { "en": "Digests waste and worn-out cell parts.", "fr": "Digère les déchets et les parties cellulaires usées." },
+    "details": {
+      "en": ["Acidic interior at pH 4.5–5.", "More than 50 hydrolytic enzymes.", "Recycles the breakdown products."],
+      "fr": ["Intérieur acide à pH 4,5–5.", "Plus de 50 enzymes hydrolytiques.", "Recycle les produits de dégradation."]
+    },
+    "color": "#2ec4b6",
+    "size": 3,
+    "links": ["autophagy", "enzyme", "vacuole", "golgi"],
+    "organelleId": "lysosome"
+  },
+  {
+    "id": "membrane",
+    "label": { "en": "Cell membrane", "fr": "Membrane plasmique" },
+    "category": "Organelles",
+    "summary": { "en": "Selective barrier that controls traffic in and out.", "fr": "Barrière sélective qui contrôle les échanges." },
+    "details": {
+      "en": ["Phospholipid bilayer about 7–8 nm thick.", "Proteins act as channels, pumps and receptors.", "Fluid mosaic model."],
+      "fr": ["Bicouche phospholipidique d'environ 7 à 8 nm.", "Les protéines servent de canaux, pompes et récepteurs.", "Modèle de la mosaïque fluide."]
+    },
+    "color": "#4cc9f0",
+    "size": 5,
+    "links": ["diffusion", "osmosis", "active-transport", "lipid", "protein", "animal-cell", "plant-cell"],
+    "organelleId": "membrane"
+  },
+  {
+    "id": "cytoskeleton",
+    "label": { "en": "Cytoskeleton", "fr": "Cytosquelette" },
+    "category": "Organelles",
+    "summary": { "en": "Protein scaffold that gives shape and movement.", "fr": "Échafaudage protéique qui donne forme et mouvement." },
+    "details": {
+      "en": ["Actin filaments, intermediate filaments and microtubules.", "Dynamic — constantly assembled and disassembled.", "Drives crawling, division and vesicle transport."],
+      "fr": ["Filaments d'actine, filaments intermédiaires et microtubules.", "Dynamique — sans cesse assemblé et démonté.", "Permet le déplacement, la division et le transport vésiculaire."]
+    },
+    "color": "#6d8fb3",
+    "size": 4,
+    "links": ["mitosis", "animal-cell", "protein", "active-transport"],
+    "organelleId": "cytoskeleton"
+  },
+  {
+    "id": "chloroplast",
+    "label": { "en": "Chloroplast", "fr": "Chloroplaste" },
+    "category": "Organelles",
+    "summary": { "en": "Captures light and builds glucose from CO₂ and water.", "fr": "Capture la lumière et fabrique du glucose à partir du CO₂ et de l'eau." },
+    "details": {
+      "en": ["Green because of chlorophyll.", "Thylakoid stacks (grana) hold the light reactions.", "Has its own DNA, like mitochondria."],
+      "fr": ["Vert à cause de la chlorophylle.", "Les empilements de thylakoïdes (grana) portent les réactions lumineuses.", "Possède son propre ADN, comme les mitochondries."]
+    },
+    "color": "#4ade80",
+    "size": 4,
+    "links": ["photosynthesis", "glucose", "oxygen", "plant-cell"]
+  },
+  {
+    "id": "vacuole",
+    "label": { "en": "Vacuole", "fr": "Vacuole" },
+    "category": "Organelles",
+    "summary": { "en": "Storage sac for water, ions and pigments.", "fr": "Sac de stockage pour l'eau, les ions et les pigments." },
+    "details": {
+      "en": ["Bound by a tonoplast membrane.", "Central vacuole maintains plant turgor.", "Can store waste and defensive compounds."],
+      "fr": ["Délimitée par le tonoplaste.", "La vacuole centrale maintient la turgescence végétale.", "Peut stocker des déchets et des composés de défense."]
+    },
+    "color": "#5ec8ff",
+    "size": 3,
+    "links": ["osmosis", "plant-cell", "water", "lysosome"],
+    "organelleId": "vacuole"
+  },
+  {
+    "id": "peroxisome",
+    "label": { "en": "Peroxisome", "fr": "Peroxysome" },
+    "category": "Organelles",
+    "summary": { "en": "Neutralises peroxide and oxidises fatty acids.", "fr": "Neutralise le peroxyde et oxyde les acides gras." },
+    "details": {
+      "en": ["Contains catalase.", "Breaks down long-chain fatty acids.", "No DNA of its own."],
+      "fr": ["Contient de la catalase.", "Décompose les acides gras à longue chaîne.", "Sans ADN propre."]
+    },
+    "color": "#b5e48c",
+    "size": 2,
+    "links": ["enzyme", "lipid", "mitochondrion"],
+    "organelleId": "peroxisome"
+  },
+  {
+    "id": "dna",
+    "label": { "en": "DNA", "fr": "ADN" },
+    "category": "Molecules",
+    "summary": { "en": "The double helix that stores genetic information.", "fr": "La double hélice qui stocke l'information génétique." },
+    "details": {
+      "en": ["Four bases: A, T, G, C.", "Base pairing: A–T and G–C.", "About 2 m of DNA per human cell."],
+      "fr": ["Quatre bases : A, T, G, C.", "Appariement : A–T et G–C.", "Environ 2 m d'ADN par cellule humaine."]
+    },
+    "color": "#7ee0c3",
+    "size": 5,
+    "links": ["transcription", "mitosis", "meiosis", "nucleus", "protein-synthesis"]
+  },
+  {
+    "id": "rna",
+    "label": { "en": "RNA", "fr": "ARN" },
+    "category": "Molecules",
+    "summary": { "en": "Working copy of a gene; builds proteins.", "fr": "Copie de travail d'un gène ; construit les protéines." },
+    "details": {
+      "en": ["Single-stranded, uses uracil instead of thymine.", "mRNA carries the message to the ribosome.", "rRNA and tRNA are part of translation."],
+      "fr": ["Mono-brin, utilise l'uracile au lieu de la thymine.", "L'ARNm porte le message jusqu'au ribosome.", "L'ARNr et l'ARNt participent à la traduction."]
+    },
+    "color": "#5eead4",
+    "size": 4,
+    "links": ["transcription", "translation", "protein-synthesis", "ribosome"]
+  },
+  {
+    "id": "protein",
+    "label": { "en": "Protein", "fr": "Protéine" },
+    "category": "Molecules",
+    "summary": { "en": "Chain of amino acids that does the cell's work.", "fr": "Chaîne d'acides aminés qui exécute le travail cellulaire." },
+    "details": {
+      "en": ["Twenty standard amino acids.", "Shape determines function.", "Acts as enzymes, channels, motors and structure."],
+      "fr": ["Vingt acides aminés standards.", "La forme détermine la fonction.", "Sert d'enzyme, de canal, de moteur et de structure."]
+    },
+    "color": "#a3e635",
+    "size": 5,
+    "links": ["translation", "enzyme", "membrane", "cytoskeleton"]
+  },
+  {
+    "id": "atp",
+    "label": { "en": "ATP", "fr": "ATP" },
+    "category": "Molecules",
+    "summary": { "en": "The cell's universal energy currency.", "fr": "La monnaie énergétique universelle de la cellule." },
+    "details": {
+      "en": ["Adenosine triphosphate.", "Releasing a phosphate group gives usable energy.", "Recycled thousands of times per day."],
+      "fr": ["Adénosine triphosphate.", "La libération d'un groupe phosphate fournit de l'énergie utilisable.", "Recyclé des milliers de fois par jour."]
+    },
+    "color": "#fbbf24",
+    "size": 4,
+    "links": ["cellular-respiration", "mitochondrion", "active-transport", "enzyme"]
+  },
+  {
+    "id": "glucose",
+    "label": { "en": "Glucose", "fr": "Glucose" },
+    "category": "Molecules",
+    "summary": { "en": "Six-carbon sugar; the main fuel of respiration.", "fr": "Sucre à six carbones ; carburant principal de la respiration." },
+    "details": {
+      "en": ["Formula C₆H₁₂O₆.", "Broken down in glycolysis and respiration.", "Built by photosynthesis in plants."],
+      "fr": ["Formule C₆H₁₂O₆.", "Dégradé par la glycolyse et la respiration.", "Fabriqué par la photosynthèse chez les plantes."]
+    },
+    "color": "#fde68a",
+    "size": 3,
+    "links": ["cellular-respiration", "photosynthesis", "mitochondrion", "chloroplast"]
+  },
+  {
+    "id": "lipid",
+    "label": { "en": "Lipid", "fr": "Lipide" },
+    "category": "Molecules",
+    "summary": { "en": "Water-fearing molecule that builds membranes.", "fr": "Molécule hydrophobe qui construit les membranes." },
+    "details": {
+      "en": ["Phospholipids have a hydrophilic head and two tails.", "Forms the bilayer barrier.", "Also stores energy and carries signals."],
+      "fr": ["Les phospholipides ont une tête hydrophile et deux queues.", "Forme la barrière en bicouche.", "Stocke aussi de l'énergie et porte des signaux."]
+    },
+    "color": "#67e8f9",
+    "size": 3,
+    "links": ["membrane", "smooth-er", "peroxisome", "golgi"]
+  },
+  {
+    "id": "enzyme",
+    "label": { "en": "Enzyme", "fr": "Enzyme" },
+    "category": "Molecules",
+    "summary": { "en": "Protein catalyst that speeds up a reaction.", "fr": "Catalyseur protéique qui accélère une réaction." },
+    "details": {
+      "en": ["Lowers activation energy.", "Highly specific — one substrate per active site.", "Sensitive to pH and temperature."],
+      "fr": ["Abaisse l'énergie d'activation.", "Très spécifique — un substrat par site actif.", "Sensible au pH et à la température."]
+    },
+    "color": "#34d399",
+    "size": 3,
+    "links": ["protein", "lysosome", "peroxisome", "autophagy"]
+  },
+  {
+    "id": "water",
+    "label": { "en": "Water", "fr": "Eau" },
+    "category": "Molecules",
+    "summary": { "en": "The solvent of life; 70–80 % of a cell.", "fr": "Le solvant de la vie ; 70 à 80 % d'une cellule." },
+    "details": {
+      "en": ["Polar molecule, forms hydrogen bonds.", "Moves freely across the membrane by osmosis.", "Dissolves salts, sugars and proteins."],
+      "fr": ["Molécule polaire, forme des liaisons hydrogène.", "Traverse librement la membrane par osmose.", "Dissout les sels, les sucres et les protéines."]
+    },
+    "color": "#38bdf8",
+    "size": 4,
+    "links": ["osmosis", "diffusion", "vacuole", "plant-cell"]
+  },
+  {
+    "id": "oxygen",
+    "label": { "en": "Oxygen", "fr": "Oxygène" },
+    "category": "Molecules",
+    "summary": { "en": "Final electron acceptor in aerobic respiration.", "fr": "Accepteur final d'électrons de la respiration aérobie." },
+    "details": {
+      "en": ["O₂ is reduced to water at the end of the chain.", "Released by photosynthesis.", "Essential for high ATP yield."],
+      "fr": ["L'O₂ est réduit en eau à la fin de la chaîne.", "Libéré par la photosynthèse.", "Indispensable à un rendement élevé en ATP."]
+    },
+    "color": "#93c5fd",
+    "size": 3,
+    "links": ["cellular-respiration", "photosynthesis", "mitochondrion", "chloroplast"]
+  },
+  {
+    "id": "transcription",
+    "label": { "en": "Transcription", "fr": "Transcription" },
+    "category": "Processes",
+    "summary": { "en": "Copying a gene from DNA into messenger RNA.", "fr": "Copie d'un gène de l'ADN en ARN messager." },
+    "details": {
+      "en": ["RNA polymerase reads the template strand.", "Happens in the nucleus of eukaryotes.", "The mRNA then leaves through a nuclear pore."],
+      "fr": ["L'ARN polymérase lit le brin matrice.", "Se déroule dans le noyau chez les eucaryotes.", "L'ARNm sort ensuite par un pore nucléaire."]
+    },
+    "color": "#f472b6",
+    "size": 4,
+    "links": ["dna", "rna", "nucleus"],
+    "quizIds": ["q01", "q02"]
+  },
+  {
+    "id": "translation",
+    "label": { "en": "Translation", "fr": "Traduction" },
+    "category": "Processes",
+    "summary": { "en": "Building a protein from an mRNA message.", "fr": "Construction d'une protéine à partir d'un ARNm." },
+    "details": {
+      "en": ["Ribosomes read codons three bases at a time.", "tRNA delivers matching amino acids.", "Ends at a stop codon."],
+      "fr": ["Les ribosomes lisent les codons trois bases à la fois.", "L'ARNt apporte les acides aminés correspondants.", "Se termine à un codon stop."]
+    },
+    "color": "#fb7185",
+    "size": 4,
+    "links": ["rna", "ribosome", "protein-synthesis"]
+  },
+  {
+    "id": "protein-synthesis",
+    "label": { "en": "Protein synthesis", "fr": "Synthèse des protéines" },
+    "category": "Processes",
+    "summary": { "en": "From gene to working protein, in two steps.", "fr": "Du gène à la protéine fonctionnelle, en deux étapes." },
+    "details": {
+      "en": ["Transcription in the nucleus, translation in the cytoplasm.", "Rough ER folds and modifies the result.", "The Golgi then sorts and ships it."],
+      "fr": ["Transcription dans le noyau, traduction dans le cytoplasme.", "Le réticulum rugueux replie et modifie le produit.", "L'appareil de Golgi le trie ensuite et l'expédie."]
+    },
+    "color": "#f87171",
+    "size": 4,
+    "links": ["ribosome", "rough-er", "translation", "transcription"]
+  },
+  {
+    "id": "cellular-respiration",
+    "label": { "en": "Cellular respiration", "fr": "Respiration cellulaire" },
+    "category": "Processes",
+    "summary": { "en": "Harvesting energy from glucose to make ATP.", "fr": "Extraction de l'énergie du glucose pour produire de l'ATP." },
+    "details": {
+      "en": ["Glycolysis, then the Krebs cycle and the electron transport chain.", "Uses oxygen as the final electron acceptor.", "Yields up to about 32 ATP per glucose."],
+      "fr": ["Glycolyse, puis cycle de Krebs et chaîne de transport d'électrons.", "Utilise l'oxygène comme accepteur final d'électrons.", "Produit jusqu'à environ 32 ATP par glucose."]
+    },
+    "color": "#fb923c",
+    "size": 5,
+    "links": ["mitochondrion", "atp", "glucose", "oxygen"],
+    "quizIds": ["q11", "q12"]
+  },
+  {
+    "id": "photosynthesis",
+    "label": { "en": "Photosynthesis", "fr": "Photosynthèse" },
+    "category": "Processes",
+    "summary": { "en": "Turning light, CO₂ and water into glucose.", "fr": "Transformer lumière, CO₂ et eau en glucose." },
+    "details": {
+      "en": ["Light reactions in the thylakoids.", "Calvin cycle in the stroma.", "Releases oxygen as a by-product."],
+      "fr": ["Réactions lumineuses dans les thylakoïdes.", "Cycle de Calvin dans le stroma.", "Libère de l'oxygène comme sous-produit."]
+    },
+    "color": "#22c55e",
+    "size": 4,
+    "links": ["chloroplast", "glucose", "oxygen", "plant-cell"]
+  },
+  {
+    "id": "diffusion",
+    "label": { "en": "Diffusion", "fr": "Diffusion" },
+    "category": "Processes",
+    "summary": { "en": "Passive movement from high to low concentration.", "fr": "Mouvement passif du milieu concentré vers le dilué." },
+    "details": {
+      "en": ["No energy required.", "Faster at higher temperature and shorter distance.", "Drives gas exchange in the lungs."],
+      "fr": ["Aucune énergie requise.", "Plus rapide à température élevée et sur courte distance.", "Assure les échanges gazeux dans les poumons."]
+    },
+    "color": "#60a5fa",
+    "size": 3,
+    "links": ["membrane", "water", "osmosis", "active-transport"]
+  },
+  {
+    "id": "osmosis",
+    "label": { "en": "Osmosis", "fr": "Osmose" },
+    "category": "Processes",
+    "summary": { "en": "Diffusion of water across a selectively permeable membrane.", "fr": "Diffusion de l'eau à travers une membrane sélectivement perméable." },
+    "details": {
+      "en": ["Water moves toward the higher solute concentration.", "Hypotonic: cell swells. Hypertonic: cell shrinks.", "Plant cells resist bursting thanks to the wall."],
+      "fr": ["L'eau va vers la concentration de soluté la plus élevée.", "Hypotonique : la cellule gonfle. Hypertonique : elle se rétracte.", "Les cellules végétales résistent grâce à leur paroi."]
+    },
+    "color": "#0ea5e9",
+    "size": 4,
+    "links": ["membrane", "water", "vacuole", "diffusion"],
+    "quizIds": ["q21", "q22"]
+  },
+  {
+    "id": "active-transport",
+    "label": { "en": "Active transport", "fr": "Transport actif" },
+    "category": "Processes",
+    "summary": { "en": "Pumping molecules against their concentration gradient.", "fr": "Pomper des molécules contre leur gradient de concentration." },
+    "details": {
+      "en": ["Requires ATP.", "Carrier proteins change shape to move the cargo.", "The sodium–potassium pump is the classic example."],
+      "fr": ["Nécessite de l'ATP.", "Les protéines transporteuses changent de forme pour déplacer la charge.", "La pompe sodium–potassium en est l'exemple classique."]
+    },
+    "color": "#818cf8",
+    "size": 3,
+    "links": ["membrane", "atp", "diffusion", "cytoskeleton"]
+  },
+  {
+    "id": "mitosis",
+    "label": { "en": "Mitosis", "fr": "Mitose" },
+    "category": "Processes",
+    "summary": { "en": "One cell divides into two identical cells.", "fr": "Une cellule se divise en deux cellules identiques." },
+    "details": {
+      "en": ["Prophase, metaphase, anaphase, telophase.", "Chromosomes are duplicated and separated.", "Produces two diploid daughter cells."],
+      "fr": ["Prophase, métaphase, anaphase, télophase.", "Les chromosomes sont dupliqués puis séparés.", "Produit deux cellules filles diploïdes."]
+    },
+    "color": "#c084fc",
+    "size": 4,
+    "links": ["nucleus", "dna", "cytoskeleton", "eukaryote"]
+  },
+  {
+    "id": "meiosis",
+    "label": { "en": "Meiosis", "fr": "Méiose" },
+    "category": "Processes",
+    "summary": { "en": "Two divisions that make haploid gametes.", "fr": "Deux divisions qui produisent des gamètes haploïdes." },
+    "details": {
+      "en": ["Four daughter cells, each haploid.", "Crossing-over shuffles the genes.", "Source of genetic variation."],
+      "fr": ["Quatre cellules filles, chacune haploïde.", "Le brassage génétique mélange les gènes.", "Source de variation génétique."]
+    },
+    "color": "#a78bfa",
+    "size": 3,
+    "links": ["dna", "eukaryote", "animal-cell"]
+  },
+  {
+    "id": "autophagy",
+    "label": { "en": "Autophagy", "fr": "Autophagie" },
+    "category": "Processes",
+    "summary": { "en": "The cell digests and recycles its own parts.", "fr": "La cellule digère et recycle ses propres composants." },
+    "details": {
+      "en": ["Damaged organelles are wrapped in a vesicle.", "The vesicle fuses with a lysosome.", "Breakdown products are reused."],
+      "fr": ["Les organites endommagés sont entourés d'une vésicule.", "La vésicule fusionne avec un lysosome.", "Les produits de dégradation sont réutilisés."]
+    },
+    "color": "#2dd4bf",
+    "size": 2,
+    "links": ["lysosome", "enzyme", "mitochondrion"]
+  },
+  {
+    "id": "prokaryote",
+    "label": { "en": "Prokaryote", "fr": "Procaryote" },
+    "category": "Cell types",
+    "summary": { "en": "A cell with no nucleus — bacteria and archaea.", "fr": "Une cellule sans noyau — bactéries et archées." },
+    "details": {
+      "en": ["DNA sits in a nucleoid region.", "Typically 1–5 µm across.", "Ribosomes are 70S, unlike the eukaryotic 80S."],
+      "fr": ["L'ADN occupe une région appelée nucléoïde.", "Généralement de 1 à 5 µm.", "Les ribosomes sont 70S, contrairement aux 80S eucaryotes."]
+    },
+    "color": "#f472b6",
+    "size": 3,
+    "links": ["dna", "ribosome", "membrane", "eukaryote"]
+  },
+  {
+    "id": "eukaryote",
+    "label": { "en": "Eukaryote", "fr": "Eucaryote" },
+    "category": "Cell types",
+    "summary": { "en": "A cell with a nucleus and membrane-bound organelles.", "fr": "Une cellule avec un noyau et des organites membraneux." },
+    "details": {
+      "en": ["10–100 µm across, much larger than prokaryotes.", "Internal membranes create compartments.", "Includes animal, plant and fungal cells."],
+      "fr": ["De 10 à 100 µm, bien plus grande que les procaryotes.", "Les membranes internes créent des compartiments.", "Comprend les cellules animales, végétales et fongiques."]
+    },
+    "color": "#ec4899",
+    "size": 4,
+    "links": ["nucleus", "mitochondrion", "prokaryote", "animal-cell", "plant-cell"]
+  },
+  {
+    "id": "animal-cell",
+    "label": { "en": "Animal cell", "fr": "Cellule animale" },
+    "category": "Cell types",
+    "summary": { "en": "No wall, no chloroplasts, many small vacuoles.", "fr": "Sans paroi, sans chloroplastes, de nombreuses petites vacuoles." },
+    "details": {
+      "en": ["Flexible membrane only.", "Lysosomes and centrioles are typical.", "Stores energy as glycogen."],
+      "fr": ["Membrane souple uniquement.", "Lysosomes et centrioles caractéristiques.", "Stocke l'énergie sous forme de glycogène."]
+    },
+    "color": "#f9a8d4",
+    "size": 4,
+    "links": ["membrane", "nucleus", "mitochondrion", "cytoskeleton", "lysosome", "eukaryote"]
+  },
+  {
+    "id": "plant-cell",
+    "label": { "en": "Plant cell", "fr": "Cellule végétale" },
+    "category": "Cell types",
+    "summary": { "en": "Rigid wall, chloroplasts and a large central vacuole.", "fr": "Paroi rigide, chloroplastes et grande vacuole centrale." },
+    "details": {
+      "en": ["Cellulose wall resists turgor pressure.", "Chloroplasts perform photosynthesis.", "Connected to neighbours by plasmodesmata."],
+      "fr": ["La paroi de cellulose résiste à la turgescence.", "Les chloroplastes réalisent la photosynthèse.", "Reliée aux voisines par des plasmodesmes."]
+    },
+    "color": "#86efac",
+    "size": 4,
+    "links": ["chloroplast", "vacuole", "membrane", "eukaryote", "photosynthesis"]
+  }
+]

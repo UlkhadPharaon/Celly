@@ -1,146 +1,103 @@
-// Shared types for Cell-Mastering. DOM-free where possible so pure modules stay testable.
+// Shared domain types. Kept DOM-free so every pure module stays unit-testable.
 
+export type Language = 'en' | 'fr';
+export type PageId = 'interactive' | 'knowledge' | 'test';
+export type HandSide = 'left' | 'right';
+export type QualityMode = 'low' | 'high';
+
+export interface Vec2 {
+  x: number;
+  y: number;
+}
 export interface Vec3 {
   x: number;
   y: number;
   z: number;
 }
 
-/** Localized text: EN required, FR optional (falls back to EN). */
-export type Loc = { en: string; fr?: string };
+/** Localized string. EN is required, FR optional (falls back to EN). */
+export interface Loc {
+  en: string;
+  fr?: string;
+}
+export interface LocList {
+  en: string[];
+  fr?: string[];
+}
+
+export type OrganelleId =
+  | 'membrane'
+  | 'cytoplasm'
+  | 'nucleus'
+  | 'nuclear-envelope'
+  | 'nucleolus'
+  | 'mitochondrion'
+  | 'rough-er'
+  | 'smooth-er'
+  | 'golgi'
+  | 'ribosome'
+  | 'lysosome'
+  | 'vacuole'
+  | 'centriole'
+  | 'cytoskeleton'
+  | 'peroxisome';
 
 export interface OrganelleMeta {
   id: string;
   name: Loc;
-  function: Loc;
-  facts: Loc[];
-  /** Approximate size, human readable, e.g. "1–2 µm". */
-  size: Loc;
-  /** Everyday analogy, the memory hook. */
-  analogy: Loc;
-  /** Hex color used when the part has no baked material. */
-  color: number;
-  /** Direction the part travels in the explode view (unit-ish vector, model space). */
-  explodeDir?: Vec3;
-  /** Default render order hints. */
-  translucent?: boolean;
-  /** Group id: parts sharing a group are toggled together (e.g. all mitochondria). */
-  group?: string;
+  shortDescription: Loc;
+  function: LocList;
+  structure: Loc;
+  funFact: Loc;
+  relatedIds: string[];
+  /** Hex string, e.g. "#7b5cff". */
+  color: string;
 }
 
-export interface CellPartSpec {
-  /** Reference into organelles.json. */
-  organelleId: string;
-  /** How many instances of this part to build. */
-  count: number;
-  /** Placement strategy consumed by the cell builder. */
-  placement: 'nucleus-center' | 'scatter' | 'shell' | 'chain' | 'stack' | 'surface' | 'cluster' | 'ring';
-  /** Radius range from cell center for scatter/placement, in cell-radius units. */
-  radiusRange?: [number, number];
-  /** Per-instance size jitter factor. */
-  sizeJitter?: number;
-  baseSize?: number;
-}
-
-export interface CellSpec {
-  id: string;
-  name: Loc;
-  kind: 'animal' | 'plant' | 'rbc';
-  /** Nominal cell radius in scene units. */
-  radius: number;
-  parts: CellPartSpec[];
-  /** Osmosis physiology (see docs/ARCHITECTURE.md §6). */
-  osmosis: {
-    /** Internal NaCl-equivalent concentration, mol/L. */
-    internalC: number;
-    /** Has a rigid wall (plant). */
-    hasWall: boolean;
-    /** Wall rest volume in multiples of V0. */
-    wallVolumeFactor: number;
-    /** Wall elastic stiffness (arbitrary sim units). */
-    wallK: number;
-    /** Volume multiple of V0 at which an animal/RBC membrane lyses. */
-    lyseVolumeFactor: number;
-    /** Volume multiple below which crenation morph kicks in. */
-    crenationFactor: number;
-    /** Hydraulic conductivity Lp (sim units). */
-    Lp: number;
-  };
-  /** Default camera framing distance multiplier. */
-  viewDistance?: number;
-}
-
-export type HandName = 'Left' | 'Right' | 'Unknown';
+// ---------------------------------------------------------------------------
+// Tracking
+// ---------------------------------------------------------------------------
 
 export interface RawHand {
-  handedness: HandName;
-  /** 21 normalized landmarks (image space 0..1). Flat [x0,y0,z0,...] or array of Vec3. */
-  landmarks: Vec3[];
-  /** 21 world landmarks in meters, origin at hand center. */
-  worldLandmarks: Vec3[];
-  /** Detection score 0..1. */
+  handedness: 'Left' | 'Right' | 'Unknown';
+  /** Detection/presence confidence 0..1. */
   score: number;
-  /** Timestamp ms of the frame this came from. */
-  tMs: number;
-}
-
-export type GestureFlag = 'pinch' | 'point' | 'palm';
-
-export interface HandState {
-  name: HandName;
-  present: boolean;
-  /** Smoothed normalized landmarks. */
+  /** 21 landmarks in normalized image space (0..1, origin top-left). */
   landmarks: Vec3[];
-  smoothedWorld: Vec3[];
-  /** Pinch state after hysteresis. */
-  pinching: boolean;
-  pointing: boolean;
-  palmOpen: boolean;
-  /** Normalized thumb-index distance / hand scale (the raw pinch signal). */
-  pinchNorm: number;
-  /** 0..1 how closed the pinch is (1 = fully pinched) for smooth visuals. */
-  pinchStrength: number;
-  /** Hand center in normalized image space, smoothed. */
-  center: Vec3;
-  /** Hand apparent scale (wrist → middle MCP, normalized units). */
-  scale: number;
-  /** Estimated camera-space depth, meters-ish, from apparent size + world landmarks. */
-  depth: number;
-  /** Roll angle of the hand in the image plane, radians. */
-  roll: number;
-  /** Index fingertip ray origin/direction in normalized space for laser. */
-  indexTip: Vec3;
+  /** 21 world landmarks in metres, origin at the hand centre. */
+  worldLandmarks: Vec3[];
 }
 
-export interface TwoHandState {
-  active: boolean;
-  /** Distance between hands in meters (world landmarks). */
-  distance: number;
-  /** Relative twist between the two hands, radians. */
-  twist: number;
-  /** Midpoint in normalized image space. */
-  midpoint: Vec3;
-}
-
-export interface GestureOutput {
-  hands: [HandState, HandState];
-  two: TwoHandState;
-  /** True if at least one hand is tracked this frame. */
-  anyHand: boolean;
-  /** Frame timestamp ms. */
+export interface RawFrame {
+  hands: RawHand[];
   tMs: number;
 }
 
-/** Intents the InteractionManager publishes for the scene to consume. */
-export type Intent =
-  | { type: 'grab-start'; hand: 0 | 1; target: string; point: Vec3 }
-  | { type: 'grab-move'; hand: 0 | 1; position: Vec3; rotation: { yaw: number; pitch: number } }
-  | { type: 'grab-end'; hand: 0 | 1 }
-  | { type: 'scale'; factor: number; pivot: Vec3 }
-  | { type: 'twist'; angle: number }
-  | { type: 'hover'; organelleId: string | null; point: Vec3 }
-  | { type: 'select'; organelleId: string; point: Vec3 }
-  | { type: 'release-part'; organelleId: string };
+export interface HandFrame {
+  side: HandSide;
+  present: boolean;
+  /** Hysteresis-filtered pinch state. */
+  pinching: boolean;
+  /** 0..1, 1 = fully pinched. */
+  pinchValue: number;
+  pinchStart: boolean;
+  pinchEnd: boolean;
+  /** Screen-space pinch cursor in CSS pixels. */
+  cursor: Vec2;
+  /** Same cursor in normalized device coordinates. */
+  cursorNdc: Vec2;
+  /** Screen-space middle-MCP palm point, used for rotate deltas. */
+  palm: Vec2;
+  /** Filtered normalized landmarks. */
+  landmarks: Vec3[];
+  /** Filtered world landmarks (metres). */
+  world: Vec3[];
+  handScale: number;
+  wrist: Vec3;
+  /** In-plane roll angle, radians. */
+  roll: number;
+  tMs: number;
+}
 
 export type CameraStatus =
   | 'idle'
@@ -152,39 +109,134 @@ export type CameraStatus =
   | 'insecure-context'
   | 'unsupported';
 
-export type TrackingStatus = 'disabled' | 'initializing' | 'gpu' | 'cpu' | 'error';
+export type TrackingStatus = 'idle' | 'initializing' | 'gpu' | 'cpu' | 'error';
 
-export type QualityMode = 'low' | 'high';
-export type Language = 'en' | 'fr';
+// ---------------------------------------------------------------------------
+// Gestures
+// ---------------------------------------------------------------------------
 
-export type OsmosisStatus =
-  | 'idle'
-  | 'stable'
-  | 'swelling'
-  | 'shrinking'
-  | 'turgid'
-  | 'plasmolysed'
-  | 'crenated'
-  | 'lysed';
+export type GestureState = 'IDLE' | 'HOVER_UI' | 'SELECTING' | 'ROTATING' | 'SCALING' | 'SWIPING' | 'COOLDOWN';
 
-export interface OsmosisSample {
-  /** Seconds since sim start. */
+export type Intent =
+  | { type: 'select'; id: string }
+  | { type: 'unselect' }
+  | { type: 'click'; id: string }
+  | { type: 'hover'; id: string | null; kind: 'ui' | 'scene' }
+  | { type: 'rotate'; dx: number; dy: number }
+  | { type: 'scale'; factor: number; delta: number }
+  | { type: 'swipe'; direction: 'left' | 'right'; progress: number; phase: 'move' | 'end' }
+  | { type: 'state'; state: GestureState; hint: string };
+
+export interface GestureContext {
   t: number;
-  /** V/V0. */
-  volumeRatio: number;
-  /** External concentration mol/L. */
-  cOut: number;
-  status: OsmosisStatus;
+  hands: HandFrame[];
+  /** Interactive DOM button id under the primary cursor, if any. */
+  uiHover: string | null;
+  /** Scene object id under the primary cursor, if any. */
+  sceneHover: string | null;
+  swipeEnabled: boolean;
+  rotateEnabled: boolean;
+  scaleEnabled: boolean;
+  dwellEnabled: boolean;
 }
 
-export interface BeakerSpec {
+export interface GestureFrame {
+  state: GestureState;
+  hint: string;
+  /** 0..1 dwell progress toward the current UI target. */
+  dwellProgress: number;
+  intents: Intent[];
+  cursors: Array<{
+    side: HandSide;
+    x: number;
+    y: number;
+    visible: boolean;
+    active: boolean;
+    pinchValue: number;
+    mode: 'pointer' | 'pinch' | 'passive';
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Content
+// ---------------------------------------------------------------------------
+
+export type KnowledgeCategory = 'Organelles' | 'Processes' | 'Molecules' | 'Cell types';
+
+export interface KnowledgeNode {
   id: string;
   label: Loc;
-  /** NaCl percentage for the UI. */
-  percent: number;
-  /** Solute concentration, mol/L. */
-  concentration: number;
-  tonicity: Loc;
-  colorHex: number;
-  position: [number, number, number];
+  category: KnowledgeCategory;
+  summary: Loc;
+  details: LocList;
+  color: string;
+  /** 1..5 importance, drives sphere radius. */
+  size: number;
+  links: string[];
+  organelleId?: string;
+  quizIds?: string[];
+}
+
+export type Difficulty = 'easy' | 'medium' | 'hard';
+
+export interface Question {
+  id: string;
+  question: Loc;
+  options: Loc[];
+  answerIndex: number;
+  explanation: Loc;
+  category: string;
+  difficulty: Difficulty;
+  linkedIds: string[];
+}
+
+export interface Flashcard {
+  id: string;
+  front: Loc;
+  back: Loc;
+  category: string;
+  linkedIds: string[];
+}
+
+export interface QuestionnaireSet {
+  id: string;
+  title: Loc;
+  description: Loc;
+  questionIds: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Settings & persisted state
+// ---------------------------------------------------------------------------
+
+export interface Settings {
+  language: Language;
+  mirrorX: boolean;
+  mirrorY: boolean;
+  handsSwap: boolean;
+  showWebcam: boolean;
+  showFeedback: boolean;
+  dwellClick: boolean;
+  autoRotate: boolean;
+  /** Multiplier on the pinch mapping: <1 needs a tighter pinch, >1 accepts a looser one. */
+  pinchSensitivity: number;
+  reducedMotion: boolean;
+  highContrast: boolean;
+  quality: QualityMode;
+}
+
+export type LeitnerBox = 1 | 2 | 3 | 4 | 5;
+
+export interface FlashcardState {
+  box: LeitnerBox;
+  lastSeen: number;
+  correct: number;
+  wrong: number;
+}
+
+export interface TrackingQuality {
+  level: 'good' | 'medium' | 'poor' | 'none';
+  value: number; // 0..1
+  jitter: number;
+  margin: number;
 }
