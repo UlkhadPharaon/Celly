@@ -3,11 +3,12 @@
 All notable changes to Celly. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses `MAJOR.MINOR.PATCH` with a `v0.2` product label.
 
-## [0.2.1] — 2026-10-23
+## [0.2.1] — 2026-10-24
 
 A real-device pass: the synthetic hand pinched to a geometric zero, which hid everything a physical
 hand does differently. Pinch now saturates on a natural pad-to-pad contact, the pointer reaches the
-screen edges, and the left overlays no longer collide.
+screen edges, and the left overlays no longer collide. A second pass then fixed the hand rig and the
+selection pipeline at their root causes (see `DIAGNOSIS_ROUND2.md`).
 
 ### Added
 
@@ -18,6 +19,17 @@ screen edges, and the left overlays no longer collide.
 - **Camera-distance guidance** — the hands check now asks for 60–80 cm at eye level.
 - **Realistic pinch regression** — a touching-but-offset hand, plus a case where metric world z is
   deliberately wrong and the 2D ratio must win.
+- **Hand-selection debug view** — `D` toggles raw/filtered/locked cursors, the pick radius, the
+  armed target, the rig rest/angle/skin readout and the last 20 pinch events.
+- **Built-in Selection test** — `T` runs ten organelles through the real pinch pipeline and reports
+  hit rate and mean aim error. The final run is 10/10 with 0.5 px mean error.
+- **Deterministic hand pose suite** — open, fist, pinch, point, peace, thumbs-up, OK, spread, wiggle,
+  slow wrist rotation, palm, back and fast movement; 14 replay fixtures and screenshots in
+  `docs/screenshots/hand-tests/`.
+- **Skin audit and procedural fallback** — load-time weight/bind checks, rest-pose calibration, and
+  a diagnostic control-panel switch between the rigged GLB and the procedural hand.
+- **Verification harness** — `scripts/verify-hands.mjs` writes screenshots and the raw wrist/joint/
+  latency/bone-stability metrics used in the final report.
 
 ### Changed
 
@@ -41,6 +53,21 @@ screen edges, and the left overlays no longer collide.
   and can be graded without remembering the front.
 - **Shadow map** uses `PCFShadowMap`; Three r186 removed `PCFSoftShadowMap` and warned on every
   page load before falling back to the same mode.
+- **Hand root** is the wrist, not the GLB armature origin. The armature translation is neutralised;
+  `root.position` is the mapped wrist and `root.quaternion` is the shortest-arc palm delta. Position
+  is direct; only orientation and fingers are damped, so fast movement does not drag the wrist.
+- **Retargeting** uses an orthonormal palm basis, a per-bone rest table, parent-first local rotations
+  and soft joint limits. Mirroring remains a screen-position transform rather than a reflection of
+  the orientation data; left and right meshes are driven separately with positive scales.
+- **Selection commits on release**, not pinch start, after a ≥100 ms hold and within a 36 px travel
+  budget. The aim is locked to the position ~100 ms before pinch start (recent fallback after fast
+  movement), and scene hover is frozen during the pinch.
+- **Picking is per instance.** Every organelle instance has its own anchor and enlarged invisible
+  proxy; screen-space proximity is primary and exact ray picking is the fallback. Sticky armed hover
+  uses ~220 ms / ~96 px with 20 px hysteresis, and test/overlay anchors follow one instance instead
+  of jumping to whichever instance is largest that frame.
+- **Finger smoothing** uses shortest-arc quaternion damping with a confidence fallback to the rest
+  pose; a missing or invalid GLB switches to the procedural hand.
 
 ### Fixed
 
@@ -51,6 +78,17 @@ screen edges, and the left overlays no longer collide.
 - The hands check was frozen on “No hands yet”: `setHands` was never called, and its selector wrote
   the label into the second hand dot instead of the status text. The count is now fed from the HUD
   snapshot, so the onboarding sees the tracker live.
+- The hand orbited around the armature origin during wrist rotation; it now rotates around the
+  tracked wrist (0 px projection offset in the final suite).
+- Fingers collapsed or tore because bone directions were applied without rest-pose calibration or
+  parent-first rotations; the rest table and solver keep bone lengths constant (worst CV 0.039 %).
+- Picking used aggregate centres for multi-instance organelles, so a pinch near a mitochondrion or
+  lysosome could select the nucleus/nucleolus; each instance now owns its pick anchor and proxy.
+- A pinch could commit the wrong target because the old aim lock re-picked during the gesture, or
+  because a multi-instance marker jumped to another instance; the target is frozen and anchors have
+  screen-space instance memory.
+- The procedural-hand switch is verified in both directions through the real control; it follows the
+  same wrist pose and restores the rigged GLB without a reload.
 
 ## [0.2.0] — 2026-10-22
 

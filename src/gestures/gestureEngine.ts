@@ -1,4 +1,4 @@
-import type { GestureContext, GestureFrame, GestureState, HandFrame, Intent } from '../types';
+import type { GestureContext, GestureFrame, GestureState, HandFrame, HandSide, Intent, Vec2 } from '../types';
 import { dist2 } from '../core/math';
 
 export interface GestureEngineConfig {
@@ -6,6 +6,10 @@ export interface GestureEngineConfig {
   swipeThresholdPx: number;
   clickMaxMs: number;
   clickMaxTravelPx: number;
+  /** A scene pinch must be held this long (measured from the enter threshold) before release. */
+  selectionHoldMs: number;
+  /** ...and the live pinch cursor must not travel farther than this between start and release. */
+  selectionMaxTravelPx: number;
   dwellMs: number;
   rotateGain: number;
   scaleSmooth: number;
@@ -16,6 +20,8 @@ export const DEFAULT_GESTURE: GestureEngineConfig = {
   swipeThresholdPx: 130,
   clickMaxMs: 500,
   clickMaxTravelPx: 24,
+  selectionHoldMs: 100,
+  selectionMaxTravelPx: 36,
   dwellMs: 900,
   rotateGain: 7,
   scaleSmooth: 0.35
@@ -28,15 +34,37 @@ interface ClickCandidate {
   y: number;
 }
 
+interface SelectionCandidate {
+  target: string | null;
+  /** Time the pinch crossed the enter threshold, not the time it became active. */
+  t: number;
+  /** Live cursor at pinch start, for the travel budget. */
+  x: number;
+  y: number;
+  /** Locked aim, reported with the intent. */
+  aim: Vec2;
+}
+
 interface SwipeSession {
   startX: number;
   t: number;
 }
 
+export interface PinchEvent {
+  t: number;
+  side: HandSide;
+  target: string | null;
+  result: 'select' | 'unselect' | 'click' | 'reject';
+  reason: string;
+  heldMs: number;
+  travelPx: number;
+  aim: Vec2;
+}
+
 const HINTS: Record<GestureState, string> = {
   IDLE: '',
   HOVER_UI: 'Pinch to click',
-  SELECTING: 'Selected',
+  SELECTING: 'Release to select',
   ROTATING: 'Rotate',
   SCALING: 'Scale',
   SWIPING: 'Swipe',
@@ -46,11 +74,16 @@ const HINTS: Record<GestureState, string> = {
 /**
  * Turns tracked hands into semantic intents. Knows nothing about pages or Three.js
  * (see DECISIONS D-18). One instance lives for the whole session.
+ *
+ * Scene selection commits on release, not on the pinch start. The hand may land on a target,
+ * close, and release after a short deliberate hold; tiny landmark drift during closure is
+ * ignored because the aim anchor is frozen. A long pinch that travels is a drag, not a click.
  */
 export class GestureEngine {
   state: GestureState = 'IDLE';
   private cooldownUntil = 0;
   private clickCandidate: ClickCandidate | null = null;
+  private selectCandidate: SelectionCandidate | null = null;
   private swipe: SwipeSession | null = null;
   private scaleStartDist = 1;
   private scaleSmoothed = 1;
@@ -60,6 +93,7 @@ export class GestureEngine {
   private lastHoverKind: 'ui' | 'scene' = 'ui';
   private dwellSince = 0;
   private dwellFired = false;
+  private pinchLog: PinchEvent[] = [];
 
   constructor(private readonly cfg: GestureEngineConfig = DEFAULT_GESTURE) {}
 
@@ -67,11 +101,18 @@ export class GestureEngine {
     this.state = 'IDLE';
     this.cooldownUntil = 0;
     this.clickCandidate = null;
+    this.selectCandidate = null;
     this.swipe = null;
     this.lastPalm = null;
     this.lastHover = null;
     this.dwellSince = 0;
     this.dwellFired = false;
+    this.pinchLog = [];
+  }
+
+  /** Last 20 selection attempts, newest last. Shown in the debug overlay. */
+  getPinchLog(): PinchEvent[] {
+    return this.pinchLog.slice(-20);
   }
 
   step(ctx: GestureContext): GestureFrame {
@@ -80,7 +121,6 @@ export class GestureEngine {
     const left = ctx.hands.find((h) => h.present && h.side === 'left') ?? null;
     const primary: HandFrame | null = right ?? left;
     const primaryIsLeft = !right;
-    const other: HandFrame | null = primaryIsLeft ? right : left;
     const bothPinching = !!(right?.pinching && left?.pinching);
 
     // ---------------------------------------------------------------- scaling
@@ -104,78 +144,161 @@ export class GestureEngine {
       this.state = 'SCALING';
       this.lastPalm = null;
       this.swipe = null;
+      this.selectCandidate = null;
+      this.clickCandidate = null;
     }
 
     if (this.state !== 'SCALING' && !primary) {
       // The hand left the frame (past the tracker's tolerance window): drop any in-flight
       // gesture without firing a click, so nothing stays stuck in SELECTING/ROTATING.
       this.clickCandidate = null;
+      this.selectCandidate = null;
       this.swipe = null;
       this.lastPalm = null;
       if (this.state !== 'COOLDOWN') this.state = 'IDLE';
     }
 
     if (this.state !== 'SCALING' && primary) {
-      // ------------------------------------------------------------ primary pinch
-      if (primary.pinchStart) {
-        if (ctx.uiHover) {
-          this.clickCandidate = { id: ctx.uiHover, t: ctx.t, x: primary.cursor.x, y: primary.cursor.y };
-        } else if (ctx.sceneHover) {
-          intents.push({ type: 'select', id: ctx.sceneHover });
-        } else {
-          intents.push({ type: 'unselect' });
-          if (primaryIsLeft) {
-            // With no right hand, a blank pinch becomes the rotate gesture.
-            this.beginRotate(primary);
-          } else if (ctx.swipeEnabled) {
-            // Pinching empty space still releases the selection, but the same hold can
-            // resolve into a horizontal swipe on release.
-            this.swipe = { startX: primary.cursor.x, t: ctx.t };
+      if (primary.lost) {
+        // A frame held during the tracker's loss window is not a deliberate release. Never turn
+        // a dropped hand into a selection or an unselection.
+        this.selectCandidate = null;
+        this.clickCandidate = null;
+        this.swipe = null;
+      } else {
+        // ---------------------------------------------------------- primary pinch
+        if (primary.pinchStart) {
+          if (ctx.uiHover) {
+            this.clickCandidate = {
+              id: ctx.uiHover,
+              t: ctx.t,
+              x: primary.cursor.x,
+              y: primary.cursor.y
+            };
+          } else {
+            const candidateAt = primary.pinchCandidateAt >= 0 ? primary.pinchCandidateAt : ctx.t;
+            this.selectCandidate = {
+              target: ctx.sceneHover,
+              t: candidateAt,
+              x: primary.cursor.x,
+              y: primary.cursor.y,
+              aim: { x: primary.aim.x, y: primary.aim.y }
+            };
+            if (!ctx.sceneHover && primaryIsLeft) {
+              // Left-only use keeps the familiar blank-pinch-to-release behaviour and starts the
+              // rotate immediately. With a right hand present, release is what unselects.
+              intents.push({ type: 'unselect', aim: { x: primary.aim.x, y: primary.aim.y } });
+              this.selectCandidate = null;
+              this.beginRotate(primary);
+            } else if (!ctx.sceneHover && ctx.swipeEnabled) {
+              // Pages that allow swiping keep the old release-on-pinch-start behaviour; the
+              // drag is a navigation gesture, not a selection candidate.
+              intents.push({ type: 'unselect', aim: { x: primary.aim.x, y: primary.aim.y } });
+              this.selectCandidate = null;
+              this.swipe = { startX: primary.cursor.x, t: ctx.t };
+            }
           }
         }
-      }
 
-      if (primary.pinching) {
-        if (this.clickCandidate) {
-          const moved = dist2(primary.cursor, this.clickCandidate);
-          if (moved > this.cfg.clickMaxTravelPx) this.clickCandidate = null;
-        }
-        if (this.swipe) {
-          const progress = (primary.cursor.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
-          intents.push({
-            type: 'swipe',
-            direction: progress >= 0 ? 'right' : 'left',
-            progress,
-            phase: 'move'
-          });
-        }
-      }
-
-      if (primary.pinchEnd) {
-        if (this.clickCandidate) {
-          const held = ctx.t - this.clickCandidate.t;
-          const moved = dist2(primary.cursor, this.clickCandidate);
-          if (held <= this.cfg.clickMaxMs && moved <= this.cfg.clickMaxTravelPx) {
-            intents.push({ type: 'click', id: this.clickCandidate.id });
+        if (primary.pinching) {
+          if (this.clickCandidate) {
+            const moved = dist2(primary.cursor, this.clickCandidate);
+            if (moved > this.cfg.clickMaxTravelPx) this.clickCandidate = null;
           }
-          this.clickCandidate = null;
+          if (this.swipe) {
+            const progress = (primary.cursor.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
+            intents.push({
+              type: 'swipe',
+              direction: progress >= 0 ? 'right' : 'left',
+              progress,
+              phase: 'move'
+            });
+          }
         }
-        if (this.swipe) {
-          const progress = (primary.cursor.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
-          intents.push({
-            type: 'swipe',
-            direction: progress >= 0 ? 'right' : 'left',
-            progress,
-            phase: 'end'
-          });
-          this.swipe = null;
+
+        if (primary.pinchEnd) {
+          if (this.clickCandidate) {
+            const held = ctx.t - this.clickCandidate.t;
+            const moved = dist2(primary.cursor, this.clickCandidate);
+            if (held <= this.cfg.clickMaxMs && moved <= this.cfg.clickMaxTravelPx) {
+              intents.push({ type: 'click', id: this.clickCandidate.id });
+              this.logPinch({
+                t: ctx.t,
+                side: primary.side,
+                target: this.clickCandidate.id,
+                result: 'click',
+                reason: 'ui-release',
+                heldMs: held,
+                travelPx: moved,
+                aim: { x: primary.aim.x, y: primary.aim.y }
+              });
+            }
+            this.clickCandidate = null;
+          }
+
+          if (this.selectCandidate) {
+            const held = ctx.t - this.selectCandidate.t;
+            const travel = dist2(primary.cursor, this.selectCandidate);
+            if (this.selectCandidate.target && held >= this.cfg.selectionHoldMs && travel <= this.cfg.selectionMaxTravelPx) {
+              intents.push({
+                type: 'select',
+                id: this.selectCandidate.target,
+                aim: this.selectCandidate.aim
+              });
+              this.logPinch({
+                t: ctx.t,
+                side: primary.side,
+                target: this.selectCandidate.target,
+                result: 'select',
+                reason: 'release',
+                heldMs: held,
+                travelPx: travel,
+                aim: this.selectCandidate.aim
+              });
+            } else if (!this.selectCandidate.target && held >= this.cfg.selectionHoldMs && travel <= this.cfg.selectionMaxTravelPx) {
+              intents.push({ type: 'unselect', aim: this.selectCandidate.aim });
+              this.logPinch({
+                t: ctx.t,
+                side: primary.side,
+                target: null,
+                result: 'unselect',
+                reason: 'blank-release',
+                heldMs: held,
+                travelPx: travel,
+                aim: this.selectCandidate.aim
+              });
+            } else {
+              this.logPinch({
+                t: ctx.t,
+                side: primary.side,
+                target: this.selectCandidate.target,
+                result: 'reject',
+                reason: held < this.cfg.selectionHoldMs ? 'short-hold' : 'moved',
+                heldMs: held,
+                travelPx: travel,
+                aim: this.selectCandidate.aim
+              });
+            }
+            this.selectCandidate = null;
+          }
+
+          if (this.swipe) {
+            const progress = (primary.cursor.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
+            intents.push({
+              type: 'swipe',
+              direction: progress >= 0 ? 'right' : 'left',
+              progress,
+              phase: 'end'
+            });
+            this.swipe = null;
+          }
+          if (this.lastPalm && primaryIsLeft) this.lastPalm = null;
         }
-        if (this.lastPalm && primaryIsLeft) this.lastPalm = null;
       }
     }
 
     // ------------------------------------------------------------- left rotate
-    if (this.state !== 'SCALING' && !primaryIsLeft && left) {
+    if (this.state !== 'SCALING' && !primaryIsLeft && left && !left.lost) {
       if (left.pinchStart && ctx.t >= this.cooldownUntil && ctx.rotateEnabled) {
         this.beginRotate(left);
       }
@@ -191,7 +314,7 @@ export class GestureEngine {
     }
 
     // ------------------------------------------------------- rotate (left-only)
-    if (primaryIsLeft && primary) {
+    if (primaryIsLeft && primary && !primary.lost) {
       if (primary.pinching && this.state === 'ROTATING' && this.lastPalm) {
         const dx = (primary.palm.x - this.lastPalm.x) * this.cfg.rotateGain;
         const dy = (primary.palm.y - this.lastPalm.y) * this.cfg.rotateGain;
@@ -230,7 +353,7 @@ export class GestureEngine {
       if (this.swipe) this.state = 'SWIPING';
       else if (this.clickCandidate) this.state = 'HOVER_UI';
       else if (this.lastPalm) this.state = 'ROTATING';
-      else if (primary?.pinching) this.state = 'SELECTING';
+      else if (this.selectCandidate || primary?.pinching) this.state = 'SELECTING';
       else if (ctx.uiHover) this.state = 'HOVER_UI';
       else this.state = 'IDLE';
     }
@@ -249,8 +372,8 @@ export class GestureEngine {
       const isPrimary = h === primary;
       cursors.push({
         side: h.side,
-        x: h.cursor.x,
-        y: h.cursor.y,
+        x: h.aimLocked ? h.aim.x : h.cursor.x,
+        y: h.aimLocked ? h.aim.y : h.cursor.y,
         visible: true,
         active: isPrimary,
         pinchValue: h.pinchValue,
@@ -258,16 +381,19 @@ export class GestureEngine {
       });
     }
 
-    // `other` is intentionally unused beyond side resolution; kept for readability.
-    void other;
-
     return { state: this.state, hint: HINTS[this.state], dwellProgress, intents, cursors };
+  }
+
+  private logPinch(event: PinchEvent): void {
+    this.pinchLog.push(event);
+    if (this.pinchLog.length > 20) this.pinchLog.shift();
   }
 
   private beginRotate(hand: HandFrame): void {
     this.state = 'ROTATING';
     this.lastPalm = { x: hand.palm.x, y: hand.palm.y };
     this.clickCandidate = null;
+    this.selectCandidate = null;
     this.swipe = null;
   }
 }

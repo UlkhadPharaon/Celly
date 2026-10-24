@@ -10,7 +10,7 @@ async function enterWithMouse(page: Page): Promise<void> {
   await page.waitForTimeout(1200);
 }
 
-/** Move the synthetic hand, settle, then pinch and hold long enough to pass the 70 ms hold. */
+/** Aim, close the pinch past the 100 ms selection hold, then release to commit. */
 async function pinchAt(page: Page, x: number, y: number, side: 'left' | 'right' = 'right'): Promise<void> {
   await page.evaluate(
     ([s, px, py]) => window.__celly!.injectHand(s as 'left' | 'right', px as number, py as number, 0.1),
@@ -19,6 +19,11 @@ async function pinchAt(page: Page, x: number, y: number, side: 'left' | 'right' 
   await page.waitForTimeout(180);
   await page.evaluate(
     ([s, px, py]) => window.__celly!.injectHand(s as 'left' | 'right', px as number, py as number, 0.96),
+    [side, x, y]
+  );
+  await page.waitForTimeout(220);
+  await page.evaluate(
+    ([s, px, py]) => window.__celly!.injectHand(s as 'left' | 'right', px as number, py as number, 0.1),
     [side, x, y]
   );
   await page.waitForTimeout(420);
@@ -56,12 +61,17 @@ async function aimAt(page: Page, ids: string[]): Promise<{ id: string; x: number
 
 async function selectHovered(page: Page, ids: string[]): Promise<string> {
   const target = await aimAt(page, ids);
-  // Re-read the anchor and pinch in the same task so the graph cannot drift out from under us.
+  // Re-read the anchor and pinch/release in the same task so the graph cannot drift.
   await page.evaluate((id) => {
     const anchor = window.__celly!.sceneAnchor(id);
     if (anchor) window.__celly!.injectHand('right', anchor.x, anchor.y, 0.96);
   }, target.id);
-  await page.waitForTimeout(520);
+  await page.waitForTimeout(220);
+  await page.evaluate((id) => {
+    const anchor = window.__celly!.sceneAnchor(id);
+    if (anchor) window.__celly!.injectHand('right', anchor.x, anchor.y, 0.1);
+  }, target.id);
+  await page.waitForTimeout(560);
   return target.id;
 }
 

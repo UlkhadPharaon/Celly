@@ -17,6 +17,7 @@ export interface ControlState {
   quality: QualityMode;
   reducedMotion: boolean;
   highContrast: boolean;
+  proceduralHand: boolean;
 }
 
 export type ToggleKey =
@@ -27,7 +28,8 @@ export type ToggleKey =
   | 'swap'
   | 'dwell'
   | 'reducedMotion'
-  | 'highContrast';
+  | 'highContrast'
+  | 'proceduralHand';
 
 const COPY = {
   en: {
@@ -51,7 +53,8 @@ const COPY = {
     privacy: 'Video never leaves this device',
     accessibility: 'Accessibility',
     reducedMotion: 'Reduce motion',
-    highContrast: 'High contrast'
+    highContrast: 'High contrast',
+    proceduralHand: 'Procedural hand (diagnostic)'
   },
   fr: {
     controls: 'Réglages',
@@ -74,7 +77,8 @@ const COPY = {
     privacy: 'La vidéo ne quitte jamais cet appareil',
     accessibility: 'Accessibilité',
     reducedMotion: 'Réduire les animations',
-    highContrast: 'Contraste élevé'
+    highContrast: 'Contraste élevé',
+    proceduralHand: 'Main procédurale (diagnostic)'
   }
 };
 
@@ -177,6 +181,7 @@ export class ControlPanel {
     more.append(moreList);
     this.addRow(moreList, 'reducedMotion', 'reducedMotion', ICONS.spark);
     this.addRow(moreList, 'highContrast', 'highContrast', ICONS.eye);
+    this.addRow(moreList, 'proceduralHand', 'proceduralHand', ICONS.hand);
     this.root.append(more);
     this.accessibilitySummary = summary;
 
@@ -280,6 +285,7 @@ export class ControlPanel {
     this.setOn('dwell', state.dwell);
     this.setOn('reducedMotion', state.reducedMotion);
     this.setOn('highContrast', state.highContrast);
+    this.setOn('proceduralHand', state.proceduralHand);
     this.preview.setVisible(state.showWebcam);
 
     for (const b of this.root.querySelectorAll<HTMLButtonElement>('[data-lang]')) {
@@ -309,7 +315,8 @@ export class ControlPanel {
       ['dwell', 'dwell'],
       ['showWebcam', 'webcam'],
       ['reducedMotion', 'reducedMotion'],
-      ['highContrast', 'highContrast']
+      ['highContrast', 'highContrast'],
+      ['proceduralHand', 'proceduralHand']
     ];
     for (const [key, labelKey] of map) {
       const label = this.labels.get(key);

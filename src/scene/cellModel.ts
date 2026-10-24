@@ -35,20 +35,35 @@ interface EmissiveTarget {
 const GHOST = 0.1;
 
 /**
- * Structural weight of each part, used to break ties when a single ray crosses several
- * of them (DECISIONS D-19). A shell — the membrane, the cytoplasm, the nuclear envelope —
- * swallows everything behind it, so it only wins when nothing more specific is under the
- * cursor. That keeps the nucleus clickable through its own envelope.
+ * Foreground structures a hand pinch may select. Background shells and particles are deliberately
+ * excluded from proximity/proxy picking: aiming through the membrane should count as blank, not
+ * select the membrane or a ribosome. They remain reachable from the structure rail.
  */
-const PICK_PRIORITY: Partial<Record<OrganelleId, number>> = {
-  membrane: 0,
-  cytoplasm: 1,
-  cytoskeleton: 2,
-  'nuclear-envelope': 3,
-  nucleus: 4,
-  ribosome: 5
-};
-const PICK_DEFAULT = 6;
+export const PICKABLE_IDS = [
+  'nucleus',
+  'nuclear-envelope',
+  'nucleolus',
+  'mitochondrion',
+  'rough-er',
+  'smooth-er',
+  'golgi',
+  'lysosome',
+  'vacuole',
+  'centriole',
+  'peroxisome'
+] as const satisfies readonly OrganelleId[];
+
+const PICKABLE = new Set<OrganelleId>(PICKABLE_IDS);
+
+interface PickAnchor {
+  /** Centre in the part group's local space, so it follows bob/selection transforms. */
+  local: THREE.Vector3;
+  radius: number;
+}
+
+export function isPickable(id: OrganelleId | string | null | undefined): id is OrganelleId {
+  return !!id && PICKABLE.has(id as OrganelleId);
+}
 
 export class CellModel {
   readonly root = new THREE.Group();
@@ -58,6 +73,7 @@ export class CellModel {
   selected: OrganelleId | null = null;
   hovered: OrganelleId | null = null;
   isolation: OrganelleId | null = null;
+  testTarget: OrganelleId | null = null;
 
   private readonly halo: THREE.Mesh;
   private haloMaterial: THREE.ShaderMaterial;
@@ -65,6 +81,11 @@ export class CellModel {
   private emissiveTargets = new Map<OrganelleId, EmissiveTarget[]>();
   private emphasis = new Map<OrganelleId, number>();
   private opacityScale = new Map<OrganelleId, number>();
+  private readonly pickProxies: THREE.Mesh[] = [];
+  /** One anchor per visible instance: six mitochondria, seven lysosomes, two centrioles, … */
+  private readonly pickAnchors = new Map<OrganelleId, PickAnchor[]>();
+  private readonly proxyGeometry = new THREE.SphereGeometry(1, 10, 8);
+  private readonly proxyMaterial = new THREE.MeshBasicMaterial({ visible: false });
   private disposed = false;
 
   constructor() {
@@ -519,6 +540,7 @@ export class CellModel {
     const { group } = this.newPart('smooth-er');
     const rng = makeRng(2207);
     const parts: THREE.BufferGeometry[] = [];
+    const anchors: Array<{ x: number; y: number; z: number; radius: number }> = [];
     for (let i = 0; i < 9; i++) {
       const start = new THREE.Vector3(range(rng, -1.15, 1.15), range(rng, -0.9, 0.9), range(rng, -0.9, 0.9));
       if (start.length() > 1.32) start.setLength(range(rng, 0.6, 1.2));
@@ -532,7 +554,20 @@ export class CellModel {
         pts.push(cur.clone());
       }
       parts.push(tubeGeometry(pts, 0.018, 5, 24));
+      // One anchor per tube segment, not one per tube: an average point in the middle of a long
+      // curved tube is a poor stand-in for the part of the tube actually under the cursor.
+      for (let k = 0; k < pts.length - 1; k++) {
+        const a = pts[k];
+        const b = pts[k + 1];
+        anchors.push({
+          x: (a.x + b.x) / 2,
+          y: (a.y + b.y) / 2,
+          z: (a.z + b.z) / 2,
+          radius: 0.07
+        });
+      }
     }
+    group.userData.pickAnchors = anchors;
     const merged = parts.length > 1 ? mergeGeometries(parts, false) : (parts[0] ?? null);
     parts.forEach((p) => p.dispose());
     if (merged) {
@@ -744,31 +779,115 @@ export class CellModel {
       part.bobSpeed = 0.35 + rng() * 0.5;
       part.phase = rng() * Math.PI * 2;
       part.spin.set((rng() - 0.5) * 0.08, (rng() - 0.5) * 0.12, (rng() - 0.5) * 0.08);
+
+      if (PICKABLE.has(part.id)) {
+        const anchors = this.collectPickAnchors(part);
+        this.pickAnchors.set(part.id, anchors);
+        for (const anchor of anchors) {
+          const proxy = new THREE.Mesh(this.proxyGeometry, this.proxyMaterial);
+          proxy.position.copy(anchor.local);
+          proxy.scale.setScalar(anchor.radius * 1.22);
+          proxy.userData.partId = part.id;
+          proxy.visible = false;
+          proxy.name = `pick:${part.id}`;
+          part.group.add(proxy);
+          this.pickProxies.push(proxy);
+        }
+      }
     }
+  }
+
+  /**
+   * Build one pick anchor per real instance. A single bounding sphere for all mitochondria sits
+   * near the cell centre and covers the nucleus; that was the root of the "aimed at a mitochondrion,
+   * selected the nucleolus" failures.
+   */
+  private collectPickAnchors(part: CellPart): PickAnchor[] {
+    const custom = part.group.userData.pickAnchors as
+      | Array<{ x: number; y: number; z: number; radius: number }>
+      | undefined;
+    if (Array.isArray(custom) && custom.length) {
+      return custom.map((a) => ({
+        local: new THREE.Vector3(a.x, a.y, a.z),
+        radius: Math.max(0.045, a.radius)
+      }));
+    }
+
+    const out: PickAnchor[] = [];
+    const box = new THREE.Box3();
+    const sphere = new THREE.Sphere();
+    for (const child of part.group.children) {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.partId !== part.id) continue;
+      box.setFromObject(mesh);
+      if (box.isEmpty()) continue;
+      box.getBoundingSphere(sphere);
+      const radius = Math.max(0.045, sphere.radius);
+      const local = part.group.worldToLocal(sphere.center.clone());
+      const duplicate = out.find(
+        (a) => a.local.distanceTo(local) < Math.max(0.035, Math.min(radius, a.radius) * 0.55)
+      );
+      if (duplicate) {
+        if (radius > duplicate.radius) {
+          duplicate.local.copy(local);
+          duplicate.radius = radius;
+        }
+        continue;
+      }
+      out.push({ local, radius });
+    }
+    return out;
   }
 
   // ------------------------------------------------------------------ interaction
 
   /**
-   * Hit-test the cell. Shell and background systems (membrane, cytoplasm, cytoskeleton,
-   * ribosomes) are only returned when nothing more specific sits under the ray, otherwise
-   * the membrane would swallow every pick.
+   * Hit-test the cell. Only foreground structures are selectable; the membrane, cytoplasm and
+   * particle systems are "blank" for hand picking even when the ray crosses them. The proxy pass
+   * is a forgiving second chance for organelles whose visible geometry is small in screen space.
    */
   pick(raycaster: THREE.Raycaster): OrganelleId | null {
     const hits = raycaster.intersectObject(this.root, true);
-    let best: OrganelleId | null = null;
-    let bestScore = -1;
+    for (const hit of hits) {
+      if (hit.object.name.startsWith('pick:')) continue;
+      const id = hit.object.userData.partId as OrganelleId | undefined;
+      if (!id || !PICKABLE.has(id)) continue;
+      return id;
+    }
+    return this.pickProxy(raycaster);
+  }
+
+  /** Invisible, slightly enlarged spheres that follow each pickable part. */
+  private pickProxy(raycaster: THREE.Raycaster): OrganelleId | null {
+    if (!this.pickProxies.length) return null;
+    const hits = raycaster.intersectObjects(this.pickProxies, false);
     for (const hit of hits) {
       const id = hit.object.userData.partId as OrganelleId | undefined;
-      if (!id || !this.parts.has(id)) continue;
-      const score = PICK_PRIORITY[id] ?? PICK_DEFAULT;
-      if (score > bestScore) {
-        best = id;
-        bestScore = score;
-      }
-      if (bestScore === PICK_DEFAULT) break;
+      if (id && PICKABLE.has(id)) return id;
     }
-    return best;
+    return null;
+  }
+
+  /** World-space instance candidates for screen-proximity picking. */
+  pickCandidates(): Array<{ id: OrganelleId; center: THREE.Vector3; radius: number }> {
+    this.root.updateWorldMatrix(true, true);
+    const out: Array<{ id: OrganelleId; center: THREE.Vector3; radius: number }> = [];
+    for (const [id, anchors] of this.pickAnchors) {
+      const part = this.parts.get(id);
+      if (!part) continue;
+      for (const anchor of anchors) {
+        out.push({
+          id,
+          center: part.group.localToWorld(anchor.local.clone()),
+          radius: anchor.radius
+        });
+      }
+    }
+    return out;
+  }
+
+  pickableIds(): OrganelleId[] {
+    return [...PICKABLE];
   }
 
   setIsolation(id: OrganelleId | null): void {
@@ -793,6 +912,10 @@ export class CellModel {
     this.hovered = id;
   }
 
+  setTestTarget(id: OrganelleId | null): void {
+    this.testTarget = id;
+  }
+
   getPart(id: OrganelleId): CellPart | undefined {
     return this.parts.get(id);
   }
@@ -813,7 +936,14 @@ export class CellModel {
     if (this.disposed) return;
 
     for (const part of this.parts.values()) {
-      const targetEmphasis = this.selected === part.id ? 1 : this.hovered === part.id ? 0.55 : 0;
+      const targetEmphasis =
+        this.selected === part.id
+          ? 1
+          : this.testTarget === part.id
+            ? 0.95
+            : this.hovered === part.id
+              ? 0.55
+              : 0;
       const em = damp(this.emphasis.get(part.id) ?? 0, targetEmphasis, 9, dt);
       this.emphasis.set(part.id, em);
 
@@ -853,11 +983,14 @@ export class CellModel {
       }
     }
 
-    if (this.selected) {
-      const part = this.parts.get(this.selected);
+    const haloId = this.selected ?? this.testTarget;
+    this.halo.visible = !!haloId;
+    if (haloId) {
+      const part = this.parts.get(haloId);
       if (part) {
         this.halo.position.copy(part.group.position).add(part.center.clone().sub(part.basePosition));
         this.halo.scale.setScalar(part.radius * (1.35 + Math.sin(elapsed * 2.2) * 0.03));
+        this.haloMaterial.uniforms.uColor.value.set(ORGANELLE_BY_ID.get(haloId)?.color ?? '#ffb347');
       }
       this.haloMaterial.uniforms.uTime.value = elapsed;
     }

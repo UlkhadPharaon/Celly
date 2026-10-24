@@ -75,6 +75,7 @@ export class Hud {
   private copy = COPY.en;
   private language: Language;
   private lastHands = -1;
+  onAction: ((action: 'overlay' | 'selection-test') => void) | null = null;
 
   constructor(language: Language = 'en') {
     this.language = language;
@@ -114,6 +115,10 @@ export class Hud {
           <span>Jitter</span><b class="jitter">0.000</b>
           <span>Margin</span><b class="margin">0.00</b>
         </div>
+        <div class="hud-actions">
+          <button type="button" class="hud-action" data-hud="overlay" title="D">Debug overlay</button>
+          <button type="button" class="hud-action" data-hud="selection-test" title="T">Selection test</button>
+        </div>
       </details>
       <div class="hud-foot">
         <i class="shield"></i><span>${this.copy.privacy}</span>
@@ -137,6 +142,10 @@ export class Hud {
     this.renderValue = this.root.querySelector('.fps-render') as HTMLElement;
     this.gestureValue = this.root.querySelector('.gesture') as HTMLElement;
     this.root.querySelector('.swap')!.textContent = '—';
+    this.root.querySelector('[data-hud="overlay"]')?.addEventListener('click', () => this.onAction?.('overlay'));
+    this.root
+      .querySelector('[data-hud="selection-test"]')
+      ?.addEventListener('click', () => this.onAction?.('selection-test'));
   }
 
   setLanguage(language: Language): void {

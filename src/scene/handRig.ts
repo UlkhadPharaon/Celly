@@ -1,11 +1,17 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Vec3 } from '../types';
 import { glowTexture } from './textures';
+import {
+  boneLocalQuaternion,
+  dampQuaternion,
+  jointAngleErrorDegrees,
+  palmBasis,
+  palmDeltaQuaternion,
+  type PalmBasis
+} from './handMath';
 
-const Y_AXIS = new THREE.Vector3(0, 1, 0);
-
-/** Longest hand span (wrist → middle fingertip) in world units at container scale 1. */
+/** Longest hand span (wrist â†’ middle fingertip) in world units at container scale 1. */
 const HAND_UNIT = 0.62;
 
 /** Driven bones: everything except the four fingertip leaves and the wrist. */
@@ -28,10 +34,38 @@ const CHILD: Record<number, number> = {
   19: 20
 };
 
+const PARENT_LANDMARK: Record<number, number> = {
+  1: 0, 2: 1, 3: 2,
+  5: 0, 6: 5, 7: 6,
+  9: 0, 10: 9, 11: 10,
+  13: 0, 14: 13, 15: 14,
+  17: 0, 18: 17, 19: 18
+};
+
+const CHAIN_NAMES: Record<number, string> = {
+  1: 'thumb', 2: 'thumb', 3: 'thumb',
+  5: 'index', 6: 'index', 7: 'index',
+  9: 'middle', 10: 'middle', 11: 'middle',
+  13: 'ring', 14: 'ring', 15: 'ring',
+  17: 'pinky', 18: 'pinky', 19: 'pinky'
+};
+
+/**
+ * Soft anatomical limits. They are deliberately generous: these are guard rails against a bad
+ * landmark frame, not a second animation layer. The thumb gets its own looser 3-DOF budget.
+ */
+const MAX_FLEX: Record<number, number> = {
+  1: 1.15, 2: 1.35, 3: 1.25,
+  5: 1.62, 6: 1.92, 7: 1.62,
+  9: 1.62, 10: 1.95, 11: 1.62,
+  13: 1.62, 14: 1.95, 15: 1.62,
+  17: 1.55, 18: 1.9, 19: 1.6
+};
+
 export interface DrivenHand {
   readonly container: THREE.Group;
   readonly side: 'left' | 'right';
-  apply(world: Vec3[], dt: number): void;
+  apply(world: Vec3[], dt: number, confidence?: number): void;
   /** World-space midpoint of thumb tip and index tip after the last apply(). */
   pinchWorld(out: THREE.Vector3): THREE.Vector3 | null;
   setFeedbackVisible(visible: boolean): void;
@@ -39,21 +73,35 @@ export interface DrivenHand {
   resetCalibration(): void;
   setOpacity(v: number): void;
   dispose(): void;
+  debugState?(): Record<string, unknown>;
 }
 
-/** Orthonormal hand frame: columns = spread, up, normal. */
+interface RestBone {
+  index: number;
+  child: number;
+  parentLandmark: number;
+  chain: string;
+  restDirParent: THREE.Vector3;
+  restQuat: THREE.Quaternion;
+  maxFlex: number;
+}
+
+interface SkinReport {
+  mesh: string;
+  vertices: number;
+  unweighted: number;
+  over4: number;
+  weightSumMin: number;
+  weightSumMax: number;
+  repaired: boolean;
+  bindMatricesFinite: boolean;
+  bones: number;
+  boneLengthStable: boolean;
+}
+
+/** Orthonormal hand frame: columns = index-pinky, palm-up, wrist-middle-MCP. */
 export function frameFrom(p: Vec3[]): THREE.Matrix3 {
-  const u = new THREE.Vector3(p[9].x - p[0].x, p[9].y - p[0].y, p[9].z - p[0].z);
-  const s = new THREE.Vector3(p[5].x - p[17].x, p[5].y - p[17].y, p[5].z - p[17].z);
-  const un = u.clone().normalize();
-  s.sub(un.clone().multiplyScalar(s.dot(un))).normalize();
-  const n = new THREE.Vector3().crossVectors(s, un).normalize();
-  const e2 = new THREE.Vector3().crossVectors(n, s).normalize();
-  return new THREE.Matrix3().set(s.x, e2.x, n.x, s.y, e2.y, n.y, s.z, e2.z, n.z);
-}
-
-function quatFromMatrix3(m: THREE.Matrix3): THREE.Quaternion {
-  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().setFromMatrix3(m));
+  return palmBasis(p).matrix;
 }
 
 function glassMaterial(color: string, opacity: number): THREE.MeshPhysicalMaterial {
@@ -72,25 +120,41 @@ function glassMaterial(color: string, opacity: number): THREE.MeshPhysicalMateri
   });
 }
 
-/** Rigged GLB hand retargeted from MediaPipe world landmarks. */
+/**
+ * Rigged GLB hand retargeted from MediaPipe world landmarks.
+ *
+ * The rig's armature origin and its `00_WRIST` bone head are the same point *after* the glTF
+ * scene translation is removed. The container is therefore a true wrist root: position is the
+ * mapped wrist, quaternion is `livePalm * inverse(restPalm)`. The wrist bone itself is never
+ * translated or rotated, so the skin cannot orbit or candy-wrapper around a hidden offset.
+ */
 export class HandRig implements DrivenHand {
   readonly container = new THREE.Group();
   readonly side: 'left' | 'right';
   readonly armature: THREE.Object3D;
   readonly bones = new Map<number, THREE.Bone>();
 
+  private readonly restBones: RestBone[] = [];
   private readonly restQ = new Map<number, THREE.Quaternion>();
-  private readonly dhfRest = new Map<number, THREE.Vector3>();
-  private readonly ema = new Map<number, THREE.Vector3>();
-  private readonly restLocalDir = new Map<number, THREE.Vector3>();
-  private readonly F = new THREE.Matrix3();
-  private readonly wristQ0 = new THREE.Quaternion();
-  private F0: THREE.Matrix3 | null = null;
-  private calibrationFrames = 0;
+  private readonly restDirParent = new Map<number, THREE.Vector3>();
+  private readonly lastBoneQ = new Map<number, THREE.Quaternion>();
+  private readonly restBasis: PalmBasis;
+  private readonly restTipLength: number;
+  private readonly rootQ = new THREE.Quaternion();
+  private rootReady = false;
   private glow: THREE.Sprite;
   private markers: THREE.Points;
+  private trackedPoints: THREE.Points;
+  private trackedLines: THREE.LineSegments;
   private markerGeometry: THREE.BufferGeometry;
+  private trackedGeometry: THREE.BufferGeometry;
+  private trackedLineGeometry: THREE.BufferGeometry;
   private meshMaterials: THREE.Material[] = [];
+  private skinReports: SkinReport[] = [];
+  private lastAngleError = 0;
+  private lastPerFinger: Record<string, number> = {};
+  /** CPU time spent in the last retarget+solve; used by the debug readout and latency checks. */
+  private lastApplyMs = 0;
 
   constructor(armature: THREE.Object3D, side: 'left' | 'right', baseRotation: THREE.Euler) {
     this.side = side;
@@ -98,7 +162,16 @@ export class HandRig implements DrivenHand {
     this.container.name = `hand:${side}`;
     this.container.add(armature);
 
+    /*
+     * glTF stores the hand at its world placement (the armature node has a translation, e.g.
+     * +0.10, -0.047, +0.0855 for the left hand). That translation is not part of the wrist
+     * joint: the `00_WRIST` bone head is local (0,0,0). Keeping it would put the visual wrist
+     * away from the container origin and make every rotation look like an orbit. Strip it once.
+     */
+    armature.position.set(0, 0, 0);
     armature.rotation.copy(baseRotation);
+    armature.scale.set(1, 1, 1);
+    armature.updateMatrixWorld(true);
 
     armature.traverse((obj) => {
       if ((obj as THREE.Bone).isBone) {
@@ -112,11 +185,14 @@ export class HandRig implements DrivenHand {
         mesh.castShadow = false;
         mesh.frustumCulled = false;
         this.meshMaterials.push(mat);
+        const report = inspectAndRepairSkin(mesh);
+        if (report) this.skinReports.push(report);
       }
     });
 
-    this.captureRest();
+    this.restBasis = this.captureRest();
     this.normalizeSize();
+    this.restTipLength = this.measureTipLength();
 
     this.glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
@@ -148,33 +224,117 @@ export class HandRig implements DrivenHand {
     );
     this.markers.visible = false;
     this.container.add(this.markers);
+
+    this.trackedGeometry = new THREE.BufferGeometry();
+    this.trackedGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(21 * 3), 3));
+    this.trackedPoints = new THREE.Points(
+      this.trackedGeometry,
+      new THREE.PointsMaterial({
+        color: new THREE.Color('#ffd166'),
+        size: 0.016,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true
+      })
+    );
+    this.trackedPoints.visible = false;
+    this.trackedPoints.renderOrder = 5;
+    this.container.add(this.trackedPoints);
+
+    const links = handLinks();
+    this.trackedLineGeometry = new THREE.BufferGeometry();
+    this.trackedLineGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(links.length * 2 * 3), 3)
+    );
+    this.trackedLines = new THREE.LineSegments(
+      this.trackedLineGeometry,
+      new THREE.LineBasicMaterial({
+        color: new THREE.Color('#ffd166'),
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+        depthTest: false
+      })
+    );
+    this.trackedLines.visible = false;
+    this.trackedLines.renderOrder = 5;
+    this.container.add(this.trackedLines);
+
+    // Debug frame: RGB axes at the wrist + one arrow along the mesh palm normal. They are only
+    // created after the rest basis is captured, and only shown with the landmark feedback.
+    this.axes = new THREE.AxesHelper(0.11);
+    this.axes.visible = false;
+    this.axes.renderOrder = 6;
+    const axesMat = this.axes.material as THREE.LineBasicMaterial;
+    axesMat.depthTest = false;
+    axesMat.transparent = true;
+    axesMat.opacity = 0.9;
+    this.container.add(this.axes);
+
+    this.palmNormal = new THREE.ArrowHelper(
+      this.restBasis.y.clone().normalize(),
+      new THREE.Vector3(0, 0, 0),
+      0.17,
+      0xffd166,
+      0.035,
+      0.022
+    );
+    this.palmNormal.visible = false;
+    this.palmNormal.renderOrder = 6;
+    (this.palmNormal.line.material as THREE.Material).depthTest = false;
+    (this.palmNormal.cone.material as THREE.Material).depthTest = false;
+    this.container.add(this.palmNormal);
+
+    this.trackedLinks = links;
   }
 
-  private captureRest(): void {
-    this.armature.updateWorldMatrix(true, true);
+  private readonly axes: THREE.AxesHelper;
+  private readonly palmNormal: THREE.ArrowHelper;
+  private trackedLinks: Array<[number, number]>;
+
+  private captureRest(): PalmBasis {
+    this.container.updateMatrixWorld(true);
     const pos = new Map<number, THREE.Vector3>();
     for (const [i, bone] of this.bones) pos.set(i, bone.getWorldPosition(new THREE.Vector3()));
 
-    this.F.copy(frameFrom([...Array(21)].map((_, i) => vec(pos.get(i)))));
+    const sample: Vec3[] = Array.from({ length: 21 }, (_, i) => vec(pos.get(i)));
+    const basis = palmBasis(sample);
+
+    this.restBones.length = 0;
     for (const j of DRIVEN) {
-      const c = CHILD[j];
-      const a = pos.get(j);
-      const b = pos.get(c);
-      if (!a || !b) continue;
-      const dir = b.clone().sub(a).normalize();
-      this.dhfRest.set(j, dir.clone().applyMatrix3(this.F.clone().transpose()));
+      const child = CHILD[j];
+      const b = this.bones.get(j);
+      const c = this.bones.get(child);
+      if (!b || !c) continue;
+      const parentQ = new THREE.Quaternion();
+      b.parent?.getWorldQuaternion(parentQ);
+      const worldDir = c.getWorldPosition(new THREE.Vector3()).sub(b.getWorldPosition(new THREE.Vector3())).normalize();
+      const restDirParent = worldDir.applyQuaternion(parentQ.invert()).normalize();
+      const restQuat = b.quaternion.clone();
+      this.restQ.set(j, restQuat.clone());
+      this.restDirParent.set(j, restDirParent.clone());
+      this.lastBoneQ.set(j, restQuat.clone());
+      this.restBones.push({
+        index: j,
+        child,
+        parentLandmark: PARENT_LANDMARK[j] ?? 0,
+        chain: CHAIN_NAMES[j] ?? 'finger',
+        restDirParent,
+        restQuat,
+        maxFlex: MAX_FLEX[j] ?? 1.6
+      });
     }
-    for (const [i, bone] of this.bones) {
-      this.restQ.set(i, bone.quaternion.clone());
-      this.restLocalDir.set(i, Y_AXIS.clone().applyQuaternion(bone.quaternion).normalize());
-    }
-    this.bones.get(0)?.getWorldQuaternion(this.wristQ0);
+    return basis;
   }
 
   /**
-   * Every hand source is normalised to the same wrist → middle-tip span, so the layer scale
-   * means the same thing for the GLB rig and the procedural fallback. Uniform scaling does
-   * not affect the direction-based retargeting.
+   * The GLB's mesh is authored in metres. Scale the armature so wrist â†’ middle fingertip is
+   * HAND_UNIT before the layer applies its display scale. Uniform scale cannot introduce
+   * stretching, and the wrist remains at the scaled origin.
    */
   private normalizeSize(): void {
     const box = new THREE.Box3();
@@ -187,10 +347,19 @@ export class HandRig implements DrivenHand {
     this.armature.updateMatrixWorld(true);
   }
 
+  private measureTipLength(): number {
+    const a = this.bones.get(0)?.getWorldPosition(new THREE.Vector3());
+    const b = this.bones.get(12)?.getWorldPosition(new THREE.Vector3());
+    return a && b ? a.distanceTo(b) : HAND_UNIT;
+  }
+
   resetCalibration(): void {
-    this.F0 = null;
-    this.calibrationFrames = 0;
-    this.ema.clear();
+    this.rootReady = false;
+    this.rootQ.identity();
+    this.container.quaternion.identity();
+    this.lastAngleError = 0;
+    this.lastPerFinger = {};
+    this.lastApplyMs = 0;
     for (const [i, bone] of this.bones) {
       const q = this.restQ.get(i);
       if (q) bone.quaternion.copy(q);
@@ -198,70 +367,105 @@ export class HandRig implements DrivenHand {
     this.armature.updateMatrixWorld(true);
   }
 
-  apply(world: Vec3[], dt: number): void {
+  apply(world: Vec3[], dt: number, confidence = 1): void {
     if (world.length !== 21) return;
-    const P = world;
-
-    if (!this.F0) {
-      if (++this.calibrationFrames >= 3) this.F0 = frameFrom(P);
+    const started = performance.now();
+    if (confidence < 0.3) {
+      this.easeToRest(dt);
+      this.lastApplyMs = performance.now() - started;
       return;
     }
 
-    const Fm = frameFrom(P);
-    const Rm = Fm.clone().multiply(this.F0.clone().transpose());
-    const qDelta = quatFromMatrix3(this.F.clone().multiply(Rm).multiply(this.F.clone().transpose()));
-    this.setWrist(qDelta);
+    const P = world;
+    const live = palmBasis(P);
+    if (!live.valid) {
+      this.lastApplyMs = performance.now() - started;
+      return;
+    }
+    const targetRoot = palmDeltaQuaternion(this.restBasis, live);
 
-    for (const j of DRIVEN) {
-      const c = CHILD[j];
-      const d = new THREE.Vector3(P[c].x - P[j].x, P[c].y - P[j].y, P[c].z - P[j].z).normalize();
-      const dhc = d.clone().applyMatrix3(Fm.clone().transpose());
-      let e = this.ema.get(j);
-      if (!e) {
-        e = dhc;
-        this.ema.set(j, e);
-      } else {
-        const k = 1 - Math.exp(-Math.min(0.08, dt) * 26);
-        e.lerp(dhc, k).normalize();
-      }
-      this.setBoneDir(j, e);
+    if (!this.rootReady) {
+      this.rootQ.copy(targetRoot);
+      this.rootReady = true;
+    } else {
+      // A palm flip is a real 180 degree rotation, not a sign change. Slerp always takes the
+      // short arc, and the exponential rate keeps tracking jitter below the mesh's resolution.
+      this.rootQ.copy(dampQuaternion(this.rootQ, targetRoot, 24, dt));
+    }
+    this.container.quaternion.copy(this.rootQ);
+    this.container.updateMatrixWorld(true);
+
+    for (const rest of this.restBones) {
+      const b = this.bones.get(rest.index);
+      if (!b) continue;
+      const targetWorld = new THREE.Vector3(
+        P[rest.child].x - P[rest.index].x,
+        P[rest.child].y - P[rest.index].y,
+        P[rest.child].z - P[rest.index].z
+      );
+      if (targetWorld.lengthSq() < 1e-10) continue;
+      targetWorld.normalize();
+
+      const parentQ = new THREE.Quaternion();
+      b.parent?.getWorldQuaternion(parentQ);
+      const targetParent = targetWorld.applyQuaternion(parentQ.invert()).normalize();
+      const desired = boneLocalQuaternion(
+        rest.restDirParent,
+        rest.restQuat,
+        targetParent,
+        rest.maxFlex
+      );
+      const previous = this.lastBoneQ.get(rest.index);
+      const next = previous ? dampQuaternion(previous, desired, 34, dt) : desired.clone();
+      this.lastBoneQ.set(rest.index, next);
+      b.quaternion.copy(next);
+      b.updateWorldMatrix(true, false);
     }
 
+    // Fingertips are children of DIPs, but their bone transforms are unchanged in the table.
+    this.updateAngleError(P);
     this.updateGlow();
     this.updateMarkers();
+    this.updateTracked(P);
+    this.lastApplyMs = performance.now() - started;
   }
 
-  private setWrist(qDeltaWorld: THREE.Quaternion): void {
-    const b = this.bones.get(0);
-    if (!b) return;
-    const wantW = qDeltaWorld.clone().multiply(this.wristQ0);
-    const pq = new THREE.Quaternion();
-    b.parent?.getWorldQuaternion(pq);
-    b.quaternion.copy(pq.invert().multiply(wantW));
-    b.updateMatrixWorld(true);
+  private easeToRest(dt: number): void {
+    for (const [i, bone] of this.bones) {
+      const q = this.restQ.get(i);
+      if (!q) continue;
+      const next = dampQuaternion(bone.quaternion, q, 8, dt);
+      bone.quaternion.copy(next);
+      this.lastBoneQ.set(i, next);
+      bone.updateWorldMatrix(true, false);
+    }
+    this.updateAngleError(null);
   }
 
-  private setBoneDir(j: number, dhf: THREE.Vector3): void {
-    const b = this.bones.get(j);
-    if (!b) return;
-    const wq = new THREE.Quaternion();
-    this.bones.get(0)?.getWorldQuaternion(wq);
-    const targetWorld = dhf
-      .clone()
-      .applyMatrix3(this.F.clone())
-      .applyQuaternion(wq.clone().multiply(this.wristQ0.clone().invert()));
-    if (targetWorld.lengthSq() < 1e-8) return;
-    targetWorld.normalize();
+  private updateAngleError(world: Vec3[] | null): void {
+    if (!world) {
+      this.lastAngleError = 0;
+      this.lastPerFinger = {};
+      return;
+    }
+    const mesh = Array.from({ length: 21 }, (_, i) => {
+      const p = this.bones.get(i)?.getWorldPosition(new THREE.Vector3());
+      return p ? vec(p) : { x: 0, y: 0, z: 0 };
+    });
+    this.lastAngleError = jointAngleErrorDegrees(world, mesh);
 
-    const pq = new THREE.Quaternion();
-    b.parent?.getWorldQuaternion(pq);
-    const localDir = targetWorld.applyQuaternion(pq.invert());
-    const restQ = this.restQ.get(j);
-    const restLocalDir = this.restLocalDir.get(j);
-    if (!restQ || !restLocalDir) return;
-    const delta = new THREE.Quaternion().setFromUnitVectors(restLocalDir, localDir);
-    b.quaternion.copy(delta.multiply(restQ));
-    b.updateMatrixWorld(true);
+    const per: Record<string, number> = {};
+    const ranges: Record<string, Array<readonly [number, number, number]>> = {
+      thumb: [[0, 1, 2], [1, 2, 3], [2, 3, 4]],
+      index: [[0, 5, 6], [5, 6, 7], [6, 7, 8]],
+      middle: [[0, 9, 10], [9, 10, 11], [10, 11, 12]],
+      ring: [[0, 13, 14], [13, 14, 15], [14, 15, 16]],
+      pinky: [[0, 17, 18], [17, 18, 19], [18, 19, 20]]
+    };
+    for (const [name, chains] of Object.entries(ranges)) {
+      per[name] = jointAngleErrorDegrees(world, mesh, chains);
+    }
+    this.lastPerFinger = per;
   }
 
   private updateGlow(): void {
@@ -293,8 +497,37 @@ export class HandRig implements DrivenHand {
     attr.needsUpdate = true;
   }
 
+  /**
+   * Raw MediaPipe landmarks overlaid in the rig's local space. Scaling by the live wristâ†’tip
+   * length makes the yellow skeleton and the mesh comparable without changing either one.
+   */
+  private updateTracked(world: Vec3[]): void {
+    if (!this.trackedPoints.visible) return;
+    const wrist = world[0];
+    const tip = world[12] ?? world[9];
+    const liveLength = Math.hypot(tip.x - wrist.x, tip.y - wrist.y, tip.z - wrist.z);
+    const scale = liveLength > 1e-6 ? this.restTipLength / liveLength : 1;
+    const attr = this.trackedGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const lineAttr = this.trackedLineGeometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < 21; i++) {
+      const p = world[i];
+      attr.setXYZ(i, (p.x - wrist.x) * scale, (p.y - wrist.y) * scale, (p.z - wrist.z) * scale);
+    }
+    let slot = 0;
+    for (const [a, b] of this.trackedLinks) {
+      lineAttr.setXYZ(slot++, (world[a].x - wrist.x) * scale, (world[a].y - wrist.y) * scale, (world[a].z - wrist.z) * scale);
+      lineAttr.setXYZ(slot++, (world[b].x - wrist.x) * scale, (world[b].y - wrist.y) * scale, (world[b].z - wrist.z) * scale);
+    }
+    attr.needsUpdate = true;
+    lineAttr.needsUpdate = true;
+  }
+
   setFeedbackVisible(visible: boolean): void {
     this.markers.visible = visible;
+    this.trackedPoints.visible = visible;
+    this.trackedLines.visible = visible;
+    this.axes.visible = visible;
+    this.palmNormal.visible = visible;
   }
 
   setPinchGlow(active: boolean): void {
@@ -308,6 +541,51 @@ export class HandRig implements DrivenHand {
       mat.opacity = v;
       mat.transparent = v < 0.999;
     }
+  }
+
+  /** Rest table, skin audit, anchor and angle error, exposed to the debug overlay. */
+  debugState(): Record<string, unknown> {
+    const wrist = this.bones.get(0)?.getWorldPosition(new THREE.Vector3());
+    const palmNormalWorld = this.restBasis.y.clone().applyQuaternion(this.container.quaternion).normalize();
+    return {
+      side: this.side,
+      wrist: wrist ? [wrist.x, wrist.y, wrist.z] : null,
+      rootPosition: [this.container.position.x, this.container.position.y, this.container.position.z],
+      rootQuaternion: [this.rootQ.x, this.rootQ.y, this.rootQ.z, this.rootQ.w],
+      palmNormal: palmNormalWorld.toArray().map((n) => Number(n.toFixed(4))),
+      angleErrorDeg: Number(this.lastAngleError.toFixed(2)),
+      applyMs: Number(this.lastApplyMs.toFixed(2)),
+      perFingerDeg: Object.fromEntries(
+        Object.entries(this.lastPerFinger).map(([k, v]) => [k, Number(v.toFixed(2))])
+      ),
+      restBasis: {
+        x: this.restBasis.x.toArray(),
+        y: this.restBasis.y.toArray(),
+        z: this.restBasis.z.toArray(),
+        valid: this.restBasis.valid
+      },
+      restTable: this.restBones.map((r) => ({
+        bone: this.bones.get(r.index)?.name ?? String(r.index),
+        child: this.bones.get(r.child)?.name ?? String(r.child),
+        parentLandmark: r.parentLandmark,
+        chain: r.chain,
+        restDir: r.restDirParent.toArray().map((n) => Number(n.toFixed(4))),
+        restQuat: r.restQuat.toArray().map((n) => Number(n.toFixed(4))),
+        maxFlexDeg: Math.round((r.maxFlex * 180) / Math.PI)
+      })),
+      skin: this.skinReports,
+      // Current bone lengths, in world units. The solver only changes rotations, so these should
+      // stay constant across poses; the verification harness checks their coefficient of variation.
+      boneLengths: Object.fromEntries(
+        this.restBones.map((r) => {
+          const b = this.bones.get(r.index);
+          const c = this.bones.get(r.child);
+          const length =
+            b && c ? b.getWorldPosition(new THREE.Vector3()).distanceTo(c.getWorldPosition(new THREE.Vector3())) : 0;
+          return [b?.name ?? String(r.index), Number(length.toFixed(5))];
+        })
+      )
+    };
   }
 
   dispose(): void {
@@ -324,7 +602,7 @@ export class HandRig implements DrivenHand {
   }
 }
 
-/** Glassy skeletal hand used if the GLB is missing or fails to load. */
+/** Glassy skeletal hand used if the GLB is missing, fails to load, or is forced in settings. */
 export class ProceduralHand implements DrivenHand {
   readonly container = new THREE.Group();
   readonly side: 'left' | 'right';
@@ -393,8 +671,9 @@ export class ProceduralHand implements DrivenHand {
 
   private links: Array<[number, number]>;
 
-  apply(world: Vec3[], _dt: number): void {
+  apply(world: Vec3[], _dt: number, confidence = 1): void {
     if (world.length !== 21) return;
+    if (confidence < 0.3) return;
     // Centre on the wrist and normalise to the same span as the rigged hand.
     const span = Math.hypot(
       world[12].x - world[0].x,
@@ -406,7 +685,7 @@ export class ProceduralHand implements DrivenHand {
       this.joints[i].position.set(
         (world[i].x - world[0].x) * scale,
         (world[i].y - world[0].y) * scale,
-        world[i].z * scale
+        (world[i].z - world[0].z) * scale
       );
     }
     const up = new THREE.Vector3(0, 1, 0);
@@ -452,6 +731,10 @@ export class ProceduralHand implements DrivenHand {
     /* stateless */
   }
 
+  debugState(): Record<string, unknown> {
+    return { side: this.side, procedural: true };
+  }
+
   dispose(): void {
     this.container.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
@@ -463,6 +746,96 @@ export class ProceduralHand implements DrivenHand {
   }
 }
 
+function handLinks(): Array<[number, number]> {
+  return [
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [0, 9], [9, 10], [10, 11], [11, 12],
+    [0, 13], [13, 14], [14, 15], [15, 16],
+    [0, 17], [17, 18], [18, 19], [19, 20]
+  ];
+}
+
+/** Normalise skin weights to 4 influences and report whether the bind data is healthy. */
+function inspectAndRepairSkin(mesh: THREE.Mesh): SkinReport | null {
+  const geometry = mesh.geometry;
+  const weight = geometry.getAttribute('skinWeight') as THREE.BufferAttribute | undefined;
+  const index = geometry.getAttribute('skinIndex') as THREE.BufferAttribute | undefined;
+  if (!weight || !index) return null;
+
+  let unweighted = 0;
+  let over4 = 0;
+  let min = Infinity;
+  let max = 0;
+  let repaired = false;
+  const w = weight.array as ArrayLike<number>;
+  const idx = index.array as ArrayLike<number>;
+  const itemSize = weight.itemSize;
+
+  for (let v = 0; v < weight.count; v++) {
+    const base = v * itemSize;
+    let sum = 0;
+    let influences = 0;
+    const entries: Array<[number, number]> = [];
+    for (let k = 0; k < itemSize; k++) {
+      const value = w[base + k];
+      if (value > 1e-5) {
+        influences++;
+        sum += value;
+      }
+      entries.push([idx[base + k], value]);
+    }
+    if (influences === 0) unweighted++;
+    if (influences > 4) over4++;
+    min = Math.min(min, sum);
+    max = Math.max(max, sum);
+
+    if (influences > 0 && Math.abs(sum - 1) > 1e-4) {
+      for (let k = 0; k < itemSize; k++) (w as number[])[base + k] = w[base + k] / sum;
+      repaired = true;
+    }
+    if (influences > 4) {
+      entries.sort((a, b) => b[1] - a[1]);
+      for (let k = 0; k < itemSize; k++) {
+        (w as number[])[base + k] = k < 4 ? entries[k][1] / sum : 0;
+        (idx as number[])[base + k] = entries[k][0];
+      }
+      repaired = true;
+    }
+  }
+  if (repaired) {
+    weight.needsUpdate = true;
+    index.needsUpdate = true;
+  }
+
+  const skinned = mesh as THREE.SkinnedMesh;
+  let bindMatricesFinite = true;
+  if (skinned.isSkinnedMesh) {
+    for (const m of skinned.skeleton.boneInverses) {
+      if (!m.elements.every(Number.isFinite)) bindMatricesFinite = false;
+    }
+  }
+  let boneLengthStable = true;
+  if (skinned.isSkinnedMesh) {
+    for (const bone of skinned.skeleton.bones) {
+      if (!Number.isFinite(bone.position.x + bone.position.y + bone.position.z)) boneLengthStable = false;
+    }
+  }
+
+  return {
+    mesh: mesh.name || 'hand',
+    vertices: weight.count,
+    unweighted,
+    over4,
+    weightSumMin: Number.isFinite(min) ? Number(min.toFixed(4)) : 0,
+    weightSumMax: Number(max.toFixed(4)),
+    repaired,
+    bindMatricesFinite,
+    bones: skinned.isSkinnedMesh ? skinned.skeleton.bones.length : 0,
+    boneLengthStable
+  };
+}
+
 function vec(p: THREE.Vector3 | undefined): Vec3 {
   return p ? { x: p.x, y: p.y, z: p.z } : { x: 0, y: 0, z: 0 };
 }
@@ -470,7 +843,12 @@ function vec(p: THREE.Vector3 | undefined): Vec3 {
 const GLB_URL = 'hands_rigged.glb';
 
 /** Loads the two armatures from the GLB; falls back to procedural hands on any failure. */
-export async function loadHands(): Promise<{ left: DrivenHand; right: DrivenHand; rigged: boolean }> {
+export async function loadHands(
+  forceProcedural = false
+): Promise<{ left: DrivenHand; right: DrivenHand; rigged: boolean }> {
+  if (forceProcedural) {
+    return { left: new ProceduralHand('left'), right: new ProceduralHand('right'), rigged: false };
+  }
   try {
     const loader = new GLTFLoader();
     const gltf = await loader.loadAsync(new URL(GLB_URL, document.baseURI).href);

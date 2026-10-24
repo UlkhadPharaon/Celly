@@ -20,6 +20,11 @@ export interface PageContext {
   actions: PageActions;
 }
 
+export interface PickOptions {
+  /** Forgiving screen-space radius in CSS pixels. Hand picks use 40–62 px. */
+  radiusPx?: number;
+}
+
 export interface Page {
   readonly id: PageId;
   readonly root: HTMLElement;
@@ -27,7 +32,7 @@ export interface Page {
   exit(): void;
   update(dt: number, elapsed: number): void;
   onIntent(intent: Intent): void;
-  pick(x: number, y: number): string | null;
+  pick(x: number, y: number, options?: PickOptions): string | null;
   setHovered(id: string | null): void;
   setLanguage(language: Language): void;
   setAutoRotate?(value: boolean): void;

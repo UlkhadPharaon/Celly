@@ -185,9 +185,17 @@ viewports and on the Test page so telemetry never covers the question cards.
 - **Mirroring:** `Mirror X` (on by default) and `Mirror Y` (off) are display-only; the raw tracking
   frame is never rewritten.
 - **3D hands:** the rigged GLB (21 bones per hand, bone names `00_WRIST` … `20_PINKY_TIP`) is
-  retargeted with a hand-local-frame solve, then damped. The container is anchored on the **pinch
-  midpoint**, not the wrist, so the fingertips meet the cursor instead of floating next to it.
-  Without the GLB, a procedural glass hand takes over with the same interface.
+  wrist-rooted: the container origin is the tracked wrist and the palm basis is orthonormal
+  (Gram–Schmidt). A rest table stores each bone's rest direction and local orientation; the solver
+  walks parent first, applies shortest-arc local rotations and soft joint limits, and never changes
+  bone lengths. `root.position` follows the wrist directly — only orientation and fingers are
+  damped. Mirror/swap is a screen-position transform, never a reflection of the orientation data,
+  and the left/right meshes stay separate with positive scales. Without a valid GLB, a procedural
+  glass hand takes over with the same interface.
+- **Selection:** every organelle instance has its own pick anchor and enlarged proxy. A pinch
+  freezes the hovered target, uses the aim from ~100 ms before the pinch, then commits on **release**
+  after a ≥100 ms hold within 36 px. The built-in Selection test (`T`) reports hit rate and mean aim
+  error; see the pose/debug screenshots in [`docs/screenshots/hand-tests/`](docs/screenshots/hand-tests/).
 
 The synthetic-hand path used by the screenshots and e2e tests (`window.__celly.injectHand`) feeds a
 full 21-landmark hand through the exact same pipeline — hover, state machine, intents — so what the
@@ -235,8 +243,8 @@ research and asset audit are in [`docs/RESEARCH.md`](docs/RESEARCH.md) and
 ## Testing
 
 ```bash
-npm test             # Vitest: 53 unit tests
-npm run test:e2e     # Playwright: 8 specs (smoke + gesture replay)
+npm test             # Vitest: 95 unit tests
+npm run test:e2e     # Playwright: 8 tests (smoke + gesture replay)
 npm run lint         # ESLint (flat config, typescript-eslint)
 npm run typecheck    # tsc --noEmit, strict
 npm run build        # typecheck + production bundle
@@ -248,6 +256,8 @@ Unit coverage:
 - MediaPipe side flip, manual swap, nearest-wrist slot matching, 150 ms debounce, loss handling;
 - every gesture-state transition: select/unselect, click budget, swipe, rotate, two-hand scale,
   cooldown, hand-loss reset, dwell-to-click;
+- pre-pinch aim look-back, screen-space proximity, palm basis/quaternion delta, parent-first bone
+  solving, joint-angle error, bone-length preservation, and all 13 deterministic hand poses;
 - Leitner promotion/demotion, ordering, persistence and corrupt-storage sanitising;
 - scoring labels, best-ratio persistence;
 - content minimums and integrity: 15 organelles, 36 nodes, 48 MCQs, 36 cards, 3 sets, bilingual
@@ -261,6 +271,7 @@ Regenerate the documentation images with the dev server running:
 
 ```bash
 node scripts/shots.mjs
+node scripts/verify-hands.mjs   # pose suite, debug/selection screenshots, hand metrics
 ```
 
 The harness boots Chrome with ANGLE SwiftShader (`--use-angle=swiftshader`, not `--disable-gpu`) and
@@ -319,11 +330,14 @@ delegate creation fails, and to mouse mode if no camera is available.
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run test:e2e` | Playwright smoke + gesture replay |
 | `node scripts/shots.mjs` | Regenerate `docs/screenshots` |
+| `node scripts/verify-hands.mjs` | Hand pose/selection screenshots and raw metrics (dev server on :5173) |
 
 ## Documentation
 
 - [`PLAN.md`](PLAN.md) — milestones and completion state
-- [`DECISIONS.md`](DECISIONS.md) — every architectural ruling (D-01 … D-31)
+- [`DECISIONS.md`](DECISIONS.md) — every architectural ruling (D-01 … D-51)
+- [`DIAGNOSIS_ROUND2.md`](DIAGNOSIS_ROUND2.md) — hand pivot, retargeting and selection root causes
+- [`FINAL_REPORT_ROUND2.md`](FINAL_REPORT_ROUND2.md) — measured results, limitations and v0.3 plan
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — scene graph, data flow, module contracts
 - [`docs/RESEARCH.md`](docs/RESEARCH.md) — prior-art and asset research
 - [`ASSET_INVENTORY.md`](ASSET_INVENTORY.md) — what ships, where it came from, licence audit

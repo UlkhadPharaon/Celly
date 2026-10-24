@@ -2930,3 +2930,316 @@ svg.icon {
     --ease: ease;
   }
 }
+
+/* ---------------------------------------------------------- hand debug / selection test ---- */
+.celly-debug {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  font-family: var(--font-ui, 'Inter', sans-serif);
+}
+
+.celly-debug[hidden] {
+  display: none;
+}
+
+.celly-debug__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.celly-debug__panel {
+  position: absolute;
+  top: 86px;
+  left: 24px;
+  width: 360px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(5, 10, 18, 0.86);
+  border: 1px solid rgba(140, 190, 255, 0.25);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  font-size: 11px;
+  line-height: 1.55;
+  color: #cfe6ff;
+  pointer-events: none;
+}
+
+.celly-debug__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.celly-debug__head strong {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd166;
+}
+
+.celly-debug__keys {
+  font-size: 9px;
+  color: #7090ad;
+}
+
+.celly-debug__readout b {
+  color: #9fd1ff;
+  font-weight: 600;
+}
+
+.celly-debug__readout em {
+  color: #b8ff6a;
+  font-style: normal;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.celly-debug__skin {
+  color: #7fa6c4;
+  font-size: 10px;
+}
+
+.celly-debug__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 7px 0 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(140, 190, 255, 0.14);
+  color: #8aa9c2;
+  font-size: 9.5px;
+}
+
+.celly-debug__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.celly-debug__legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.celly-debug__log {
+  display: grid;
+  gap: 3px;
+  max-height: 220px;
+  overflow: hidden;
+}
+
+.celly-debug__log > div {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(120, 180, 255, 0.07);
+}
+
+.celly-debug__log span {
+  display: inline-block;
+  min-width: 46px;
+  color: #ffd166;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+
+.celly-debug__log small {
+  color: #7f9db6;
+  margin-left: 6px;
+}
+
+.celly-debug__empty {
+  color: #6f8ba4;
+}
+
+.hud-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.hud-action {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-soft);
+  border-radius: 7px;
+  padding: 5px 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-action:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(76, 201, 240, 0.08);
+}
+
+.lab-test-panel {
+  position: absolute;
+  top: 108px;
+  right: calc(var(--panel-w) + 28px);
+  width: 286px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--ink);
+  pointer-events: auto;
+}
+
+.lab-test-panel[hidden] {
+  display: none;
+}
+
+.lab-test-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.lab-test-head .eyebrow {
+  color: var(--cyan);
+}
+
+.lab-test-close {
+  border: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lab-test-target {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 3px 0 8px;
+}
+
+.lab-test-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.lab-test-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4cc9f0, #b8ff6a);
+  transition: width 0.3s var(--ease);
+}
+
+.lab-test-stats {
+  margin: 7px 0 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-test-list {
+  display: grid;
+  gap: 3px;
+  max-height: 124px;
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.lab-test-list > div {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+}
+
+.lab-test-list b {
+  width: 11px;
+  color: #ff6b8a;
+}
+
+.lab-test-list .is-hit b {
+  color: #b8ff6a;
+}
+
+.lab-test-list small {
+  margin-left: auto;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-test-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+  pointer-events: auto;
+}
+
+.lab-test-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.lab-test-marker[hidden] {
+  display: none;
+}
+
+.lab-test-marker i {
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  left: -29px;
+  top: -29px;
+  border-radius: 50%;
+  border: 2px solid #ffd166;
+  box-shadow: 0 0 0 5px rgba(255, 209, 102, 0.12), 0 0 26px rgba(255, 209, 102, 0.45);
+  animation: test-pulse 1.4s ease-in-out infinite;
+}
+
+.lab-test-marker b {
+  position: absolute;
+  left: 36px;
+  top: -28px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(10, 16, 26, 0.82);
+  border: 1px solid rgba(255, 209, 102, 0.4);
+  color: #ffd166;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes test-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}

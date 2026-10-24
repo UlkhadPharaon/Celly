@@ -45,6 +45,10 @@ Full transitive licence texts live in `node_modules/` and in `package-lock.json`
   open biology references (LibreTexts Biology, CC-BY; OpenStax Biology 2e, CC-BY) for accuracy.
 - **Icons** are hand-authored inline SVG (`src/ui/dom.ts`). No icon font.
 - **Screenshots** in `docs/screenshots/` are renders of this software captured with Playwright.
+- **Hand-retargeting reference** — [`bandinopla/three-mediapipe-rig`](https://github.com/bandinopla/three-mediapipe-rig),
+  MIT. Studied for wrist-rooted rest-pose retargeting, parent-first local rotations and angle
+  comparison. Celly's implementation is a reimplementation of those principles, not a copy of its
+  code; see D-47 in [`DECISIONS.md`](DECISIONS.md).
 
 ## Notes
 

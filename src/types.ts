@@ -82,8 +82,16 @@ export interface HandFrame {
   pinchValue: number;
   pinchStart: boolean;
   pinchEnd: boolean;
-  /** Screen-space pinch cursor in CSS pixels. */
+  /** Set when the frame is a stale hold during the tracker's 250 ms loss tolerance. */
+  lost?: boolean;
+  /** Screen-space pinch cursor in CSS pixels (filtered). */
   cursor: Vec2;
+  /** Cursor computed from the raw landmarks before One-Euro filtering, for debug comparison. */
+  rawCursor: Vec2;
+  /** Selection aim: live cursor, or the pre-pinch lock while a pinch is in flight. */
+  aim: Vec2;
+  /** True when `aim` is the frozen pre-pinch anchor rather than the live cursor. */
+  aimLocked: boolean;
   /** Same cursor in normalized device coordinates. */
   cursorNdc: Vec2;
   /** Screen-space middle-MCP palm point, used for rotate deltas. */
@@ -93,6 +101,12 @@ export interface HandFrame {
   /** Filtered world landmarks (metres). */
   world: Vec3[];
   handScale: number;
+  /** Image-space wrist → middle-MCP length, 0..1 viewport height; drives depth/scale. */
+  handSpan: number;
+  /** MediaPipe detection confidence 0..1. */
+  confidence: number;
+  /** Time the current pinch candidate crossed the enter threshold, or -1. */
+  pinchCandidateAt: number;
   wrist: Vec3;
   /** In-plane roll angle, radians. */
   roll: number;
@@ -118,8 +132,8 @@ export type TrackingStatus = 'idle' | 'initializing' | 'gpu' | 'cpu' | 'error';
 export type GestureState = 'IDLE' | 'HOVER_UI' | 'SELECTING' | 'ROTATING' | 'SCALING' | 'SWIPING' | 'COOLDOWN';
 
 export type Intent =
-  | { type: 'select'; id: string }
-  | { type: 'unselect' }
+  | { type: 'select'; id: string; aim?: Vec2 }
+  | { type: 'unselect'; aim?: Vec2 }
   | { type: 'click'; id: string }
   | { type: 'hover'; id: string | null; kind: 'ui' | 'scene' }
   | { type: 'rotate'; dx: number; dy: number }
@@ -222,6 +236,8 @@ export interface Settings {
   pinchSensitivity: number;
   reducedMotion: boolean;
   highContrast: boolean;
+  /** Diagnostics: force the procedural skeletal hand instead of the rigged GLB. */
+  proceduralHand: boolean;
   quality: QualityMode;
 }
 

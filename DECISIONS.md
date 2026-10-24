@@ -248,3 +248,62 @@ software compositor a 320 ms fade can start seconds late; 07 was captured with t
 overlay's 78 % glass is raised to 97 % for stills because the blur is disabled for capture; without
 that, bright graph labels printed through the card text. This is a screenshot policy, not an app
 mode.
+
+## Hand-tracking round 2
+
+**D-46 — The wrist is the only hand pivot.** The GLB armature node translations were the pivot bug:
+the container rotated around the armature origin, so a wrist roll orbited the whole hand. The
+armature translation is neutralised and the container origin is placed exactly at the mapped wrist.
+The rig builds an orthonormal palm basis with Gram–Schmidt (`palmBasis`), uses
+`root.quaternion = palmDelta × inverse(restPose)`, and slerps on the shortest arc. Position is
+assigned directly each frame; only orientation and finger rotations are damped. Mirror/swap is a
+screen-position transform and is never applied to the world landmarks used for the basis: reflecting
+them produced a left-handed frame and non-unit quaternions. The left and right GLB meshes stay
+separate, with no negative scales. Acceptance: 0 px wrist offset at every sampled pose and a
+palm/back dot of -0.991.
+
+**D-47 — Reimplementation, not a port, of the MIT reference rig.** `bandinopla/three-mediapipe-rig`
+was studied for its wrist-centred root, rest-pose capture, parent-first local rotations and angle
+comparison. It is MIT-licensed, but its scene graph, bone names and frame conventions are not
+Celly's. Copying it would have imported a second set of assumptions and made the GLB-specific
+calibration and Celly's constraints harder to audit. Celly therefore reimplements the principles in
+`src/scene/handMath.ts` / `handRig.ts` with its own rest table, joint limits, skin audit and
+procedural fallback. The reference is credited in `CREDITS.md`; its code is not shipped.
+
+**D-48 — Selection commits on release, from a frozen pre-pinch aim.** Committing on pinch start made
+a crossing pinch select before the user could hold or abort. The engine now captures the target on
+pinch start, requires a ≥100 ms hold and rejects travel over 36 px, then selects on release. The aim
+is the position 100 ms before the pinch (35 ms fallback if the hand moved >55 px, because the pinch
+convergence then carries the cursor away from the intended point). A pinch released too quickly, or
+after too much travel, logs a rejection instead of selecting. Empty-space pinches keep the previous
+v0.2.1 semantics: left-only unselects and rotates immediately; right-empty defers unselect to
+release on interactive pages; swipe-enabled pages unselect immediately.
+
+**D-49 — One anchor per instance, armed hover, and a frozen target.** An aggregate centre for a
+multi-instance organelle sits near the cell centre, which is why aiming at a mitochondrion could
+pick the nucleus. Each instance now has a pick anchor and an enlarged invisible proxy. Screen-space
+proximity (40–62 px by hand span) is primary and the exact ray is the fallback; membrane, cytoplasm
+and particles are blank. A ~220 ms / ~96 px sticky target with 20 px hysteresis absorbs jitter. Once
+a pinch starts, scene hover is frozen: the engine selected the target captured at pinch start, so
+re-picking the 100 ms-old locked aim cannot silently change it. Selection-test and overlay anchors
+pick the largest projected instance when first shown, then follow it through screen-space anchor
+memory; choosing “largest every frame” made a vacuole/Golgi ring jump 279 px during rotation. The
+first implementation’s “least contested point” experiment was rejected because it placed labels in
+empty space at the edge of large bounding spheres.
+
+**D-50 — Rest calibration, parent-first rotations, and a healthy-skin fallback.** Each driven bone
+captures its rest direction in parent space, rest local quaternion and a soft flexion limit. The
+solver walks parent first and solves only local rotations, so bone lengths cannot change. Quaternion
+targets use shortest-arc damping; low tracker confidence eases to rest, and a missing/invalid GLB
+falls back to a procedural glass hand that follows the same wrist and landmarks. On load, skin
+weights are normalised to four influences and audited (unweighted vertices, weight sums, finite
+bind matrices); failures are logged in the debug overlay instead of producing silent tearing.
+
+**D-51 — Acceptance uses the deterministic exact test, not SwiftShader jitter.** The built-in
+Selection test is the acceptance instrument: it freezes auto-rotation, follows one instance per
+target, reports hits and mean aim error, and uses the real gesture engine. Under ANGLE SwiftShader a
+frame can take 1–2 s, which exceeds the real 220 ms sticky window; a synthetic 12 px step/jitter test
+therefore tests frame pacing, not hand selection. The exact 10-target run is the reported E2E result
+(10/10, 0.5 px). Timing-sensitive hysteresis is exercised with synthetic timestamps in unit tests,
+and the pose suite uses deterministic landmark replays rather than webcam footage. `applyMs`
+measures only the CPU retarget solver, not MediaPipe inference or rendering.
