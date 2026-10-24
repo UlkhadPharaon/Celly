@@ -6,12 +6,25 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { PageId, QualityMode, Vec2 } from '../types';
 import { Tweens, ease } from '../core/tween';
-import { glowTexture } from './textures';
+import { deviceProfile, type DeviceProfile } from '../core/device';
 
 export interface Framing {
   position: THREE.Vector3;
   target: THREE.Vector3;
   fov: number;
+}
+
+export interface SceneRenderStats {
+  quality: QualityMode;
+  deviceClass: DeviceProfile['deviceClass'];
+  dpr: number;
+  triangles: number;
+  calls: number;
+  points: number;
+  geometries: number;
+  textures: number;
+  shadows: boolean;
+  bloom: boolean;
 }
 
 const FRAMINGS: Record<PageId, Framing> = {
@@ -36,30 +49,48 @@ export class SceneManager {
   readonly handGroup = new THREE.Group();
 
   readonly target = new THREE.Vector3();
+  readonly profile: DeviceProfile;
 
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
+  private keyLight!: THREE.DirectionalLight;
   private dust: THREE.Points | null = null;
-  private dustSpeed: Float32Array | null = null;
   private environment: THREE.Texture | null = null;
-  private quality: QualityMode = 'high';
+  private quality: QualityMode;
   private page: PageId = 'interactive';
   private transitioning = false;
 
+  // Reused vectors keep the render loop allocation-free.
+  private readonly viewDirection = new THREE.Vector3();
+  private readonly lookTarget = new THREE.Vector3();
+  private readonly projectedScratch = new THREE.Vector3();
+  private readonly ndcScratch = new THREE.Vector2();
+
+  private readonly dustUniforms = {
+    uTime: { value: 0 },
+    uPixelRatio: { value: 1 },
+    uScale: { value: 800 },
+    uSize: { value: 0.03 },
+    uColor: { value: new THREE.Color('#8fd3ff') }
+  };
+
   constructor(mount: HTMLElement) {
+    this.profile = deviceProfile();
+    this.quality = this.profile.defaultQuality;
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: this.profile.antialias,
       alpha: false,
-      powerPreference: 'high-performance',
+      powerPreference: this.profile.deviceClass === 'desktop' ? 'high-performance' : 'default',
       stencil: false
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(this.profile.highDpr);
     this.renderer.setSize(mount.clientWidth || window.innerWidth, mount.clientHeight || window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = false;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.info.autoReset = false;
     this.renderer.domElement.className = 'celly-canvas';
     this.renderer.domElement.setAttribute('aria-hidden', 'true');
     mount.appendChild(this.renderer.domElement);
@@ -91,7 +122,8 @@ export class SceneManager {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
-    window.addEventListener('resize', this.onResize);
+    this.applyQuality();
+    window.addEventListener('resize', this.onResize, { passive: true });
     this.onResize();
   }
 
@@ -109,8 +141,8 @@ export class SceneManager {
 
     const key = new THREE.DirectionalLight('#c8ecff', 1.65);
     key.position.set(4.5, 7.5, 5.5);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
+    key.castShadow = false;
+    key.shadow.mapSize.set(this.profile.shadowSize, this.profile.shadowSize);
     key.shadow.camera.near = 0.5;
     key.shadow.camera.far = 28;
     key.shadow.camera.left = -6;
@@ -118,6 +150,7 @@ export class SceneManager {
     key.shadow.camera.top = 6;
     key.shadow.camera.bottom = -6;
     key.shadow.bias = -0.0007;
+    this.keyLight = key;
     this.scene.add(key);
 
     const rim = new THREE.DirectionalLight('#7b6bff', 1.2);
@@ -178,14 +211,14 @@ export class SceneManager {
       opacity: 0.72,
       depthWrite: false
     });
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(15, 96), floorMat);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(15, this.profile.floorSegments), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -2.15;
     floor.receiveShadow = true;
     this.scene.add(floor);
 
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(2.35, 0.006, 6, 180),
+      new THREE.TorusGeometry(2.35, 0.006, 6, this.profile.ringSegments),
       new THREE.MeshBasicMaterial({
         color: new THREE.Color('#4fd8ff'),
         transparent: true,
@@ -205,7 +238,7 @@ export class SceneManager {
   }
 
   private setupDust(): void {
-    const count = 420;
+    const count = this.profile.dustCount;
     const positions = new Float32Array(count * 3);
     const speeds = new Float32Array(count);
     for (let i = 0; i < count; i++) {
@@ -216,21 +249,49 @@ export class SceneManager {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const mat = new THREE.PointsMaterial({
-      color: new THREE.Color('#8fd3ff'),
-      size: 0.028,
-      // Without a map a point sprite is a hard-edged square; one close particle in the corner
-      // was visible as a blue tile on the page edge.
-      map: glowTexture(),
-      alphaTest: 0.01,
+    geo.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1));
+    geo.setDrawRange(0, count);
+
+    // The drift and the circular sprite are computed on the GPU. The previous implementation
+    // rewrote 420 Y positions and uploaded the whole buffer every frame on the CPU.
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.dustUniforms,
+      vertexShader: /* glsl */ `
+        attribute float aSpeed;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        uniform float uScale;
+        uniform float uSize;
+        varying float vFade;
+
+        void main() {
+          vec3 p = position;
+          p.y = mod(p.y + 4.5 + uTime * aSpeed, 9.0) - 4.5;
+          vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          gl_PointSize = max(1.0, uSize * uScale * uPixelRatio / max(0.5, -mvPosition.z));
+          vFade = smoothstep(0.0, 1.5, 4.5 - abs(p.y));
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uColor;
+        varying float vFade;
+
+        void main() {
+          vec2 point = gl_PointCoord - 0.5;
+          if (dot(point, point) > 0.25) discard;
+          float alpha = smoothstep(0.5, 0.05, length(point)) * 0.42 * vFade;
+          gl_FragColor = vec4(uColor, alpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
       transparent: true,
-      opacity: 0.42,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true
+      blending: THREE.AdditiveBlending
     });
     this.dust = new THREE.Points(geo, mat);
-    this.dustSpeed = speeds;
+    this.dust.frustumCulled = false;
     this.scene.add(this.dust);
   }
 
@@ -286,17 +347,45 @@ export class SceneManager {
   // --------------------------------------------------------------------- quality
 
   setQuality(quality: QualityMode): void {
+    if (quality === this.quality) return;
     this.quality = quality;
-    const dpr = quality === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-    this.renderer.setPixelRatio(dpr);
-    this.renderer.shadowMap.enabled = quality === 'high';
-    this.bloom.enabled = quality === 'high';
-    this.composer.setPixelRatio(dpr);
+    this.applyQuality();
     this.onResize();
+  }
+
+  private applyQuality(): void {
+    const high = this.quality === 'high';
+    const dpr = high ? this.profile.highDpr : this.profile.lowDpr;
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.shadowMap.enabled = high && this.profile.shadows;
+    this.keyLight.castShadow = high && this.profile.shadows;
+    this.bloom.enabled = high && this.profile.bloom;
+    this.composer.setPixelRatio(dpr);
+    this.dustUniforms.uPixelRatio.value = dpr;
+    if (this.dust) {
+      const count = this.profile.dustCount;
+      this.dust.geometry.setDrawRange(0, high ? count : Math.round(count * 0.55));
+    }
   }
 
   get currentQuality(): QualityMode {
     return this.quality;
+  }
+
+  get renderStats(): SceneRenderStats {
+    const info = this.renderer.info;
+    return {
+      quality: this.quality,
+      deviceClass: this.profile.deviceClass,
+      dpr: this.renderer.getPixelRatio(),
+      triangles: info.render.triangles,
+      calls: info.render.calls,
+      points: info.render.points,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      shadows: this.renderer.shadowMap.enabled,
+      bloom: this.bloom.enabled
+    };
   }
 
   // ---------------------------------------------------------------------- picking
@@ -311,12 +400,13 @@ export class SceneManager {
 
   rayFromPixels(x: number, y: number, raycaster = new THREE.Raycaster()): THREE.Raycaster {
     const ndc = this.ndcFromPixels(x, y);
-    raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), this.camera);
+    this.ndcScratch.set(ndc.x, ndc.y);
+    raycaster.setFromCamera(this.ndcScratch, this.camera);
     return raycaster;
   }
 
   projectToScreen(world: THREE.Vector3): { x: number; y: number; visible: boolean } {
-    const p = world.clone().project(this.camera);
+    const p = this.projectedScratch.copy(world).project(this.camera);
     const rect = this.renderer.domElement.getBoundingClientRect();
     return {
       x: rect.left + ((p.x + 1) / 2) * rect.width,
@@ -330,36 +420,29 @@ export class SceneManager {
   render(dt: number): void {
     this.tweens.update(dt * 1000);
 
-    if (this.dust && this.dustSpeed) {
-      const pos = this.dust.geometry.getAttribute('position') as THREE.BufferAttribute;
-      for (let i = 0; i < pos.count; i++) {
-        let y = pos.getY(i) + this.dustSpeed[i] * dt;
-        if (y > 4.5) y = -4.5;
-        pos.setY(i, y);
-      }
-      pos.needsUpdate = true;
-      this.dust.rotation.y += dt * 0.006;
-    }
+    this.dustUniforms.uTime.value += dt;
+    if (this.dust) this.dust.rotation.y += dt * 0.006;
 
     // Smooth the look-at target so camera tweens never snap.
-    const current = new THREE.Vector3();
-    this.camera.getWorldDirection(current);
-    const look = this.camera.position.clone().add(current.multiplyScalar(6));
-    look.lerp(this.target, 0.18);
-    this.camera.lookAt(look);
+    this.camera.getWorldDirection(this.viewDirection);
+    this.lookTarget.copy(this.camera.position).addScaledVector(this.viewDirection, 6);
+    this.lookTarget.lerp(this.target, 0.18);
+    this.camera.lookAt(this.lookTarget);
 
-    if (this.quality === 'high') this.composer.render();
+    this.renderer.info.reset();
+    if (this.bloom.enabled) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }
 
   private onResize = (): void => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
-    this.bloom.setSize(w, h);
+    this.dustUniforms.uPixelRatio.value = this.renderer.getPixelRatio();
+    this.dustUniforms.uScale.value = h * 0.5;
   };
 
   dispose(): void {

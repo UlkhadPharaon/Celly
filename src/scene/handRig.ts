@@ -1,12 +1,14 @@
 ﻿import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Vec3 } from '../types';
 import { glowTexture } from './textures';
+import { createLowPolyHand } from './lowPolyHand';
 import {
   boneLocalQuaternion,
+  createPalmBasis,
   dampQuaternion,
   jointAngleErrorDegrees,
   palmBasis,
+  palmBasisInto,
   palmDeltaQuaternion,
   type PalmBasis
 } from './handMath';
@@ -16,6 +18,15 @@ const HAND_UNIT = 0.62;
 
 /** Driven bones: everything except the four fingertip leaves and the wrist. */
 const DRIVEN = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19];
+const FINGER_CHAINS: ReadonlyArray<
+  readonly [string, ReadonlyArray<readonly [number, number, number]>]
+> = [
+  ['thumb', [[0, 1, 2], [1, 2, 3], [2, 3, 4]]],
+  ['index', [[0, 5, 6], [5, 6, 7], [6, 7, 8]]],
+  ['middle', [[0, 9, 10], [9, 10, 11], [10, 11, 12]]],
+  ['ring', [[0, 13, 14], [13, 14, 15], [14, 15, 16]]],
+  ['pinky', [[0, 17, 18], [17, 18, 19], [18, 19, 20]]]
+];
 const CHILD: Record<number, number> = {
   1: 2,
   2: 3,
@@ -76,6 +87,13 @@ export interface DrivenHand {
   debugState?(): Record<string, unknown>;
 }
 
+export type HandSource = 'lowpoly' | 'glb' | 'skeletal';
+
+interface HandRigOptions {
+  cheapMaterial?: boolean;
+  source?: HandSource;
+}
+
 interface RestBone {
   index: number;
   child: number;
@@ -104,7 +122,26 @@ export function frameFrom(p: Vec3[]): THREE.Matrix3 {
   return palmBasis(p).matrix;
 }
 
-function glassMaterial(color: string, opacity: number): THREE.MeshPhysicalMaterial {
+function glassMaterial(
+  color: string,
+  opacity: number,
+  cheap = false
+): THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial {
+  if (cheap) {
+    // One standard material per hand instead of clearcoat physical shading. The emissive tint
+    // keeps the glass look while removing the most expensive BRDF lobe on low-end GPUs.
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color),
+      emissive: new THREE.Color(color),
+      emissiveIntensity: 0.62,
+      roughness: 0.26,
+      metalness: 0.08,
+      transparent: true,
+      opacity,
+      depthWrite: true,
+      side: THREE.FrontSide
+    });
+  }
   return new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(color),
     emissive: new THREE.Color(color),
@@ -133,12 +170,14 @@ export class HandRig implements DrivenHand {
   readonly side: 'left' | 'right';
   readonly armature: THREE.Object3D;
   readonly bones = new Map<number, THREE.Bone>();
+  readonly source: HandSource;
 
   private readonly restBones: RestBone[] = [];
   private readonly restQ = new Map<number, THREE.Quaternion>();
   private readonly restDirParent = new Map<number, THREE.Vector3>();
   private readonly lastBoneQ = new Map<number, THREE.Quaternion>();
   private readonly restBasis: PalmBasis;
+  private readonly liveBasis = createPalmBasis();
   private readonly restTipLength: number;
   private readonly rootQ = new THREE.Quaternion();
   private rootReady = false;
@@ -155,10 +194,31 @@ export class HandRig implements DrivenHand {
   private lastPerFinger: Record<string, number> = {};
   /** CPU time spent in the last retarget+solve; used by the debug readout and latency checks. */
   private lastApplyMs = 0;
+  private meshVertices = 0;
+  private meshTriangles = 0;
+  private meshDrawCalls = 0;
 
-  constructor(armature: THREE.Object3D, side: 'left' | 'right', baseRotation: THREE.Euler) {
+  // Reused solver scratch. `apply()` runs at display rate, so allocating a handful of vectors
+  // per bone per frame becomes measurable GC pressure on phones.
+  private readonly tmpTargetWorld = new THREE.Vector3();
+  private readonly tmpParentQ = new THREE.Quaternion();
+  private readonly tmpTargetParent = new THREE.Vector3();
+  private readonly tmpDesired = new THREE.Quaternion();
+  private readonly tmpRootTarget = new THREE.Quaternion();
+  private readonly tmpVecA = new THREE.Vector3();
+  private readonly tmpVecB = new THREE.Vector3();
+  private readonly tmpVecC = new THREE.Vector3();
+  private readonly meshSample: Vec3[] = Array.from({ length: 21 }, () => ({ x: 0, y: 0, z: 0 }));
+
+  constructor(
+    armature: THREE.Object3D,
+    side: 'left' | 'right',
+    baseRotation: THREE.Euler,
+    options: HandRigOptions = {}
+  ) {
     this.side = side;
     this.armature = armature;
+    this.source = options.source ?? 'glb';
     this.container.name = `hand:${side}`;
     this.container.add(armature);
 
@@ -173,6 +233,7 @@ export class HandRig implements DrivenHand {
     armature.scale.set(1, 1, 1);
     armature.updateMatrixWorld(true);
 
+    const staleMaterials = new Set<THREE.Material>();
     armature.traverse((obj) => {
       if ((obj as THREE.Bone).isBone) {
         const idx = parseInt(obj.name.slice(0, 2), 10);
@@ -180,15 +241,28 @@ export class HandRig implements DrivenHand {
       }
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
-        const mat = glassMaterial(side === 'left' ? '#19b5ff' : '#8b5cf6', 0.88);
+        const mat = glassMaterial(
+          side === 'left' ? '#19b5ff' : '#8b5cf6',
+          0.88,
+          options.cheapMaterial
+        );
+        const previous = mesh.material;
         mesh.material = mat;
+        if (Array.isArray(previous)) previous.forEach((m) => staleMaterials.add(m));
+        else if (previous) staleMaterials.add(previous);
         mesh.castShadow = false;
         mesh.frustumCulled = false;
         this.meshMaterials.push(mat);
+        const position = mesh.geometry.getAttribute('position');
+        this.meshVertices += position?.count ?? 0;
+        const index = mesh.geometry.getIndex();
+        this.meshTriangles += index ? index.count / 3 : (position?.count ?? 0) / 3;
+        this.meshDrawCalls += 1;
         const report = inspectAndRepairSkin(mesh);
         if (report) this.skinReports.push(report);
       }
     });
+    for (const material of staleMaterials) material.dispose();
 
     this.restBasis = this.captureRest();
     this.normalizeSize();
@@ -377,12 +451,12 @@ export class HandRig implements DrivenHand {
     }
 
     const P = world;
-    const live = palmBasis(P);
+    const live = palmBasisInto(P, this.liveBasis);
     if (!live.valid) {
       this.lastApplyMs = performance.now() - started;
       return;
     }
-    const targetRoot = palmDeltaQuaternion(this.restBasis, live);
+    const targetRoot = palmDeltaQuaternion(this.restBasis, live, this.tmpRootTarget);
 
     if (!this.rootReady) {
       this.rootQ.copy(targetRoot);
@@ -390,7 +464,7 @@ export class HandRig implements DrivenHand {
     } else {
       // A palm flip is a real 180 degree rotation, not a sign change. Slerp always takes the
       // short arc, and the exponential rate keeps tracking jitter below the mesh's resolution.
-      this.rootQ.copy(dampQuaternion(this.rootQ, targetRoot, 24, dt));
+      dampQuaternion(this.rootQ, targetRoot, 24, dt, this.rootQ);
     }
     this.container.quaternion.copy(this.rootQ);
     this.container.updateMatrixWorld(true);
@@ -398,27 +472,34 @@ export class HandRig implements DrivenHand {
     for (const rest of this.restBones) {
       const b = this.bones.get(rest.index);
       if (!b) continue;
-      const targetWorld = new THREE.Vector3(
+      this.tmpTargetWorld.set(
         P[rest.child].x - P[rest.index].x,
         P[rest.child].y - P[rest.index].y,
         P[rest.child].z - P[rest.index].z
       );
-      if (targetWorld.lengthSq() < 1e-10) continue;
-      targetWorld.normalize();
+      if (this.tmpTargetWorld.lengthSq() < 1e-10) continue;
+      this.tmpTargetWorld.normalize();
 
-      const parentQ = new THREE.Quaternion();
-      b.parent?.getWorldQuaternion(parentQ);
-      const targetParent = targetWorld.applyQuaternion(parentQ.invert()).normalize();
-      const desired = boneLocalQuaternion(
+      b.parent?.getWorldQuaternion(this.tmpParentQ);
+      this.tmpTargetParent
+        .copy(this.tmpTargetWorld)
+        .applyQuaternion(this.tmpParentQ.invert())
+        .normalize();
+      boneLocalQuaternion(
         rest.restDirParent,
         rest.restQuat,
-        targetParent,
-        rest.maxFlex
+        this.tmpTargetParent,
+        rest.maxFlex,
+        this.tmpDesired
       );
       const previous = this.lastBoneQ.get(rest.index);
-      const next = previous ? dampQuaternion(previous, desired, 34, dt) : desired.clone();
-      this.lastBoneQ.set(rest.index, next);
-      b.quaternion.copy(next);
+      if (previous) {
+        dampQuaternion(previous, this.tmpDesired, 34, dt, previous);
+        b.quaternion.copy(previous);
+      } else {
+        b.quaternion.copy(this.tmpDesired);
+        this.lastBoneQ.set(rest.index, this.tmpDesired.clone());
+      }
       b.updateWorldMatrix(true, false);
     }
 
@@ -434,9 +515,10 @@ export class HandRig implements DrivenHand {
     for (const [i, bone] of this.bones) {
       const q = this.restQ.get(i);
       if (!q) continue;
-      const next = dampQuaternion(bone.quaternion, q, 8, dt);
-      bone.quaternion.copy(next);
-      this.lastBoneQ.set(i, next);
+      const previous = this.lastBoneQ.get(i) ?? bone.quaternion;
+      dampQuaternion(previous, q, 8, dt, previous);
+      bone.quaternion.copy(previous);
+      this.lastBoneQ.set(i, previous);
       bone.updateWorldMatrix(true, false);
     }
     this.updateAngleError(null);
@@ -448,40 +530,40 @@ export class HandRig implements DrivenHand {
       this.lastPerFinger = {};
       return;
     }
-    const mesh = Array.from({ length: 21 }, (_, i) => {
-      const p = this.bones.get(i)?.getWorldPosition(new THREE.Vector3());
-      return p ? vec(p) : { x: 0, y: 0, z: 0 };
-    });
-    this.lastAngleError = jointAngleErrorDegrees(world, mesh);
-
-    const per: Record<string, number> = {};
-    const ranges: Record<string, Array<readonly [number, number, number]>> = {
-      thumb: [[0, 1, 2], [1, 2, 3], [2, 3, 4]],
-      index: [[0, 5, 6], [5, 6, 7], [6, 7, 8]],
-      middle: [[0, 9, 10], [9, 10, 11], [10, 11, 12]],
-      ring: [[0, 13, 14], [13, 14, 15], [14, 15, 16]],
-      pinky: [[0, 17, 18], [17, 18, 19], [18, 19, 20]]
-    };
-    for (const [name, chains] of Object.entries(ranges)) {
-      per[name] = jointAngleErrorDegrees(world, mesh, chains);
+    for (let i = 0; i < 21; i++) {
+      const bone = this.bones.get(i);
+      if (bone) bone.getWorldPosition(this.tmpVecA);
+      const sample = this.meshSample[i];
+      sample.x = this.tmpVecA.x;
+      sample.y = this.tmpVecA.y;
+      sample.z = this.tmpVecA.z;
     }
-    this.lastPerFinger = per;
+    this.lastAngleError = jointAngleErrorDegrees(world, this.meshSample);
+
+    const per: Record<string, number> = this.lastPerFinger;
+    for (const [name, chains] of FINGER_CHAINS) {
+      per[name] = jointAngleErrorDegrees(world, this.meshSample, chains);
+    }
   }
 
   private updateGlow(): void {
-    const a = this.bones.get(4)?.getWorldPosition(new THREE.Vector3());
-    const b = this.bones.get(8)?.getWorldPosition(new THREE.Vector3());
+    const a = this.bones.get(4);
+    const b = this.bones.get(8);
     if (!a || !b) return;
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-    this.container.worldToLocal(mid);
-    this.glow.position.copy(mid);
+    a.getWorldPosition(this.tmpVecA);
+    b.getWorldPosition(this.tmpVecB);
+    this.tmpVecC.copy(this.tmpVecA).add(this.tmpVecB).multiplyScalar(0.5);
+    this.container.worldToLocal(this.tmpVecC);
+    this.glow.position.copy(this.tmpVecC);
   }
 
   pinchWorld(out: THREE.Vector3): THREE.Vector3 | null {
-    const a = this.bones.get(4)?.getWorldPosition(new THREE.Vector3());
-    const b = this.bones.get(8)?.getWorldPosition(new THREE.Vector3());
+    const a = this.bones.get(4);
+    const b = this.bones.get(8);
     if (!a || !b) return null;
-    return out.copy(a).add(b).multiplyScalar(0.5);
+    a.getWorldPosition(this.tmpVecA);
+    b.getWorldPosition(this.tmpVecB);
+    return out.copy(this.tmpVecA).add(this.tmpVecB).multiplyScalar(0.5);
   }
 
   private updateMarkers(): void {
@@ -490,9 +572,9 @@ export class HandRig implements DrivenHand {
     for (let i = 0; i < 21; i++) {
       const bone = this.bones.get(i);
       if (!bone) continue;
-      const p = bone.getWorldPosition(new THREE.Vector3());
-      this.container.worldToLocal(p);
-      attr.setXYZ(i, p.x, p.y, p.z);
+      bone.getWorldPosition(this.tmpVecA);
+      this.container.worldToLocal(this.tmpVecA);
+      attr.setXYZ(i, this.tmpVecA.x, this.tmpVecA.y, this.tmpVecA.z);
     }
     attr.needsUpdate = true;
   }
@@ -537,9 +619,8 @@ export class HandRig implements DrivenHand {
 
   setOpacity(v: number): void {
     for (const m of this.meshMaterials) {
-      const mat = m as THREE.MeshPhysicalMaterial;
-      mat.opacity = v;
-      mat.transparent = v < 0.999;
+      m.opacity = v;
+      m.transparent = v < 0.999;
     }
   }
 
@@ -549,6 +630,13 @@ export class HandRig implements DrivenHand {
     const palmNormalWorld = this.restBasis.y.clone().applyQuaternion(this.container.quaternion).normalize();
     return {
       side: this.side,
+      source: this.source,
+      mesh: {
+        vertices: this.meshVertices,
+        triangles: Math.round(this.meshTriangles),
+        drawCalls: this.meshDrawCalls,
+        material: this.meshMaterials[0]?.type ?? null
+      },
       wrist: wrist ? [wrist.x, wrist.y, wrist.z] : null,
       rootPosition: [this.container.position.x, this.container.position.y, this.container.position.z],
       rootQuaternion: [this.rootQ.x, this.rootQ.y, this.rootQ.z, this.rootQ.w],
@@ -732,7 +820,7 @@ export class ProceduralHand implements DrivenHand {
   }
 
   debugState(): Record<string, unknown> {
-    return { side: this.side, procedural: true };
+    return { side: this.side, source: 'skeletal', procedural: true };
   }
 
   dispose(): void {
@@ -842,29 +930,71 @@ function vec(p: THREE.Vector3 | undefined): Vec3 {
 
 const GLB_URL = 'hands_rigged.glb';
 
-/** Loads the two armatures from the GLB; falls back to procedural hands on any failure. */
-export async function loadHands(
-  forceProcedural = false
-): Promise<{ left: DrivenHand; right: DrivenHand; rigged: boolean }> {
+export interface LoadedHands {
+  left: DrivenHand;
+  right: DrivenHand;
+  rigged: boolean;
+  source: HandSource;
+}
+
+/**
+ * Loads the generated low-poly skinned hands. The authored GLB is opt-in (`?hands=glb`) so the
+ * default boot does not download or parse 1.3 MB of high-detail geometry. The old skeletal hand
+ * remains the explicit diagnostic fallback in settings.
+ */
+export async function loadHands(forceProcedural = false): Promise<LoadedHands> {
   if (forceProcedural) {
-    return { left: new ProceduralHand('left'), right: new ProceduralHand('right'), rigged: false };
+    return {
+      left: new ProceduralHand('left'),
+      right: new ProceduralHand('right'),
+      rigged: false,
+      source: 'skeletal'
+    };
   }
+
+  if (new URLSearchParams(window.location.search).get('hands') === 'glb') {
+    try {
+      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+      const loader = new GLTFLoader();
+      const gltf = await loader.loadAsync(new URL(GLB_URL, document.baseURI).href);
+      const left = findArmature(gltf.scene, 'L');
+      const right = findArmature(gltf.scene, 'R');
+      if (!left || !right) throw new Error('hand armatures not found in GLB');
+
+      left.removeFromParent();
+      right.removeFromParent();
+
+      const l = new HandRig(left, 'left', new THREE.Euler(0, Math.PI, 0), { source: 'glb' });
+      const r = new HandRig(right, 'right', new THREE.Euler(0, Math.PI, 0), { source: 'glb' });
+      return { left: l, right: r, rigged: true, source: 'glb' };
+    } catch (err) {
+      console.warn('[celly] high-detail hands unavailable, using generated low-poly hands:', err);
+    }
+  }
+
   try {
-    const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync(new URL(GLB_URL, document.baseURI).href);
-    const left = findArmature(gltf.scene, 'L');
-    const right = findArmature(gltf.scene, 'R');
-    if (!left || !right) throw new Error('hand armatures not found in GLB');
-
-    left.removeFromParent();
-    right.removeFromParent();
-
-    const l = new HandRig(left, 'left', new THREE.Euler(0, Math.PI, 0));
-    const r = new HandRig(right, 'right', new THREE.Euler(0, Math.PI, 0));
-    return { left: l, right: r, rigged: true };
+    const left = createLowPolyHand('left');
+    const right = createLowPolyHand('right');
+    return {
+      left: new HandRig(left.armature, 'left', new THREE.Euler(0, 0, 0), {
+        cheapMaterial: true,
+        source: 'lowpoly'
+      }),
+      right: new HandRig(right.armature, 'right', new THREE.Euler(0, 0, 0), {
+        cheapMaterial: true,
+        source: 'lowpoly'
+      }),
+      rigged: true,
+      source: 'lowpoly'
+    };
   } catch (err) {
-    console.warn('[celly] falling back to procedural hands:', err);
-    return { left: new ProceduralHand('left'), right: new ProceduralHand('right'), rigged: false };
+    console.warn('[celly] low-poly hand generation failed, using skeletal fallback:', err);
+    return {
+      left: new ProceduralHand('left'),
+      right: new ProceduralHand('right'),
+      rigged: false,
+      source: 'skeletal'
+    };
   }
 }
 

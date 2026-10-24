@@ -180,42 +180,65 @@ export class Overlay {
   }
 
   private place(): void {
-    if (!this.anchor) {
-      this.root.style.left = `${Math.max(MARGIN, window.innerWidth - WIDTH - 44)}px`;
-      this.root.style.top = '50%';
-      this.root.style.transform = 'translateY(-50%)';
-      return;
-    }
-    const h = this.inner.offsetHeight || 360;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const margin = vw <= 640 ? 12 : MARGIN;
+    const width = Math.min(WIDTH, vw - margin * 2);
+    this.root.style.width = `${width}px`;
+
+    const rail = document.querySelector('.left-rail')?.getBoundingClientRect();
+    const controls = document.querySelector('.controls')?.getBoundingClientRect();
+    // On phones and tablets the control panel is a full-width bottom sheet. Reserve the strip
+    // above it rather than treating it as a right-hand column.
+    const controlsIsSheet = !!controls && controls.width > vw * 0.45 && controls.top > vh * 0.32;
+    const bottomReserve = controlsIsSheet
+      ? Math.max(margin, vh - controls.top + 10)
+      : margin;
+    const compact = controlsIsSheet || vw <= 1080;
+    const maxHeight = Math.max(200, vh - TOPBAR - bottomReserve - margin);
+    this.inner.style.maxHeight = compact ? `${Math.round(maxHeight)}px` : '';
+    this.inner.style.overflowY = compact ? 'auto' : '';
+
+    if (!this.anchor) {
+      this.root.style.transform = 'none';
+      if (compact) {
+        this.root.style.left = `${margin}px`;
+        this.root.style.top = `${TOPBAR}px`;
+        this.root.dataset.side = 'right';
+      } else {
+        this.root.style.left = `${Math.max(margin, vw - width - 44)}px`;
+        this.root.style.top = '50%';
+        this.root.style.transform = 'translateY(-50%)';
+      }
+      return;
+    }
+
+    const h = Math.min(this.inner.offsetHeight || 360, maxHeight);
     // Keep the card on the far side of the anchor, but stay out of the fixed HUD rail and the
     // control panel. On a centred node both sides fit; on a left-hand node only the right side
     // clears the rail, and vice versa near the control panel.
-    const rail = document.querySelector('.left-rail')?.getBoundingClientRect();
-    const controls = document.querySelector('.controls')?.getBoundingClientRect();
-    const safeLeft = Math.max(MARGIN, rail && rail.width > 0 ? rail.right + 14 : MARGIN);
+    const safeLeft = Math.max(margin, rail && rail.width > 0 ? rail.right + 14 : margin);
     const safeRight = Math.min(
-      vw - MARGIN,
-      controls && controls.width > 0 ? controls.left - 14 : vw - MARGIN
+      vw - margin,
+      controls && controls.width > 0 && !controlsIsSheet ? controls.left - 14 : vw - margin
     );
-    const leftCandidate = this.anchor.x - WIDTH - GAP;
+    const leftCandidate = this.anchor.x - width - GAP;
     const rightCandidate = this.anchor.x + GAP;
     const leftFits = leftCandidate >= safeLeft;
-    const rightFits = rightCandidate + WIDTH <= safeRight;
+    const rightFits = rightCandidate + width <= safeRight;
     // Prefer the open side of the scene: the left rail is wider than the control panel, and a card
     // that fits on the right never has to cover the legend.
     let preferRight = rightFits;
     if (!rightFits && !leftFits) preferRight = safeRight - this.anchor.x >= this.anchor.x - safeLeft;
     this.side = preferRight ? 'right' : 'left';
     let left = preferRight ? rightCandidate : leftCandidate;
-    if (safeRight - WIDTH >= safeLeft) {
-      left = Math.max(safeLeft, Math.min(safeRight - WIDTH, left));
+    if (safeRight - width >= safeLeft) {
+      left = Math.max(safeLeft, Math.min(safeRight - width, left));
     } else {
-      left = Math.max(MARGIN, Math.min(vw - WIDTH - MARGIN, left));
+      left = Math.max(margin, Math.min(vw - width - margin, left));
     }
     let top = this.anchor.y - h * 0.35;
-    top = Math.max(TOPBAR, Math.min(vh - h - MARGIN, top));
+    top = Math.max(TOPBAR, Math.min(vh - bottomReserve - h, top));
     this.root.style.left = `${Math.round(left)}px`;
     this.root.style.top = `${Math.round(top)}px`;
     this.root.style.transform = 'none';

@@ -17,6 +17,8 @@ export class WebcamPreview {
   private readonly empty: HTMLElement;
   private readonly badge: HTMLElement;
   private source: HTMLVideoElement | null = null;
+  private visible = true;
+  private lastDraw = 0;
 
   constructor() {
     this.root = document.createElement('div');
@@ -43,6 +45,7 @@ export class WebcamPreview {
   }
 
   setVisible(visible: boolean): void {
+    this.visible = visible;
     this.root.classList.toggle('is-hidden', !visible);
   }
 
@@ -53,9 +56,13 @@ export class WebcamPreview {
     if (span) span.textContent = label;
   }
 
-  draw(hands: HandFrame[], settings: Settings): void {
+  draw(hands: HandFrame[], settings: Settings, now = performance.now()): void {
     const ctx = this.ctx;
-    if (!ctx) return;
+    if (!ctx || !this.visible) return;
+    // The main scene renders at display rate; a 320x180 camera thumbnail with landmarks does
+    // not need 60 redraws per second. Roughly 15 fps also keeps the canvas off the critical path.
+    if (now - this.lastDraw < 66) return;
+    this.lastDraw = now;
     const w = this.canvas.width;
     const h = this.canvas.height;
 

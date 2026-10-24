@@ -1,5 +1,6 @@
 import { FilesetResolver, HandLandmarker, type HandLandmarkerResult } from '@mediapipe/tasks-vision';
 import type { CameraStatus, RawFrame, RawHand, TrackingStatus, Vec3 } from '../types';
+import { deviceProfile } from '../core/device';
 
 export interface TrackerCallbacks {
   onCamera?: (status: CameraStatus, detail?: string) => void;
@@ -66,11 +67,12 @@ export class HandTracker {
 
     this.setCamera('requesting');
     try {
+      const camera = deviceProfile();
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30, max: 60 },
+          width: { ideal: camera.cameraWidth },
+          height: { ideal: camera.cameraHeight },
+          frameRate: { ideal: camera.cameraFps, max: camera.cameraFps },
           facingMode: 'user'
         },
         audio: false
@@ -100,10 +102,12 @@ export class HandTracker {
     this.setTracking('initializing');
     const modelPath = resolveAssetPath('models/hand_landmarker.task');
 
-    const attempt = async (wasmBase: string, label: string): Promise<HandLandmarker> => {
+    type Attempt = { landmarker: HandLandmarker; delegate: 'gpu' | 'cpu' };
+
+    const attempt = async (wasmBase: string): Promise<Attempt> => {
       const vision = await FilesetResolver.forVisionTasks(wasmBase);
       try {
-        const lm = await HandLandmarker.createFromOptions(vision, {
+        const landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: modelPath, delegate: 'GPU' },
           runningMode: 'VIDEO',
           numHands: 2,
@@ -111,10 +115,9 @@ export class HandTracker {
           minHandPresenceConfidence: 0.5,
           minTrackingConfidence: 0.5
         });
-        this.detail = `${label} · GPU`;
-        return lm;
+        return { landmarker, delegate: 'gpu' };
       } catch {
-        const lm = await HandLandmarker.createFromOptions(vision, {
+        const landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: modelPath, delegate: 'CPU' },
           runningMode: 'VIDEO',
           numHands: 2,
@@ -122,20 +125,22 @@ export class HandTracker {
           minHandPresenceConfidence: 0.5,
           minTrackingConfidence: 0.5
         });
-        this.detail = `${label} · CPU`;
-        return lm;
+        return { landmarker, delegate: 'cpu' };
       }
     };
 
     try {
-      this.landmarker = await attempt(resolveAssetPath('mediapipe-wasm'), 'local');
-      this.setTracking('gpu');
+      const local = await attempt(resolveAssetPath('mediapipe-wasm'));
+      this.landmarker = local.landmarker;
+      this.detail = `local · ${local.delegate.toUpperCase()}`;
+      this.setTracking(local.delegate);
     } catch (localErr) {
       try {
         const cdn = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm';
-        this.landmarker = await attempt(cdn, 'cdn');
-        this.setTracking('gpu');
-        this.detail = `${this.detail ?? ''} (CDN fallback)`;
+        const remote = await attempt(cdn);
+        this.landmarker = remote.landmarker;
+        this.detail = `cdn · ${remote.delegate.toUpperCase()} (CDN fallback)`;
+        this.setTracking(remote.delegate);
       } catch {
         this.setTracking('error', String(localErr));
       }

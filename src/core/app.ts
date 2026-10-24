@@ -26,6 +26,7 @@ import { DebugOverlay } from '../ui/debugOverlay';
 import { Shell } from '../ui/shell';
 import type { ControlState, ToggleKey } from '../ui/controlPanel';
 import { loadJSON, saveJSON } from './store';
+import { preferredQuality } from './device';
 import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
@@ -53,7 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reducedMotion: false,
   highContrast: false,
   proceduralHand: false,
-  quality: 'high'
+  quality: preferredQuality()
 };
 
 export class CellyApp {
@@ -1015,6 +1016,11 @@ export class CellyApp {
     };
   }
 
+  /** Draw-call and resolution snapshot used by the performance audit. */
+  get renderStats(): SceneManager['renderStats'] {
+    return this.scene.renderStats;
+  }
+
   /** Test hook: where the pipeline thinks the cursor is versus where the 3D hand sits. */
   debugHand(side: HandSide): Record<string, unknown> {
     const frame = this.frames.find((f) => f.side === side && f.present);
@@ -1107,7 +1113,7 @@ function loadSettings(): Settings {
   const stored = loadJSON<Partial<Settings>>(SETTINGS_KEY, {});
   const merged: Settings = { ...DEFAULT_SETTINGS, ...stored };
   if (merged.language !== 'fr' && merged.language !== 'en') merged.language = 'en';
-  if (merged.quality !== 'low' && merged.quality !== 'high') merged.quality = 'high';
+  if (merged.quality !== 'low' && merged.quality !== 'high') merged.quality = preferredQuality();
   if (!Number.isFinite(merged.pinchSensitivity)) merged.pinchSensitivity = PINCH_SENSITIVITY.normal;
   merged.pinchSensitivity = Math.min(
     PINCH_SENSITIVITY.max,

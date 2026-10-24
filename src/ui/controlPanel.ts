@@ -34,6 +34,8 @@ export type ToggleKey =
 const COPY = {
   en: {
     controls: 'Controls',
+    openControls: 'Open controls',
+    closeControls: 'Close controls',
     feedback: 'Visual feedback + landmarks',
     mirrorX: 'Mirror X axis',
     mirrorY: 'Mirror Y axis',
@@ -58,6 +60,8 @@ const COPY = {
   },
   fr: {
     controls: 'Réglages',
+    openControls: 'Ouvrir les réglages',
+    closeControls: 'Fermer les réglages',
     feedback: 'Retour visuel + points',
     mirrorX: 'Miroir axe X',
     mirrorY: 'Miroir axe Y',
@@ -94,6 +98,9 @@ export class ControlPanel {
   private readonly statusText: HTMLElement;
   private readonly retry: HTMLButtonElement;
   private readonly accessibilitySummary: HTMLElement;
+  private readonly sheetToggle: HTMLButtonElement;
+  private readonly sheetQuery: MediaQueryList;
+  private sheetOpen = true;
 
   constructor(
     private readonly registry: ButtonRegistry,
@@ -106,23 +113,49 @@ export class ControlPanel {
     private readonly onRetry: () => void
   ) {
     this.copy = COPY[state.language];
+    this.sheetQuery = window.matchMedia('(max-width: 1080px)');
+    this.sheetOpen = !this.sheetQuery.matches;
     this.root = document.createElement('aside');
+    this.root.id = 'celly-controls';
     this.root.className = 'controls glass';
+    this.root.classList.toggle('is-open', this.sheetOpen);
     this.root.setAttribute('aria-label', this.copy.controls);
-    this.root.append(this.preview.root);
 
     const head = document.createElement('div');
     head.className = 'controls-head';
-    head.innerHTML = `<span class="eyebrow">${this.copy.controls}</span>`;
+    const eyebrow = document.createElement('span');
+    eyebrow.className = 'eyebrow';
+    eyebrow.textContent = this.copy.controls;
+    const tools = document.createElement('div');
+    tools.className = 'controls-head-actions';
+
     const help = document.createElement('button');
-    help.className = 'ghost-btn small';
+    help.className = 'ghost-btn small help-btn';
     help.type = 'button';
     help.append(svgIcon(ICONS.help));
     help.setAttribute('aria-label', this.copy.help);
     help.addEventListener('click', this.onHelp);
     this.registry.register('control:help', help, this.onHelp);
-    head.append(help);
-    this.root.append(head);
+
+    this.sheetToggle = document.createElement('button');
+    this.sheetToggle.className = 'ghost-btn small sheet-toggle';
+    this.sheetToggle.type = 'button';
+    this.sheetToggle.append(svgIcon(ICONS.chevron));
+    this.sheetToggle.setAttribute('aria-controls', 'celly-controls');
+    this.sheetToggle.setAttribute('aria-expanded', String(this.sheetOpen));
+    this.sheetToggle.setAttribute(
+      'aria-label',
+      this.sheetOpen ? this.copy.closeControls : this.copy.openControls
+    );
+    this.sheetToggle.addEventListener('click', () => this.setSheetOpen(!this.sheetOpen));
+    this.registry.register('control:sheet', this.sheetToggle, () =>
+      this.setSheetOpen(!this.sheetOpen)
+    );
+
+    tools.append(help, this.sheetToggle);
+    head.append(eyebrow, tools);
+    this.root.append(head, this.preview.root);
+    this.sheetQuery.addEventListener('change', this.onSheetQueryChange);
 
     const list = document.createElement('div');
     list.className = 'controls-list';
@@ -239,6 +272,32 @@ export class ControlPanel {
     this.setState(state);
   }
 
+  private readonly onSheetQueryChange = (event: MediaQueryListEvent): void => {
+    this.setSheetOpen(!event.matches);
+  };
+
+  /** Collapse the panel to a header strip on phones and tablets. */
+  setSheetOpen(open: boolean): void {
+    this.sheetOpen = open;
+    this.root.classList.toggle('is-open', open);
+    this.sheetToggle.setAttribute('aria-expanded', String(open));
+    this.sheetToggle.setAttribute(
+      'aria-label',
+      open ? this.copy.closeControls : this.copy.openControls
+    );
+    this.syncPreviewVisibility();
+    // Cached gesture hit rects must follow the sheet through its transition.
+    this.registry.refreshAll();
+    requestAnimationFrame(() => this.registry.refreshAll());
+    window.setTimeout(() => this.registry.refreshAll(), 340);
+  }
+
+  /** The thumbnail is only worth drawing when it can actually be seen. */
+  private syncPreviewVisibility(): void {
+    const sheetHidden = this.sheetQuery.matches && !this.sheetOpen;
+    this.preview.setVisible(this.state.showWebcam && !sheetHidden);
+  }
+
   private addRow(parent: HTMLElement, key: ToggleKey, labelKey: keyof typeof COPY.en, icon: string): void {
     const row = document.createElement('div');
     row.className = 'control-row';
@@ -286,7 +345,7 @@ export class ControlPanel {
     this.setOn('reducedMotion', state.reducedMotion);
     this.setOn('highContrast', state.highContrast);
     this.setOn('proceduralHand', state.proceduralHand);
-    this.preview.setVisible(state.showWebcam);
+    this.syncPreviewVisibility();
 
     for (const b of this.root.querySelectorAll<HTMLButtonElement>('[data-lang]')) {
       b.classList.toggle('is-active', b.dataset.lang === state.language);
@@ -332,8 +391,12 @@ export class ControlPanel {
     const fastLabel = this.root.querySelector('[data-quality="low"]');
     if (qualityLabel) qualityLabel.textContent = this.copy.high;
     if (fastLabel) fastLabel.textContent = this.copy.low;
-    const help = this.root.querySelector('.controls-head .ghost-btn');
+    const help = this.root.querySelector('.controls-head .help-btn');
     help?.setAttribute('aria-label', this.copy.help);
+    this.sheetToggle.setAttribute(
+      'aria-label',
+      this.sheetOpen ? this.copy.closeControls : this.copy.openControls
+    );
     const privacy = this.root.querySelector('.controls-privacy span');
     if (privacy) privacy.textContent = this.copy.privacy;
     this.accessibilitySummary.textContent = this.copy.accessibility;

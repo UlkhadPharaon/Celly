@@ -109,6 +109,12 @@ tracking quality (`Good / Medium / Poor` + %), mirror state, and both tracker an
 gesture legend sits directly beneath it in the same left rail; it collapses automatically on short
 viewports and on the Test page so telemetry never covers the question cards.
 
+On phones and tablets the shell becomes touch-first: the HUD is hidden at ≤820 px, the control panel
+collapses into a bottom sheet, the structure rail sits above the collapsed sheet, overlays reserve
+the sheet's height, and controls use safe-area padding with 44 px rows, switch hit areas, tabs and
+icon buttons on coarse pointers. The sheet can still be opened by pinch: its header is registered
+with the gesture button registry.
+
 | Welcome | Hands check | Gesture primer |
 |---|---|---|
 | ![welcome](docs/screenshots/01-onboarding-welcome.png) | ![hands](docs/screenshots/02-onboarding-hands.png) | ![gestures](docs/screenshots/03-onboarding-gestures.png) |
@@ -184,14 +190,17 @@ viewports and on the Test page so telemetry never covers the question cards.
   Good/Medium/Poor readout.
 - **Mirroring:** `Mirror X` (on by default) and `Mirror Y` (off) are display-only; the raw tracking
   frame is never rewritten.
-- **3D hands:** the rigged GLB (21 bones per hand, bone names `00_WRIST` … `20_PINKY_TIP`) is
-  wrist-rooted: the container origin is the tracked wrist and the palm basis is orthonormal
-  (Gram–Schmidt). A rest table stores each bone's rest direction and local orientation; the solver
-  walks parent first, applies shortest-arc local rotations and soft joint limits, and never changes
-  bone lengths. `root.position` follows the wrist directly — only orientation and fingers are
-  damped. Mirror/swap is a screen-position transform, never a reflection of the orientation data,
-  and the left/right meshes stay separate with positive scales. Without a valid GLB, a procedural
-  glass hand takes over with the same interface.
+- **3D hands:** the default is a **generated low-poly skinned hand** — one connected mesh, 1,149
+  vertices and the same 21 bones per hand. The high-detail authored GLB (bone names `00_WRIST` …
+  `20_PINKY_TIP`) is opt-in with `?hands=glb`; the old procedural glass hand remains the diagnostic
+  fallback. Every path is wrist-rooted: the container origin is the tracked wrist and the palm basis
+  is orthonormal (Gram–Schmidt). A rest table stores each bone's rest direction and local
+  orientation; the solver walks parent first, applies shortest-arc local rotations and soft joint
+  limits, and never changes bone lengths. `root.position` follows the wrist directly — only
+  orientation and fingers are damped. Mirror/swap is a screen-position transform, never a
+  reflection of the orientation data, and the left/right meshes stay separate with positive scales.
+  The generated skeleton's world matrices are updated before `THREE.Skeleton` binds, so no part can
+  detach at the origin.
 - **Selection:** every organelle instance has its own pick anchor and enlarged proxy. A pinch
   freezes the hovered target, uses the aim from ~100 ms before the pinch, then commits on **release**
   after a ≥100 ms hold within 36 px. The built-in Selection test (`T`) reports hit rate and mean aim
@@ -207,14 +216,17 @@ tests exercise is what a camera produces.
 
 ```
 src/
-  core/        app shell, render loop, page router, tween engine, store, math, replay hand
+  core/        app shell, render loop, page router, tween engine, store, math, replay hand,
+               device profiles (phone/tablet/desktop budgets and quality defaults)
   tracking/    camera, HandLandmarker, One-Euro filter, side resolver, quality
   gestures/    pinch hysteresis, gesture state machine, virtual cursors
-  scene/       one renderer/scene: cellModel, knowledgeScene, handRig, handLayer, textures, shapes
-  ui/          shell, tabs, HUD, overlay, control panel, onboarding, cursor layer, webcam preview
+  scene/       one renderer/scene: cellModel, knowledgeScene, handRig, lowPolyHand, handMath,
+               handLayer, textures, shapes
+  ui/          shell, tabs, HUD, overlay, collapsible control panel, onboarding, cursor layer,
+               webcam preview
   pages/       interactiveLab, knowledge, testing/{testingPage, leitner, progress, session}
   data/        organelles.json, knowledge.json, questions.json, catalog helpers
-  styles/      design tokens, glass/grain, layout, cursor, responsive rules
+  styles/      design tokens, glass/grain, layout, cursor, responsive sheet/safe-area rules
 tests/
   unit/        pinch, side resolution, gesture engine, Leitner/progress, data integrity
   e2e/         smoke + synthetic-hand replay (Playwright)
@@ -243,7 +255,7 @@ research and asset audit are in [`docs/RESEARCH.md`](docs/RESEARCH.md) and
 ## Testing
 
 ```bash
-npm test             # Vitest: 95 unit tests
+npm test             # Vitest: 101 unit tests
 npm run test:e2e     # Playwright: 8 tests (smoke + gesture replay)
 npm run lint         # ESLint (flat config, typescript-eslint)
 npm run typecheck    # tsc --noEmit, strict
@@ -258,6 +270,8 @@ Unit coverage:
   cooldown, hand-loss reset, dwell-to-click;
 - pre-pinch aim look-back, screen-space proximity, palm basis/quaternion delta, parent-first bone
   solving, joint-angle error, bone-length preservation, and all 13 deterministic hand poses;
+- phone/tablet/desktop device profiles, DPR clamps, quality defaults, antialias policy, camera
+  constraints and touch-laptop classification;
 - Leitner promotion/demotion, ordering, persistence and corrupt-storage sanitising;
 - scoring labels, best-ratio persistence;
 - content minimums and integrity: 15 organelles, 36 nodes, 48 MCQs, 36 cards, 3 sets, bilingual
@@ -301,9 +315,29 @@ compositor cannot capture a half-faded card.
 
 ## Performance and browser support
 
-Rendering is capped at the display refresh; tracking runs at camera rate (30/60 fps). The scene
-budget is ~120 draw calls in the Lab and ~160 in Knowledge, with instanced ribosomes and a single
-bloom pass. `renderer.info` is available in the debug panel.
+Rendering is capped at the display refresh; tracking runs at 24 fps on phones and 30 fps on
+tablets/desktops. The generated hands are one skinned mesh per hand (1,149 vertices), not the
+multi-mesh GLB. At 1440×900 the Lab measured **80 draw calls and 79,270 triangles**; the Knowledge
+graph remains the heaviest page. `window.__celly.renderStats` exposes live quality, device class,
+DPR, calls, triangles, points and texture counts for audits.
+
+Device profiles in `src/core/device.ts` choose the budget before the first frame:
+
+| Profile | Default quality | DPR cap | Shadows | Bloom | Dust | Camera |
+|---|---|---|---|---|---|---|
+| Phone | Fast (`low`) | 1.5 | off | off, even at High | 120 | 640×480 @ 24 fps |
+| Tablet | Fast (`low`) | 1.75 | off | on at High | 220 | 960×540 @ 30 fps |
+| Desktop | High | 2 | on at High | on at High | 420 | 1280×720 @ 30 fps |
+
+Fast quality renders at DPR 1, disables bloom/shadows and draws roughly half the dust. High quality
+uses the profile's DPR cap and restores the full effects where the device supports them (bloom stays
+off on phones). The dust drift is a GPU vertex shader — no per-frame CPU position upload — and the
+render loop avoids camera, look-at, projection and preview allocations. The webcam thumbnail is
+drawn at ~15 fps and skipped entirely while its sheet is collapsed.
+
+The high-detail GLB is never on the startup path; append `?hands=glb` to load it for comparison. If
+that fails, the app falls back to the generated low-poly hand, then to the procedural diagnostic
+hand.
 
 | Browser | Status |
 |---|---|
@@ -311,8 +345,9 @@ bloom pass. `renderer.info` is available in the debug panel.
 | Safari 17+ | Supported (WebGL2 + WASM SIMD) |
 | Firefox 121+ | Supported; MediaPipe CPU delegate can be slower |
 
-A discrete or modern integrated GPU is recommended. The app degrades to the CPU delegate if GPU
-delegate creation fails, and to mouse mode if no camera is available.
+A discrete or modern integrated GPU is recommended. The tracker tries the GPU delegate first and
+reports the delegate that actually initialised (`gpu` or `cpu`) instead of assuming success; it
+degrades to mouse mode if no camera is available.
 
 ---
 
@@ -335,7 +370,7 @@ delegate creation fails, and to mouse mode if no camera is available.
 ## Documentation
 
 - [`PLAN.md`](PLAN.md) — milestones and completion state
-- [`DECISIONS.md`](DECISIONS.md) — every architectural ruling (D-01 … D-51)
+- [`DECISIONS.md`](DECISIONS.md) — every architectural ruling (D-01 … D-54)
 - [`DIAGNOSIS_ROUND2.md`](DIAGNOSIS_ROUND2.md) — hand pivot, retargeting and selection root causes
 - [`FINAL_REPORT_ROUND2.md`](FINAL_REPORT_ROUND2.md) — measured results, limitations and v0.3 plan
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — scene graph, data flow, module contracts

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { HandFrame, HandSide, Settings } from '../types';
 import { clamp, damp } from '../core/math';
 import { mapNormalized } from '../gestures/cursor';
-import { loadHands, type DrivenHand } from './handRig';
+import { loadHands, type DrivenHand, type HandSource } from './handRig';
 
 /** Distance from the camera along its view ray. The hand stays in front of the cell. */
 const HAND_DISTANCE = 4.35;
@@ -24,6 +24,8 @@ export class HandLayer {
   private readonly hands = new Map<HandSide, DrivenHand>();
   private ready = false;
   private rigged = false;
+  private source: HandSource = 'skeletal';
+  private readonly map = { width: 0, height: 0, mirrorX: true, mirrorY: false };
 
   async init(forceProcedural = false): Promise<void> {
     try {
@@ -31,6 +33,7 @@ export class HandLayer {
       this.hands.set('left', loaded.left);
       this.hands.set('right', loaded.right);
       this.rigged = loaded.rigged;
+      this.source = loaded.source;
       for (const hand of this.hands.values()) {
         hand.container.visible = false;
         hand.container.position.set(0, 0, HAND_DISTANCE);
@@ -49,15 +52,18 @@ export class HandLayer {
     return this.rigged;
   }
 
+  get handSource(): HandSource {
+    return this.source;
+  }
+
   update(frames: HandFrame[], settings: Settings, dt: number, camera: THREE.PerspectiveCamera): void {
     if (!this.ready) return;
     camera.updateMatrixWorld();
-    const map = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      mirrorX: settings.mirrorX,
-      mirrorY: settings.mirrorY
-    };
+    const map = this.map;
+    map.width = window.innerWidth;
+    map.height = window.innerHeight;
+    map.mirrorX = settings.mirrorX;
+    map.mirrorY = settings.mirrorY;
 
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands.get(side);

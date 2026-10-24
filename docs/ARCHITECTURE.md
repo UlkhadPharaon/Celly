@@ -32,6 +32,7 @@ src/
     tween.ts              cancellable numeric/vector tweens with easing
     math.ts               clamp, lerp, damp, distances, seeded RNG helpers
     events.ts             tiny typed emitter used by UI and pages
+    device.ts             phone/tablet/desktop budgets, DPR caps, camera constraints
     replayHand.ts         synthetic 21-landmark hand for tests and screenshots
   tracking/
     handTracker.ts        getUserMedia, HandLandmarker (GPU→CPU), detect(), axis conversion
@@ -47,8 +48,10 @@ src/
     cellModel.ts          procedural cell, 15 organelles, picking, isolation, selection halo
     knowledgeScene.ts     nodes, labels, edges, focus transform, picking
     knowledgeLayout.ts    deterministic seeded 3D force layout
-    handRig.ts            GLB retargeting, procedural fallback, DrivenHand interface
-    handLayer.ts          screen→world placement, mirroring, pinch-midpoint anchoring
+    lowPolyHand.ts        generated 21-bone skinned hand mesh (default source)
+    handMath.ts           palm basis, quaternion deltas, joint-angle metrics, scratch helpers
+    handRig.ts            GLB/low-poly retargeting, procedural fallback, DrivenHand interface
+    handLayer.ts          wrist→world placement, mirroring, scale cue, feedback
     shapes.ts             geometry factories shared by organelles
     textures.ts           procedural canvases (speckle, glow, cristae, grain…)
     types.ts              scene-side shared types
@@ -88,7 +91,7 @@ main.ts
        ├─ Shell (top bar, tabs, HUD, legend, control panel, cursor layer, overlay)
        ├─ SceneManager (renderer, camera, environment, bloom)
        ├─ HandTracker (lazy: only after the user enables the camera)
-       ├─ HandLayer → loadHands() (GLB async, procedural fallback)
+       ├─ HandLayer → loadHands() (generated low-poly default; GLB opt-in; procedural fallback)
        ├─ pages: InteractiveLab, KnowledgePage, TestingPage
        ├─ setPage('interactive', animate: false)
        └─ start(): requestAnimationFrame(loop)
@@ -114,10 +117,10 @@ loop(now)
       update dwell state on the button registry
   hands.update(frames, settings, dt, camera)
   currentPage.update(dt, elapsed)
-  webcamPreview.draw(frames, settings)
+  webcamPreview.draw(frames, settings)  // ~15 Hz, skipped while the preview is hidden
   updateCursors()
   updateHud(now)          // throttled to ~10 Hz
-  scene.render(dt)
+  scene.render(dt)        // reset renderer.info once per frame
 ```
 
 `buildFrames()` is where raw detections become `HandFrame`s:
@@ -140,8 +143,8 @@ is dispatched to the active page, except `click`, which goes through the button 
 
 | Stage | Detail |
 |---|---|
-| Camera | `getUserMedia({ video: 1280×720 ideal, 30–60 fps, facingMode: 'user' })` |
-| Model | `HandLandmarker`, `runningMode: 'VIDEO'`, `numHands: 2`, GPU delegate → CPU retry |
+| Camera | `getUserMedia({ video: device profile ideal, facingMode: 'user' })`: 1280×720 @ 30 desktop, 960×540 @ 30 tablet, 640×480 @ 24 phone |
+| Model | `HandLandmarker`, `runningMode: 'VIDEO'`, `numHands: 2`, GPU delegate → CPU retry; the live delegate is reported honestly |
 | Runtime | `public/mediapipe-wasm`, `public/models/hand_landmarker.task` (self-hosted) |
 | Timing | `requestVideoFrameCallback` when available, otherwise `requestAnimationFrame` |
 | Axes | MediaPipe world landmarks are image-aligned (y down, z toward −camera); converted once to y-up / +z toward the viewer |
@@ -193,10 +196,25 @@ Intents are a closed union (`select`, `unselect`, `click`, `rotate`, `scale`, `s
 
 ## 7. Scene
 
-`SceneManager` owns the renderer (`antialias`, ACES tone mapping, sRGB), the perspective camera, the
-composer (`RenderPass` → `UnrealBloomPass` → `OutputPass`), a procedural PMREM environment, the lab
-floor/rings and the ambient dust. It exposes three framings and tweens between them when pages
-change:
+`SceneManager` owns the renderer (ACES tone mapping, sRGB, device-aware antialias), the perspective
+camera, the composer (`RenderPass` → `UnrealBloomPass` → `OutputPass`), a procedural PMREM
+environment, the lab floor/rings and the ambient dust. `deviceProfile()` supplies resolution,
+geometry and camera budgets once, before the renderer is created:
+
+| | Phone | Tablet | Desktop |
+|---|---|---|---|
+| Default quality | low | low | high |
+| DPR cap (high / low) | 1.5 / 1 | 1.75 / 1 | 2 / 1 |
+| Shadows / bloom | off / off | high only / high only | high only / high only |
+| Dust / floor / ring | 120 / 48 / 96 | 220 / 64 / 128 | 420 / 96 / 180 |
+
+The dust is a `ShaderMaterial` `Points` field: drift, wrap and a circular sprite are evaluated in
+the vertex/fragment shader from `uTime`, so the 60 fps loop never rewrites or uploads positions. The
+renderer runs with `info.autoReset = false`; `render()` resets it once and `renderStats` reports the
+last frame (quality, device class, DPR, calls, triangles, points, geometries, textures, shadows,
+bloom). Camera look-at vectors and projection scratch objects are reused.
+
+It exposes three framings and tweens between them when pages change:
 
 | Page | Camera position | Target | FOV |
 |---|---|---|---|
@@ -256,17 +274,23 @@ updates the tabs and the auto-rotate control, and keeps the hands mounted.
 
 `HandLayer` owns one `DrivenHand` per side. Each frame it
 
-1. maps the wrist's normalized position to a world point on the `z = 1.95` plane;
-2. damps the container position and scale (hand size cue);
-3. mirrors the world landmarks for display (`mirrorX`/`mirrorY`) and retargets the rig;
-4. projects the **pinch midpoint** (bones 4/8) through the camera and corrects the container by the
-   screen-space error, so the fingertips meet the virtual cursor;
-5. places the pinch glow at the same midpoint and shows/hides landmark markers.
+1. maps the wrist's normalized position to a world point on the camera ray at the fixed hand
+   distance, so the projected wrist is exactly the tracked wrist;
+2. damps only the scale (wrist→middle-MCP span, clamped) — position is assigned directly because
+   the One-Euro filter has already removed camera noise;
+3. passes the **unmirrored** world landmarks to the rig; `mirrorX`/`mirrorY` are screen-position
+   transforms only;
+4. applies the 21-joint retarget and updates the pinch glow, landmark markers and feedback.
 
-The GLB path maps bone names `00_WRIST … 20_PINKY_TIP` to the 21 MediaPipe indices, solves each
-bone direction in the hand-local frame and damps the wrist rotation. The procedural fallback builds
-capsules and joints from the same landmarks; both implement `DrivenHand`, so nothing above the layer
-knows which one is active.
+`loadHands()` returns a generated low-poly skinned hand by default. Each hand is one mesh
+(1,149 vertices) bound to 21 bones; `createLowPolyHand()` updates the armature world matrices before
+constructing `THREE.Skeleton` and binding, so bone inverses are real and the palm/fingers stay
+connected. `?hands=glb` opts into the authored `hands_rigged.glb` (mapped by `00_WRIST …
+20_PINKY_TIP`); if that load fails the generated low-poly hand is used, and if generation fails too
+the procedural glass hand takes over. All three implement `DrivenHand`, so the selection pipeline,
+debug view and gesture engine do not know which is active.
+Hot-path palm-basis and per-finger metric helpers use reusable out-parameters rather than allocating
+per frame.
 
 ## 10. Data and persistence
 
@@ -305,6 +329,18 @@ follows the HUD when it grows instead of being pinned at 50 % of the viewport; o
 than 860 px and on the Test page the legend collapses to its header. The cursor layer is purely
 visual.
 
+At ≤1080 px the control panel becomes a centred bottom sheet (`max-width: 560px`) with a 78 px
+collapsed header and a scrollable open state. Its header is sticky, its internal grid uses
+`grid-auto-rows: max-content`, and its background is nearly opaque with no backdrop blur to avoid a
+large mobile-GPU compositing cost. The panel keeps a fixed open height (`min(74dvh, 620px)`) and
+slides between collapsed and open with a composited `transform`; `max-height` is deliberately never
+animated, because that re-lays out the panel on every frame and can stall when the WebGL loop
+saturates the main thread. Open/close also toggles the webcam preview's visibility and redraw flag. The sheet toggle (and every sheet control) is registered with the
+gesture `ButtonRegistry`, so pinch can open and use it. The structure rail is drawn above the
+collapsed peek; `Overlay.place()` measures the sheet's live rect and reserves that band. Safe-area
+insets pad the topbar, sheet, test shell, onboarding and toasts. At ≤820 px the left HUD rail is
+hidden. The webcam preview is only drawn while the sheet is open.
+
 Mouse fallback: pointer movement drives the same hover/raycast path; clicks are dispatched through
 the button registry; drag rotates and the wheel scales. Gesture and pointer input therefore share
 one intent pipeline.
@@ -318,7 +354,8 @@ one intent pipeline.
 | `injectHand(side, x, y, pinch, present)` | Build a synthetic 21-landmark hand and run it through the real pipeline |
 | `clearInjectedHands()` | Remove synthetic hands and reset gesture state |
 | `sceneAnchor(id)` | Project a scene element's world position to CSS pixels |
-| `debugHand(side)` | Container/wrist/scale diagnostics |
+| `debugHand(side)` | Container/wrist/scale diagnostics, rig source and skin audit |
+| `renderStats` | Quality, device class, DPR, calls, triangles, points, textures, shadows/bloom |
 | `state` | Page, hands, hover, pinch, tracker and renderer snapshot |
 
 Injected hands are built in `replayHand.ts` from the same anatomical model the filter and rig expect,

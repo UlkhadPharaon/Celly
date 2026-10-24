@@ -3,6 +3,72 @@
 All notable changes to Celly. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses `MAJOR.MINOR.PATCH` with a `v0.2` product label.
 
+## [Unreleased] — 2026-10-24
+
+An efficiency and touch pass: the startup hand is now generated low-poly geometry, rendering follows
+an explicit phone/tablet/desktop budget, and the control panel becomes a bottom sheet on small
+screens without changing the 21-bone tracking or selection contract.
+
+### Added
+
+- **Device profiles** (`src/core/device.ts`) for phone, tablet and desktop: default quality, DPR
+  caps, antialias, shadows, bloom, shadow-map size, floor/ring tessellation, dust count and camera
+  constraints. Six unit tests cover portrait/landscape phones, tablets, touch laptops, desktops and
+  DPR clamping.
+- **Live render stats** — `window.__celly.renderStats` reports quality, device class, DPR, draw
+  calls, triangles, points, geometry/texture counts and whether shadows/bloom are active.
+- **Collapsible control sheet** at ≤1080 px with a sticky header, safe-area padding, touch targets
+  and a gesture-registered toggle. The structure rail sits above the collapsed peek and overlays
+  reserve the sheet band.
+- **GPU dust** — a `ShaderMaterial` `Points` field with time-driven drift and a circular sprite in
+  the shader.
+- **Low-poly hand generation** — one connected 1,149-vertex skinned hand per side, 21 bones.
+
+### Changed
+
+- **Default hand source** is now the generated low-poly mesh. The 1.3 MB authored GLB is opt-in with
+  `?hands=glb`; the procedural glass hand remains the diagnostic fallback.
+- **Renderer setup** uses the device profile for antialias, pixel ratio, shadow map size, floor/ring
+  segments and dust count. `low` renders at DPR 1 with no shadows/bloom and about half the dust;
+  phones keep bloom off even at high. Desktop defaults to high, phones/tablets to low.
+- **Camera capture** requests 640×480@24 on phones, 960×540@30 on tablets and 1280×720@30 on
+  desktop. The tracker now reports the delegate that actually initialised instead of always saying
+  GPU after a CPU fallback.
+- **Render loop** reuses camera look-at, projection and ray scratch vectors; `renderer.info` is
+  reset once per frame; the webcam thumbnail draws at ~15 fps and only while visible.
+- **Hand solver** reuses the palm basis and per-finger chain tables instead of allocating them each
+  frame.
+- **Small-screen shell** hides the HUD at ≤820 px, compacts the topbar, scales the test shell,
+  onboarding, overlay and toasts, and gives toggle rows/hit areas, tabs and icon buttons a 44 px
+  touch target on coarse pointers.
+- **Mobile control sheet** is nearly opaque and disables backdrop blur over the canvas; its grid
+  uses `max-content` rows so the preview cannot overlap settings, and a short landscape viewport
+  hides the preview entirely. Open/close animates a composited `transform` on a fixed-height panel
+  instead of animating `max-height`, which re-laid out the whole panel every frame and could stall
+  behind a busy WebGL loop.
+
+### Fixed
+
+- The generated hand's bone inverses were all identity because the armature world matrices had not
+  been updated before `Skeleton` construction; each part detached to its bone origin. The bind now
+  runs after `updateMatrixWorld(true)`, giving a connected palm, four fingers, thumb and forearm.
+- The desktop control panel no longer shows the mobile sheet toggle.
+- Opening the sheet no longer leaves the header below the preview; the header is first in the panel
+  and stays sticky while scrolling.
+- On 821–1080 px tablet layouts the HUD is retained, so the page intro now caps its width to clear
+  the left rail instead of running underneath it.
+
+### Verification
+
+- `npm test` 101/101, `npm run test:e2e` 8/8, `npm run typecheck`, `npm run lint` and
+  `npm run build` pass.
+- Deterministic hand suite: 0 page errors, skin audit 1,149 vertices / 0 unweighted / 0 over-four
+  influences / 21 bones, 0 px wrist offset, ≤0.2° static joint error, selection 10/10 at 0.6 px mean
+  aim error, and a clean procedural→rigged fallback round trip.
+- Responsive audits at 390×844, 1024×768 and 1440×900: zero page errors and no horizontal overflow;
+  phones/tablets default to low, tablet sheet is 560 px wide, phone sheet is 374 px wide, and the
+  structure rail/overlay clear the collapsed sheet.
+
 ## [0.2.1] — 2026-10-24
 
 A real-device pass: the synthetic hand pinched to a geometric zero, which hid everything a physical

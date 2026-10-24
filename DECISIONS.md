@@ -53,6 +53,7 @@ weight. Blender export was possible but would freeze the part hierarchy.
 hologram textures. To guarantee the "semi-transparent / stylised, never hides the cell" requirement
 in every lighting state, the loaded meshes are re-materialled at runtime: dark glass body, cyan
 fresnel rim, additive pinch glow. The GLB's textures are ignored (they remain in the file, unused).
+The default source is now the generated low-poly mesh (D-52); the material treatment is unchanged.
 
 **D-11 — DOM for text-heavy UI, WebGL for space.** MCQ options, overlay text and flashcards live in
 DOM (crisp at any DPR, accessible, keyboard-navigable, ARIA-able) while the stage, cell, network and
@@ -147,7 +148,9 @@ gesture states (select, focus, swipe) are real and reproducible for the screensh
 
 ## Hand presentation (post-build)
 
-**D-31 — Anchor the hand on its pinch midpoint, not its wrist.** The GLB includes forearm geometry
+**D-31 — Anchor the hand on its pinch midpoint, not its wrist.** *(Superseded by D-46: the rig is
+wrist-rooted, and the pinch-midpoint correction was removed so the wrist stays on the tracked
+landmark.)* The GLB includes forearm geometry
 and its visual fingertips do not coincide with the driven bone tips when the container is placed by
 the wrist. Each frame, after the wrist damping and the rig retarget, the pinch midpoint (bones 4/8)
 is projected through the camera, the screen-space error against the virtual cursor is converted to
@@ -294,16 +297,64 @@ empty space at the edge of large bounding spheres.
 **D-50 — Rest calibration, parent-first rotations, and a healthy-skin fallback.** Each driven bone
 captures its rest direction in parent space, rest local quaternion and a soft flexion limit. The
 solver walks parent first and solves only local rotations, so bone lengths cannot change. Quaternion
-targets use shortest-arc damping; low tracker confidence eases to rest, and a missing/invalid GLB
-falls back to a procedural glass hand that follows the same wrist and landmarks. On load, skin
-weights are normalised to four influences and audited (unweighted vertices, weight sums, finite
-bind matrices); failures are logged in the debug overlay instead of producing silent tearing.
+targets use shortest-arc damping; low tracker confidence eases to rest. A missing/invalid opt-in GLB
+now falls back to the generated low-poly hand, then to a procedural glass hand that follows the same
+wrist and landmarks. On load, skin weights are normalised to four influences and audited (unweighted
+vertices, weight sums, finite bind matrices); failures are logged in the debug overlay instead of
+producing silent tearing.
 
 **D-51 — Acceptance uses the deterministic exact test, not SwiftShader jitter.** The built-in
 Selection test is the acceptance instrument: it freezes auto-rotation, follows one instance per
 target, reports hits and mean aim error, and uses the real gesture engine. Under ANGLE SwiftShader a
 frame can take 1–2 s, which exceeds the real 220 ms sticky window; a synthetic 12 px step/jitter test
 therefore tests frame pacing, not hand selection. The exact 10-target run is the reported E2E result
-(10/10, 0.5 px). Timing-sensitive hysteresis is exercised with synthetic timestamps in unit tests,
+(10/10; 0.5 px in 0.2.1, 0.6 px after the low-poly/hot-path pass). Timing-sensitive hysteresis is
+exercised with synthetic timestamps in unit tests,
 and the pose suite uses deterministic landmark replays rather than webcam footage. `applyMs`
 measures only the CPU retarget solver, not MediaPipe inference or rendering.
+
+## Efficiency and touch pass
+
+**D-52 — The default hand is a generated low-poly skinned mesh, not the authored GLB.** The GLB is
+1.3 MB and carries far more geometry than the translucent hand reads at interaction distance. The
+default boot now builds one connected low-poly mesh per hand (1,149 vertices), binds it to the same
+21-bone contract and uses the same wrist root, palm basis and rest table. The GLB stays available
+with `?hands=glb` for comparison and screenshots; the old skeletal `ProceduralHand` is the explicit
+diagnostic fallback. `createLowPolyHand()` must call `armature.updateMatrixWorld(true)` before
+`new THREE.Skeleton(...)` and `mesh.bind(...)`; without that, every bone inverse is identity and each
+body part is drawn at its bone origin. Verification keeps the 21-bone contract: 0 px wrist offset,
+≤0.2° static joint error, 0 unweighted/over-4 vertices, finite bind matrices and stable bone lengths.
+Generated geometry won over decimating the GLB because it removes the asset download, keeps the
+skin audit deterministic, and preserves a clean rest pose for the retargeter.
+
+**D-53 — Device budgets are explicit, and quality is independent of CSS breakpoints.** `device.ts`
+classifies the primary pointer and shortest viewport dimension into phone/tablet/desktop, then derives
+a budget: default quality, DPR cap, antialias, shadows, bloom, shadow-map size, floor/ring
+tessellation, dust count and camera constraints. Phones/tablets default to `low`; desktop defaults to
+`high`. High caps DPR at 1.5/1.75/2 and low always renders at 1. Bloom stays off on phones even at
+high, shadows are desktop-only, and the dust draw range shrinks in low. The classification is
+deliberately separate from the CSS breakpoints: an 800 px desktop window still has a desktop GPU and
+should not be forced into the phone budget; a touch laptop with a fine pointer is a desktop. The
+dust field is now a GPU shader (`uTime`, `uPixelRatio`, `uScale`, `uSize`) rather than a per-frame CPU
+Y rewrite and buffer upload. The tracker asks for 640×480@24, 960×540@30 or 1280×720@30 and reports
+the delegate that actually initialised, so a GPU→CPU fallback is visible instead of mislabelled as
+GPU. `window.__celly.renderStats` exposes the live budget for regression checks.
+
+**D-54 — Phones/tablets get a collapsible bottom sheet, not a shrunken side panel.** Below 1080 px
+the control panel is a centred sheet (max 560 px) with a 78 px collapsed header, a sticky open
+header and safe-area padding. On coarse pointers, toggle rows and switch hit areas are 44 px (the
+pill itself stays 44×24); tabs and icon buttons are also 44 px. The structure rail moves above
+the collapsed peek; the overlay measures the sheet's live rect and reserves its band, so details and
+the rail never sit under the panel. The HUD/legend rail is hidden at ≤820 px. The sheet is nearly
+opaque with no backdrop blur — a full-width blur over WebGL is expensive on mobile GPUs and can
+ghost — and its grid uses `grid-auto-rows: max-content` so the preview cannot overlap the settings
+when the sheet is height-constrained. The webcam thumbnail is drawn at ~15 fps and not at all while
+the sheet is collapsed. The toggle and all sheet controls are registered with the gesture button
+registry, so pinch can open the sheet and then operate it; cached hit rects are refreshed after the
+transition. The panel keeps its full open height at all times and slides between states with a
+composited `transform`; animating `max-height` re-laid out the entire panel every frame and was
+observed to stall for seconds when the WebGL loop starved the main thread. Desktop keeps the
+existing side panel and HUD. Audited at 390×844, 1024×768 and
+1440×900, plus the 820/821 px HUD breakpoint and 900 px intermediate width, with zero page errors
+and no horizontal overflow. At 821–1080 px the intro width is capped to leave the 210 px rail and
+its 14 px gap clear.
