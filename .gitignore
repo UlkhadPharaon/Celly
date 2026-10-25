@@ -1,6 +1,5 @@
 node_modules/
 dist/
-.vercel/
 dist-ssr/
 *.local
 .DS_Store
@@ -15,3 +14,5 @@ public/mediapipe-wasm/
 *.log
 logs/
 shots/
+.vercel
+.env*

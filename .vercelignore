@@ -11,6 +11,8 @@ coverage/
 node_modules/
 dist/
 .vercel/
+.env*
+!.env.example
 *.blend
 *.fbx
 *.log

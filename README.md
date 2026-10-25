@@ -1,5 +1,7 @@
 # Celly v0.2
 
+**Live demo:** <https://celly-blue.vercel.app>
+
 **A touch-free 3D cell biology lab.** Celly puts a living, procedural cell in front of you and lets
 you explore it with your **bare hands** — no controller, no headset, no gloves. A webcam and a pinch
 are the entire interface, with the mouse and keyboard kept as a first-class fallback.
