@@ -1,0 +1,22 @@
+# Local reference material and development-only files. The Vercel build only needs
+# the Vite app, scripts/, public/ runtime assets and package metadata.
+3d models/
+Handtracking systems/
+Unreal environnements/
+depedences/
+docs/
+test-results/
+playwright-report/
+coverage/
+node_modules/
+dist/
+.vercel/
+*.blend
+*.fbx
+*.log
+
+# Alternative local hand skins. The generated low-poly hand is the default and
+# needs no GLB; hands_rigged.glb is kept separately for the opt-in ?hands=glb path.
+hands_holo.glb
+hands_ulkhad.glb
+public/hands_*.glb

@@ -23,6 +23,11 @@ screens without changing the 21-bone tracking or selection contract.
 - **GPU dust** — a `ShaderMaterial` `Points` field with time-driven drift and a circular sprite in
   the shader.
 - **Low-poly hand generation** — one connected 1,149-vertex skinned hand per side, 21 bones.
+- **Vercel deployment config** — `vercel.json` and `.vercelignore` define the static Vite build
+  (Node 24, `npm ci`, `dist/`), same-origin camera permissions, security headers, immutable caching
+  for hashed assets and bounded caching for the unhashed WASM/model/GLB files. `prebuild` re-runs
+  asset preparation so WASM/model files exist even when install scripts are cached. No environment
+  variables or server functions.
 
 ### Changed
 

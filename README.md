@@ -64,6 +64,28 @@ npm run preview      # serve dist/ locally
 The build is static. Serve `dist/` behind HTTPS (or `localhost`) — browsers only grant camera access
 in a secure context.
 
+### Deploy to Vercel
+
+The repo ships a `vercel.json` for a static Vite deployment: Node 24, `npm ci`, `npm run build` and
+`dist/` as the output. Import [`UlkhadPharaon/Celly`](https://github.com/UlkhadPharaon/Celly) at
+[vercel.com/new](https://vercel.com/new), name the project `celly` (Vercel project names must be
+lowercase) and keep the detected Vite settings. For a CLI deploy, create and link that lowercase
+project once:
+
+```bash
+vercel project add celly
+vercel link --yes --project celly
+vercel --prod
+```
+
+No environment variables, server functions or database are required. Vercel provides the HTTPS
+secure context the camera needs; the response headers allow `camera` for the same origin, disable
+microphone and geolocation, and cache the hashed bundles immutably. `npm run build` runs
+`fetch-assets.mjs` as a `prebuild` step, so the pinned MediaPipe WASM and model are present even
+when install scripts are restored from cache. The generated low-poly hands are the deployed
+default; the optional `?hands=glb` comparison asset is intentionally uncommitted, and the app
+falls back safely when it is absent.
+
 ---
 
 ## The gesture vocabulary

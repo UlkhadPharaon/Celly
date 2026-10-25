@@ -5,8 +5,12 @@
   "description": "Celly v0.2 — a touch-free 3D cell biology laboratory, knowledge network and quiz, controlled by your bare hands",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "postinstall": "node scripts/fetch-assets.mjs",
+    "prebuild": "node scripts/fetch-assets.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
