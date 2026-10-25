@@ -104,6 +104,43 @@ async function expectOverlayClearOfChrome(page: Page): Promise<void> {
   }
 }
 
+/**
+ * The knowledge graph auto-rotates until a node is focused, so a node can drift under the cursor
+ * between the anchor read and the pinch, and the focus tween (820 ms) pans and scales the graph
+ * again. Freeze the rotation before aiming so the projected anchors stay valid.
+ */
+async function freezeKnowledgeGraph(page: Page): Promise<void> {
+  const button = page.locator('.auto-rotate');
+  if ((await button.getAttribute('data-on')) !== 'false') {
+    await button.click();
+    await expect(button).toHaveAttribute('data-on', 'false');
+  }
+}
+
+/**
+ * A screen point with no node under it. Fixed coordinates are not safe: the focus tween moves the
+ * graph, so a pixel that was empty before the selection can hold a node afterwards. Probe the
+ * candidates against the live scene and return the first one the picker reports as blank.
+ */
+async function findBlankPoint(page: Page): Promise<{ x: number; y: number }> {
+  const candidates = [
+    { x: 40, y: 830 },
+    { x: 60, y: 420 },
+    { x: 1380, y: 860 },
+    { x: 1360, y: 300 },
+    { x: 720, y: 60 }
+  ];
+  for (const point of candidates) {
+    await page.evaluate((p) => window.__celly!.injectHand('right', p.x, p.y, 0.1), point);
+    // Wait past the 220 ms sticky-hover window, otherwise the previously armed node survives the
+    // jump and the probe would report a false hit.
+    await page.waitForTimeout(340);
+    const hover = await page.evaluate(() => window.__celly!.state.sceneHover);
+    if (!hover) return point;
+  }
+  throw new Error('no blank pixel available to release the selection');
+}
+
 test.describe('synthetic hand replay', () => {
   test('tracks a hand, selects an organelle and releases it', async ({ page }) => {
     await enterWithMouse(page);
@@ -146,6 +183,8 @@ test.describe('synthetic hand replay', () => {
     await enterWithMouse(page);
     await page.click('.tabs .tab[data-page="knowledge"]');
     await expect(page.locator('.page-knowledge')).toBeVisible();
+    // Freeze the graph: an auto-rotating scene invalidates every projected anchor.
+    await freezeKnowledgeGraph(page);
     // Let the camera tween finish before trusting any projected anchor.
     await page.waitForTimeout(2600);
 
@@ -154,7 +193,10 @@ test.describe('synthetic hand replay', () => {
     await expectOverlayClearOfChrome(page);
     await expect(page.locator('.overlay-anchor.is-open h2')).toContainText(titlePattern(picked));
 
-    await pinchAt(page, 40, 830);
+    // Release on a pixel the picker reports as empty — the focus tween may have moved a node
+    // under the old fixed coordinate, and pinching a node would re-select it instead.
+    const blank = await findBlankPoint(page);
+    await pinchAt(page, blank.x, blank.y);
     await expect(page.locator('.overlay-anchor')).not.toHaveClass(/is-open/);
   });
 
