@@ -76,6 +76,8 @@ const MAX_FLEX: Record<number, number> = {
 export interface DrivenHand {
   readonly container: THREE.Group;
   readonly side: 'left' | 'right';
+  /** Wrist → middle-MCP length at container scale 1, in world units. */
+  readonly palmLength: number;
   apply(world: Vec3[], dt: number, confidence?: number): void;
   /** World-space midpoint of thumb tip and index tip after the last apply(). */
   pinchWorld(out: THREE.Vector3): THREE.Vector3 | null;
@@ -171,6 +173,7 @@ export class HandRig implements DrivenHand {
   readonly armature: THREE.Object3D;
   readonly bones = new Map<number, THREE.Bone>();
   readonly source: HandSource;
+  readonly palmLength: number;
 
   private readonly restBones: RestBone[] = [];
   private readonly restQ = new Map<number, THREE.Quaternion>();
@@ -267,6 +270,7 @@ export class HandRig implements DrivenHand {
     this.restBasis = this.captureRest();
     this.normalizeSize();
     this.restTipLength = this.measureTipLength();
+    this.palmLength = this.measurePalmLength();
 
     this.glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
@@ -425,6 +429,12 @@ export class HandRig implements DrivenHand {
     const a = this.bones.get(0)?.getWorldPosition(new THREE.Vector3());
     const b = this.bones.get(12)?.getWorldPosition(new THREE.Vector3());
     return a && b ? a.distanceTo(b) : HAND_UNIT;
+  }
+
+  private measurePalmLength(): number {
+    const a = this.bones.get(0)?.getWorldPosition(new THREE.Vector3());
+    const b = this.bones.get(9)?.getWorldPosition(new THREE.Vector3());
+    return a && b ? Math.max(1e-4, a.distanceTo(b)) : HAND_UNIT * 0.5;
   }
 
   resetCalibration(): void {
@@ -698,6 +708,12 @@ export class ProceduralHand implements DrivenHand {
   private bones: THREE.Mesh[] = [];
   private glow: THREE.Sprite;
   private markers: THREE.Points;
+  /** Live wrist→MCP / wrist→middle-tip ratio; the fallback is only a diagnostic view. */
+  private palmRatio = 0.5;
+
+  get palmLength(): number {
+    return HAND_UNIT * this.palmRatio;
+  }
 
   constructor(side: 'left' | 'right') {
     this.side = side;
@@ -768,6 +784,12 @@ export class ProceduralHand implements DrivenHand {
       world[12].y - world[0].y,
       world[12].z - world[0].z
     );
+    const mcpSpan = Math.hypot(
+      world[9].x - world[0].x,
+      world[9].y - world[0].y,
+      world[9].z - world[0].z
+    );
+    if (span > 1e-6) this.palmRatio = clampRatio(mcpSpan / span);
     const scale = span > 1e-6 ? HAND_UNIT / span : 3.2;
     for (let i = 0; i < 21; i++) {
       this.joints[i].position.set(
@@ -832,6 +854,10 @@ export class ProceduralHand implements DrivenHand {
       else mat?.dispose();
     });
   }
+}
+
+function clampRatio(v: number): number {
+  return Math.min(0.75, Math.max(0.3, Number.isFinite(v) ? v : 0.5));
 }
 
 function handLinks(): Array<[number, number]> {

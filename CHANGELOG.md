@@ -60,6 +60,11 @@ screens without changing the 21-bone tracking or selection contract.
 
 ### Fixed
 
+- The 3D hand was drawn roughly 30 % smaller than the tracked palm because the mesh used a fixed
+  visual scale. The cursor sits on the landmark thumb/index midpoint, so it floated past the mesh
+  fingertips. The mesh now scales to the filtered wrist → middle-MCP span at its actual camera-ray
+  depth: the wrist stays exactly on landmark 0, and the deterministic pose suite's cursor-to-mesh
+  pinch offset is ≤13 px instead of 27–47 px.
 - The generated hand's bone inverses were all identity because the armature world matrices had not
   been updated before `Skeleton` construction; each part detached to its bone origin. The bind now
   runs after `updateMatrixWorld(true)`, giving a connected palm, four fingers, thumb and forearm.
@@ -74,11 +79,12 @@ screens without changing the 21-bone tracking or selection contract.
 
 ### Verification
 
-- `npm test` 101/101, `npm run test:e2e` 9/9, `npm run typecheck`, `npm run lint` and
+- `npm test` 101/101, `npm run test:e2e` 10/10, `npm run typecheck`, `npm run lint` and
   `npm run build` pass.
 - Deterministic hand suite: 0 page errors, skin audit 1,149 vertices / 0 unweighted / 0 over-four
-  influences / 21 bones, 0 px wrist offset, ≤0.2° static joint error, selection 10/10 at 0.6 px mean
-  aim error, and a clean procedural→rigged fallback round trip.
+  influences / 21 bones, 0 px wrist offset, ≤12.9 px cursor-to-mesh pinch offset, ≤0.2° static
+  joint error, selection 10/10 at 0.5 px mean aim error, and a clean procedural→rigged fallback
+  round trip.
 - Responsive audits at 390×844, 1024×768 and 1440×900: zero page errors and no horizontal overflow;
   phones/tablets default to low, tablet sheet is 560 px wide, phone sheet is 374 px wide, and the
   structure rail/overlay clear the collapsed sheet.

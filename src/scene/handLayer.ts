@@ -6,11 +6,11 @@ import { loadHands, type DrivenHand, type HandSource } from './handRig';
 
 /** Distance from the camera along its view ray. The hand stays in front of the cell. */
 const HAND_DISTANCE = 4.35;
-/** Reference distance the visual scale constants were tuned at. */
-const HAND_REFERENCE_DISTANCE = 5.05;
 const RAY = new THREE.Vector3();
 const DIR = new THREE.Vector3();
+const FORWARD = new THREE.Vector3();
 const NDC = new THREE.Vector3();
+const PINCH = new THREE.Vector3();
 
 /**
  * Places the two tracked hands in front of the cell.
@@ -64,6 +64,8 @@ export class HandLayer {
     map.height = window.innerHeight;
     map.mirrorX = settings.mirrorX;
     map.mirrorY = settings.mirrorY;
+    camera.getWorldDirection(FORWARD);
+    const tanHalfFov = Math.tan((camera.fov * Math.PI) / 360);
 
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands.get(side);
@@ -86,12 +88,22 @@ export class HandLayer {
       // screen height during fast movement. Orientation is the only thing that needs smoothing.
       hand.container.position.copy(target);
 
-      // 2) Scale: use the image-space wrist → middle-MCP span, which shrinks as the hand moves
-      // away from the camera. Scaling happens around the container origin (the wrist), so it
-      // never pulls the pivot away from the tracked wrist.
+      // 2) Scale: match the digital palm to the tracked palm. The wrist → middle-MCP span is
+      // stable under finger curl and shrinks with distance from the camera, so the mesh keeps
+      // the same apparent size as the landmark hand instead of sitting well inside it. The
+      // previous constant-factor scale made the cursor (at the landmark thumb/index midpoint)
+      // float past the mesh fingertips.
       const span = frame.handSpan > 1e-5 ? frame.handSpan : 0.1;
-      const cue = clamp(span / 0.1, 0.55, 1.55);
-      const targetScale = 0.82 * cue * (HAND_DISTANCE / HAND_REFERENCE_DISTANCE);
+      // Points on a view ray are at a fixed Euclidean distance from the camera; their depth
+      // along the optical axis (what perspective divides by) is shorter towards the frame edge.
+      const depth = Math.max(0.2, HAND_DISTANCE * FORWARD.dot(DIR));
+      const pxPerUnit = map.height / (2 * tanHalfFov * depth);
+      const targetPalmPx = span * map.height;
+      const targetScale = clamp(
+        targetPalmPx / Math.max(1e-5, hand.palmLength * pxPerUnit),
+        0.5,
+        1.8
+      );
       const s = damp(hand.container.scale.x, targetScale, 10, dt);
       hand.container.scale.setScalar(s);
 
@@ -123,6 +135,20 @@ export class HandLayer {
 
   debugHand(side: HandSide): Record<string, unknown> | null {
     return this.hands.get(side)?.debugState?.() ?? null;
+  }
+
+  /**
+   * Test hook: the 3D hand's thumb/index midpoint projected into CSS pixels. The screen cursor is
+   * driven by the tracked landmarks, so this offset is the visible hand/pointer alignment.
+   */
+  debugPinch(side: HandSide, camera: THREE.PerspectiveCamera): { x: number; y: number } | null {
+    const pinch = this.hands.get(side)?.pinchWorld(PINCH);
+    if (!pinch) return null;
+    const p = NDC.copy(pinch).project(camera);
+    return {
+      x: (p.x * 0.5 + 0.5) * window.innerWidth,
+      y: (0.5 - p.y * 0.5) * window.innerHeight
+    };
   }
 
   dispose(): void {

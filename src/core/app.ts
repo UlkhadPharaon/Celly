@@ -1037,6 +1037,10 @@ export class CellyApp {
     const p = container.position;
     const projected = this.scene.projectToScreen(p);
     const offsetPx = Math.hypot(projected.x - mapped.x, projected.y - mapped.y);
+    const meshPinch = this.hands.debugPinch(side, this.scene.camera);
+    const meshOffsetPx = meshPinch
+      ? Math.hypot(meshPinch.x - frame.cursor.x, meshPinch.y - frame.cursor.y)
+      : null;
     return {
       side,
       present: true,
@@ -1048,6 +1052,15 @@ export class CellyApp {
       containerScreen: [Math.round(projected.x), Math.round(projected.y)],
       offsetPx: Number(offsetPx.toFixed(2)),
       offsetPctHeight: Number(((offsetPx / window.innerHeight) * 100).toFixed(2)),
+      meshPinch: meshPinch
+        ? [Number(meshPinch.x.toFixed(1)), Number(meshPinch.y.toFixed(1))]
+        : null,
+      meshOffsetPx: meshOffsetPx === null ? null : Number(meshOffsetPx.toFixed(2)),
+      meshOffsetPctHeight:
+        meshOffsetPx === null
+          ? null
+          : Number(((meshOffsetPx / window.innerHeight) * 100).toFixed(2)),
+      pickRadius: Number(this.pickRadius.toFixed(1)),
       container: [Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3))],
       scale: Number(container.scale.x.toFixed(3)),
       rig: this.hands.debugHand(side)

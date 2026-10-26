@@ -94,6 +94,9 @@ function summarize(samples) {
   const offsets = samples
     .filter((sample) => typeof sample?.offsetPx === 'number')
     .map((sample) => sample.offsetPx);
+  const meshOffsets = samples
+    .filter((sample) => typeof sample?.meshOffsetPx === 'number')
+    .map((sample) => sample.meshOffsetPx);
   const apply = rigged.map((sample) => sample.rig.applyMs);
   const joint = rigged.map((sample) => sample.rig.angleErrorDeg);
   const perFinger = {};
@@ -113,6 +116,18 @@ function summarize(samples) {
     ),
     wristOffsetMaxPctHeight: Number(
       Math.max(0, ...samples.map((sample) => sample.offsetPctHeight ?? 0)).toFixed(3)
+    ),
+    meshOffsetMeanPx: Number(average(meshOffsets).toFixed(2)),
+    meshOffsetMaxPx: Number(Math.max(0, ...meshOffsets).toFixed(2)),
+    meshOffsetMeanPctHeight: Number(
+      average(
+        samples
+          .filter((sample) => typeof sample?.meshOffsetPctHeight === 'number')
+          .map((sample) => sample.meshOffsetPctHeight)
+      ).toFixed(3)
+    ),
+    meshOffsetMaxPctHeight: Number(
+      Math.max(0, ...samples.map((sample) => sample.meshOffsetPctHeight ?? 0)).toFixed(3)
     ),
     applyMsMean: Number(average(apply).toFixed(2)),
     applyMsMax: Number(Math.max(0, ...apply).toFixed(2)),
@@ -287,6 +302,7 @@ await page.waitForFunction(
 await page.evaluate(() => window.__celly.injectPose('open', 'right', 820, 430, 0));
 await frame(3);
 const restoredSample = await debug();
+await shot('rigged-restored');
 
 // ------------------------------------------------------------------------- report
 const allStatic = Object.values(staticSamples);
@@ -317,6 +333,8 @@ console.log(
           name,
           {
             wristOffsetPctHeight: sample.offsetPctHeight,
+            meshOffsetPx: sample.meshOffsetPx,
+            meshOffsetPctHeight: sample.meshOffsetPctHeight,
             angleErrorDeg: sample.rig?.angleErrorDeg ?? null,
             perFingerDeg: sample.rig?.perFingerDeg ?? null,
             applyMs: sample.rig?.applyMs ?? null,
@@ -334,12 +352,16 @@ console.log(
       left: {
         present: leftSample.present,
         wristOffsetPctHeight: leftSample.offsetPctHeight,
+        meshOffsetPx: leftSample.meshOffsetPx,
         angleErrorDeg: leftSample.rig?.angleErrorDeg ?? null
       },
       debug: {
         present: debugSample.present,
-        pickRadius: 52,
-        rigged: !debugSample.rig?.procedural
+        pickRadius: debugSample.pickRadius ?? null,
+        rigged: !debugSample.rig?.procedural,
+        meshPinch: debugSample.meshPinch,
+        cursor: debugSample.cursor,
+        meshOffsetPx: debugSample.meshOffsetPx
       },
       selection: {
         attempts: selection.attempts,

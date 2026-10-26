@@ -41,10 +41,12 @@ through the actual control-panel switch (`Procedural hand (diagnostic)`).
 ## Measured summary
 
 - Wrist projection offset: **0 px / 0 % of screen height** across 50 samples (static, motion, fast movement, left hand).
-- Joint-angle error: **4.26° mean / 4.71° max** on static poses; **4.24° mean / 6.54° max** across all 50 samples.
-- Per-finger static mean: index 1.88°, middle 0.08°, ring 1.01°, pinky 1.29°; thumb 17.04° (known rest/constraint limitation).
-- CPU retarget solver `apply()`: **0.45 ms mean / 1.1 ms max** (does not include MediaPipe inference or rendering).
-- Bone lengths: **15 bones, worst coefficient of variation 0.039 %** after normalising for the container scale.
-- Skin audit: `Hand_R`, 10,116 vertices, 0 unweighted, 0 over-4, weight sums 1.0, 21 bones, bind matrices finite.
+- Cursor-to-mesh pinch offset: **3.3–12.9 px** on the static poses (mean **7.7 px**), **15.8 px** worst across all 50 samples (mean **7.9 px / 1.97 % of height**). The mesh is now scaled to the tracked wrist → middle-MCP span, so the wrist stays exact while the fingertips reach the cursor.
+- Joint-angle error: **0.06° mean / 0.20° max** on static poses; **0.35° mean / 1.75° max** across all 50 samples.
+- Per-finger static mean: index 0.05°, middle 0.06°, ring 0.04°, pinky 0.04°; thumb 0.08°.
+- CPU retarget solver `apply()`: **0.23–0.58 ms mean** in the motion sequences, **3.3 ms max**; one 96.6 ms cold sample in the static suite is retained in the JSON rather than discarded.
+- Bone lengths: **15 bones, worst coefficient of variation 0.029 %** after normalising for the container scale.
+- Skin audit: `Hand_R`, 1,149 vertices, 0 unweighted, 0 over-4, weight sums 1.0, 21 bones, bind matrices finite.
 - Palm vs back palm-normal dot: **-0.991** (correct flip, no mirror quaternion).
+- Selection test: **10/10 hits, 100 %, 0.5 px mean aim error**.
 - Procedural fallback: both switches report `present: true`, wrist offset 0; rigged hand restored afterwards.

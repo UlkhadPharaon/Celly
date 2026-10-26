@@ -10,6 +10,16 @@ async function enterWithMouse(page: Page): Promise<void> {
   await page.waitForTimeout(1200);
 }
 
+/** Wait for rendered frames instead of a wall-clock sleep so slow SwiftShader hosts stay stable. */
+async function waitFrames(page: Page, count: number): Promise<void> {
+  const start = await page.evaluate(() => window.__celly!.renderedFrames);
+  await page.waitForFunction(
+    ([s, n]) => window.__celly!.renderedFrames >= s + n,
+    [start, count],
+    { timeout: 20_000 }
+  );
+}
+
 /** Aim, close the pinch past the 100 ms selection hold, then release to commit. */
 async function pinchAt(page: Page, x: number, y: number, side: 'left' | 'right' = 'right'): Promise<void> {
   await page.evaluate(
@@ -142,6 +152,22 @@ async function findBlankPoint(page: Page): Promise<{ x: number; y: number }> {
 }
 
 test.describe('synthetic hand replay', () => {
+  test('keeps the 3D pinch point under the cursor', async ({ page }) => {
+    await enterWithMouse(page);
+    for (const pose of ['open', 'pinch'] as const) {
+      await page.evaluate(
+        (name) => window.__celly!.injectPose(name, 'right', 820, 430, 0),
+        pose
+      );
+      await waitFrames(page, 8);
+      const debug = await page.evaluate(() => window.__celly!.debugHand('right'));
+      expect(debug.present, `${pose}: hand present`).toBe(true);
+      expect(debug.scale, `${pose}: palm-matched mesh scale`).toBeGreaterThan(0.85);
+      expect(debug.meshOffsetPx, `${pose}: mesh pinch vs cursor`).toBeLessThan(20);
+      expect(debug.offsetPx, `${pose}: wrist vs tracked wrist`).toBeLessThan(1);
+    }
+  });
+
   test('tracks a hand, selects an organelle and releases it', async ({ page }) => {
     await enterWithMouse(page);
     // Freeze the cell so the organelle does not drift between the anchor read and the pinch.
@@ -167,7 +193,8 @@ test.describe('synthetic hand replay', () => {
     await expectOverlayClearOfChrome(page);
     await expect(page.locator('.overlay-anchor.is-open h2')).toContainText(titlePattern(picked));
 
-    // The 3D hand is anchored on its pinch point, so the fingertips sit on the cursor.
+    // The wrist is anchored to landmark 0 and the mesh is scaled to the tracked palm, so the
+    // cursor sits on the mesh pinch instead of floating past smaller fingertips.
     const debug = await page.evaluate(() => window.__celly!.debugHand('right'));
     expect(debug.present).toBe(true);
 
