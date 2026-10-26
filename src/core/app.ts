@@ -276,6 +276,7 @@ export class CellyApp {
 
   private setLanguage(language: Language): void {
     this.settings.language = language;
+    document.documentElement.lang = language;
     this.shell.setLanguage(language);
     for (const page of this.pages.values()) page.setLanguage(language);
     this.saveSettings();
@@ -321,6 +322,7 @@ export class CellyApp {
     this.shell.setControlState(this.controlState());
     this.reducedMotion = this.settings.reducedMotion;
     const root = document.documentElement;
+    root.lang = this.settings.language;
     root.dataset.reducedMotion = String(this.settings.reducedMotion);
     root.dataset.highContrast = String(this.settings.highContrast);
     this.current?.setAutoRotate?.(this.settings.autoRotate);

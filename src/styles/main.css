@@ -261,6 +261,120 @@ svg.icon {
   gap: 8px;
 }
 
+/* ----------------------------------------------------------------- project links ---- */
+.top-project-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.project-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink-dim);
+  font-size: 10.5px;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition:
+    color 0.2s var(--ease),
+    background 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    transform 0.16s var(--ease);
+}
+
+.project-link:hover,
+.project-link.is-hover {
+  color: var(--ink);
+  background: rgba(122, 196, 255, 0.08);
+}
+
+.project-link.is-pressed,
+.project-link:active {
+  transform: scale(0.97);
+}
+
+.project-link svg.project-link-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.project-link svg.project-link-external {
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+}
+
+.project-link--compact {
+  width: 38px;
+  height: 38px;
+  min-height: 0;
+  justify-content: center;
+  padding: 0;
+  border-color: var(--line);
+  border-radius: 12px;
+  background: var(--glass);
+  color: var(--ink-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.project-link--compact:hover,
+.project-link--compact.is-hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--glass);
+}
+
+.project-link--compact.is-pressed,
+.project-link--compact:active {
+  transform: scale(0.94);
+}
+
+.project-link--compact .project-link-label,
+.project-link--compact .project-link-external {
+  display: none;
+}
+
+.project-link--compact svg.project-link-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.controls .project-links,
+.onboarding-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.controls .project-links {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.onboarding-links {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.onboarding-links .project-link {
+  padding: 6px 9px;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
 .icon-btn {
   display: grid;
   place-items: center;
@@ -3015,6 +3129,13 @@ svg.icon {
   }
 }
 
+@media (max-width: 900px) {
+  /* The sheet and the onboarding keep both project links reachable on narrow screens. */
+  .top-project-links {
+    display: none;
+  }
+}
+
 @media (max-width: 820px) {
   .left-rail,
   .legend,
@@ -3242,6 +3363,18 @@ svg.icon {
   .icon-btn {
     width: 44px;
     height: 44px;
+  }
+
+  .project-link {
+    min-height: 44px;
+    padding: 10px 9px;
+    touch-action: manipulation;
+  }
+
+  .project-link--compact {
+    width: 44px;
+    height: 44px;
+    padding: 0;
   }
 
   .tab {

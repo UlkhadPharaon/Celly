@@ -1,5 +1,6 @@
 import type { ButtonRegistry } from './buttons';
 import { svgIcon, ICONS } from './dom';
+import { createProjectLink, registerProjectLink } from './projectLinks';
 
 const COPY = {
   en: {
@@ -32,7 +33,11 @@ const COPY = {
     enter: 'Enter the lab',
     skip: 'Skip tour',
     settings: 'Camera settings',
-    blocked: 'Camera unavailable. You can still explore with the mouse.'
+    blocked: 'Camera unavailable. You can still explore with the mouse.',
+    projectLinks: 'Project links',
+    github: 'GitHub',
+    article: 'Learn article',
+    newTab: 'opens in a new tab'
   },
   fr: {
     kicker: 'Celly · v0.2',
@@ -65,7 +70,11 @@ const COPY = {
     enter: 'Entrer au laboratoire',
     skip: 'Passer la visite',
     settings: 'Réglages caméra',
-    blocked: 'Caméra indisponible. Vous pouvez explorer à la souris.'
+    blocked: 'Caméra indisponible. Vous pouvez explorer à la souris.',
+    projectLinks: 'Liens du projet',
+    github: 'GitHub',
+    article: 'Lire l’article',
+    newTab: 's’ouvre dans un nouvel onglet'
   }
 };
 
@@ -146,6 +155,19 @@ export class Onboarding {
     this.card.innerHTML = steps[this.step] ?? steps[0];
     this.card.dataset.step = String(this.step);
 
+    const projectLinks = this.card.querySelector<HTMLElement>('[data-project-links]');
+    if (projectLinks) {
+      for (const kind of ['github', 'article'] as const) {
+        const link = createProjectLink({
+          kind,
+          label: copy[kind],
+          newTabLabel: copy.newTab
+        });
+        this.unregister.push(registerProjectLink(this.registry, `onboarding:${kind}`, link));
+        projectLinks.append(link);
+      }
+    }
+
     for (const btn of this.card.querySelectorAll<HTMLButtonElement>('[data-celly]')) {
       const id = btn.dataset.celly as string;
       const handler = this.handlerFor(id);
@@ -207,6 +229,7 @@ export class Onboarding {
           ${svgIcon(ICONS.privacy).outerHTML}
           <span>${copy.privacy}</span>
         </div>
+        <nav class="onboarding-links" aria-label="${copy.projectLinks}" data-project-links></nav>
         <div class="onboarding-actions">
           <button class="btn primary" type="button" data-celly="enable">
             ${svgIcon(ICONS.camera).outerHTML}<span>${copy.enable}</span>

@@ -70,6 +70,7 @@ src/
     overlay.ts            anchored info card + placement logic
     controlPanel.ts       webcam preview, mirror/swap, language, quality, accessibility
     onboarding.ts         3-step first-run flow + camera error states
+    projectLinks.ts       canonical demo/GitHub/article URLs + external-link anchors
     cursorLayer.ts        virtual cursors, pinch rings, hints (DOM)
     webcamPreview.ts      mirrored preview + landmark debug canvas
     buttons.ts            registry: gesture hit-testing, hover/press/dwell state
@@ -315,13 +316,18 @@ session-only experience instead of throwing.
  └─ .stage            canvas (WebGL)
     ├─ .grain / .vignette
     ├─ .page-layer     page DOM (lab rail, knowledge hints, test cards)
-    ├─ .topbar         brand, tabs, auto-rotate, help
+    ├─ .topbar         brand, tabs, auto-rotate, help, project links
     ├─ .left-rail      HUD + gesture legend  pointer-events: none
     ├─ .controls       preview + settings
     ├─ .overlay-anchor info card
     ├─ .onboarding     first-run flow
     └─ .cursor-layer   cursors + hints    pointer-events: none
 ```
+
+The GitHub and learn-article links live in `ui/projectLinks.ts` and appear in the top bar (desktop),
+the control panel footer and the onboarding intro. They are real anchors with `target="_blank"` and
+`rel="noopener noreferrer"`, and are registered with the gesture button registry so pinch can open
+them too. The top-bar pair collapses at ≤900 px, where the sheet and onboarding still expose both.
 
 Only real controls receive pointer events. The HUD and legend opt out entirely, so they can overlap
 the scene — or a page card — without stealing a click. They share one flex-column rail so the legend

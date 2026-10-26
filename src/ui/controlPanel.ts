@@ -3,6 +3,7 @@ import type { ButtonRegistry } from './buttons';
 import { svgIcon, ICONS } from './dom';
 import { WebcamPreview } from './webcamPreview';
 import { PINCH_SENSITIVITY } from '../gestures/pinch';
+import { createProjectLink, registerProjectLink, updateProjectLink } from './projectLinks';
 
 export interface ControlState {
   showWebcam: boolean;
@@ -56,7 +57,11 @@ const COPY = {
     accessibility: 'Accessibility',
     reducedMotion: 'Reduce motion',
     highContrast: 'High contrast',
-    proceduralHand: 'Procedural hand (diagnostic)'
+    proceduralHand: 'Procedural hand (diagnostic)',
+    projectLinks: 'Project links',
+    github: 'GitHub',
+    article: 'Learn article',
+    newTab: 'opens in a new tab'
   },
   fr: {
     controls: 'Réglages',
@@ -82,7 +87,11 @@ const COPY = {
     accessibility: 'Accessibilité',
     reducedMotion: 'Réduire les animations',
     highContrast: 'Contraste élevé',
-    proceduralHand: 'Main procédurale (diagnostic)'
+    proceduralHand: 'Main procédurale (diagnostic)',
+    projectLinks: 'Liens du projet',
+    github: 'GitHub',
+    article: 'Lire l’article',
+    newTab: 's’ouvre dans un nouvel onglet'
   }
 };
 
@@ -264,6 +273,20 @@ export class ControlPanel {
     foot.append(qWrap);
     this.root.append(foot);
 
+    const projectLinks = document.createElement('nav');
+    projectLinks.className = 'project-links';
+    projectLinks.setAttribute('aria-label', this.copy.projectLinks);
+    for (const kind of ['github', 'article'] as const) {
+      const link = createProjectLink({
+        kind,
+        label: this.copy[kind],
+        newTabLabel: this.copy.newTab
+      });
+      registerProjectLink(this.registry, `control:${kind}`, link);
+      projectLinks.append(link);
+    }
+    this.root.append(projectLinks);
+
     const privacy = document.createElement('div');
     privacy.className = 'controls-privacy';
     privacy.innerHTML = `<i></i><span>${this.copy.privacy}</span>`;
@@ -400,6 +423,14 @@ export class ControlPanel {
     const privacy = this.root.querySelector('.controls-privacy span');
     if (privacy) privacy.textContent = this.copy.privacy;
     this.accessibilitySummary.textContent = this.copy.accessibility;
+
+    this.root.querySelector('.project-links')?.setAttribute('aria-label', this.copy.projectLinks);
+    for (const link of this.root.querySelectorAll<HTMLAnchorElement>('.project-links [data-project-link]')) {
+      const kind = link.dataset.projectLink;
+      if (kind === 'github' || kind === 'article') {
+        updateProjectLink(link, this.copy[kind], this.copy.newTab);
+      }
+    }
 
     this.pinchLabel.textContent = this.copy.pinch;
     const pinchOptions: Array<[number, keyof typeof COPY.en]> = [

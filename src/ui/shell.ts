@@ -7,6 +7,7 @@ import { Onboarding } from './onboarding';
 import { Overlay } from './overlay';
 import { Tabs } from './tabs';
 import { ICONS, svgIcon } from './dom';
+import { createProjectLink, registerProjectLink, updateProjectLink } from './projectLinks';
 
 export interface ShellHandlers {
   onPage: (page: PageId) => void;
@@ -40,8 +41,28 @@ const LEGEND = {
 };
 
 const UI_COPY = {
-  en: { autoRotate: 'Auto-rotate', stop: 'Stop', help: 'Help', gestures: 'Gestures', status: 'ON-DEVICE · MEDIAPIPE' },
-  fr: { autoRotate: 'Rotation auto', stop: 'Arrêter', help: 'Aide', gestures: 'Gestes', status: 'LOCAL · MEDIAPIPE' }
+  en: {
+    autoRotate: 'Auto-rotate',
+    stop: 'Stop',
+    help: 'Help',
+    gestures: 'Gestures',
+    status: 'ON-DEVICE · MEDIAPIPE',
+    projectLinks: 'Project links',
+    github: 'GitHub',
+    article: 'Learn article',
+    newTab: 'opens in a new tab'
+  },
+  fr: {
+    autoRotate: 'Rotation auto',
+    stop: 'Arrêter',
+    help: 'Aide',
+    gestures: 'Gestes',
+    status: 'LOCAL · MEDIAPIPE',
+    projectLinks: 'Liens du projet',
+    github: 'GitHub',
+    article: 'Lire l’article',
+    newTab: 's’ouvre dans un nouvel onglet'
+  }
 };
 
 export class Shell {
@@ -101,6 +122,7 @@ export class Shell {
 
     const actions = document.createElement('div');
     actions.className = 'top-actions';
+    const copy = UI_COPY[this.language];
 
     this.autoButton = document.createElement('button');
     this.autoButton.className = 'auto-rotate';
@@ -119,6 +141,21 @@ export class Shell {
     help.addEventListener('click', handlers.onHelp);
     this.registry.register('top:help', help, handlers.onHelp);
     actions.append(help);
+
+    const projectLinks = document.createElement('nav');
+    projectLinks.className = 'top-project-links';
+    projectLinks.setAttribute('aria-label', copy.projectLinks);
+    for (const kind of ['github', 'article'] as const) {
+      const link = createProjectLink({
+        kind,
+        label: copy[kind],
+        newTabLabel: copy.newTab,
+        compact: true
+      });
+      registerProjectLink(this.registry, `top:${kind}`, link);
+      projectLinks.append(link);
+    }
+    actions.append(projectLinks);
     topbar.append(actions);
     this.root.append(topbar);
 
@@ -222,7 +259,21 @@ export class Shell {
     this.tabs.setLanguage(language);
     this.onboarding.setLanguage(language);
     this.syncAutoRotate();
+    this.syncProjectLinks();
     this.renderLegend();
+  }
+
+  private syncProjectLinks(): void {
+    const copy = UI_COPY[this.language];
+    this.root.querySelector('.top-project-links')?.setAttribute('aria-label', copy.projectLinks);
+    for (const link of this.root.querySelectorAll<HTMLAnchorElement>(
+      '.top-project-links [data-project-link]'
+    )) {
+      const kind = link.dataset.projectLink;
+      if (kind === 'github' || kind === 'article') {
+        updateProjectLink(link, copy[kind], copy.newTab);
+      }
+    }
   }
 
   private renderLegend(): void {

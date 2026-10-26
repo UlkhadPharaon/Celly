@@ -50,6 +50,12 @@ Full transitive licence texts live in `node_modules/` and in `package-lock.json`
   comparison. Celly's implementation is a reimplementation of those principles, not a copy of its
   code; see D-47 in [`DECISIONS.md`](DECISIONS.md).
 
+## Writing
+
+- **“From RGB camera to 3D interaction — how controller-free XR could transform learning”**,
+  Ulkhad Pharaon — [Medium](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba).
+  The companion learn article for this project.
+
 ## Notes
 
 - The MediaPipe model and WASM are redistributed unmodified, satisfying Apache-2.0 attribution; the

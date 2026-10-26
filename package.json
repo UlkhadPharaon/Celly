@@ -4,6 +4,24 @@
   "private": true,
   "description": "Celly v0.2 — a touch-free 3D cell biology laboratory, knowledge network and quiz, controlled by your bare hands",
   "license": "MIT",
+  "author": "Ulkhad Pharaon",
+  "homepage": "https://celly-blue.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UlkhadPharaon/Celly.git"
+  },
+  "bugs": {
+    "url": "https://github.com/UlkhadPharaon/Celly/issues"
+  },
+  "keywords": [
+    "webxr",
+    "hand-tracking",
+    "mediapipe",
+    "threejs",
+    "webgl",
+    "cell-biology",
+    "education"
+  ],
   "type": "module",
   "engines": {
     "node": "24.x"

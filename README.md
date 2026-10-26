@@ -1,10 +1,13 @@
 # Celly v0.2
 
-**Live demo:** <https://celly-blue.vercel.app>
+[**Live demo**](https://celly-blue.vercel.app) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba)
 
 **A touch-free 3D cell biology lab.** Celly puts a living, procedural cell in front of you and lets
 you explore it with your **bare hands** — no controller, no headset, no gloves. A webcam and a pinch
 are the entire interface, with the mouse and keyboard kept as a first-class fallback.
+
+> **The story behind Celly:** [From RGB camera to 3D interaction — how controller-free XR could
+> transform learning](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba).
 
 The app has three sections:
 
@@ -42,7 +45,7 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Requirements: **Node 20+**, a browser with **WebGL2** and **WASM**, and a webcam for gesture mode.
+Requirements: **Node 24+**, a browser with **WebGL2** and **WASM**, and a webcam for gesture mode.
 Chrome or Edge give the most predictable MediaPipe performance; Safari 17+ also works.
 
 `npm install` runs `scripts/fetch-assets.mjs`, which
@@ -280,7 +283,7 @@ research and asset audit are in [`docs/RESEARCH.md`](docs/RESEARCH.md) and
 
 ```bash
 npm test             # Vitest: 101 unit tests
-npm run test:e2e     # Playwright: 8 tests (smoke + gesture replay)
+npm run test:e2e     # Playwright: 9 tests (smoke + gesture replay)
 npm run lint         # ESLint (flat config, typescript-eslint)
 npm run typecheck    # tsc --noEmit, strict
 npm run build        # typecheck + production bundle
@@ -399,6 +402,7 @@ degrades to mouse mode if no camera is available.
 - [`FINAL_REPORT_ROUND2.md`](FINAL_REPORT_ROUND2.md) — measured results, limitations and v0.3 plan
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — scene graph, data flow, module contracts
 - [`docs/RESEARCH.md`](docs/RESEARCH.md) — prior-art and asset research
+- [Learn article: From RGB camera to 3D interaction](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba) — the story and design rationale
 - [`ASSET_INVENTORY.md`](ASSET_INVENTORY.md) — what ships, where it came from, licence audit
 - [`CREDITS.md`](CREDITS.md) — attribution for models, fonts, WASM and code
 - [`CHANGELOG.md`](CHANGELOG.md) — v0.1 → v0.2

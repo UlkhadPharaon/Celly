@@ -28,6 +28,12 @@ screens without changing the 21-bone tracking or selection contract.
   for hashed assets and bounded caching for the unhashed WASM/model/GLB files. `prebuild` re-runs
   asset preparation so WASM/model files exist even when install scripts are cached. No environment
   variables or server functions.
+- **Project links** — the GitHub source and the companion learn article are one click away from the
+  top bar (desktop), the control-panel footer and the onboarding welcome card, in EN and FR.
+  `ui/projectLinks.ts` owns the canonical URLs and the external-link anchor builder.
+- **Social and search metadata** — canonical URL, Open Graph/Twitter cards, `SoftwareApplication`
+  JSON-LD, repository/homepage/bugs package metadata and a 1200×630 social preview
+  (`public/og-celly.jpg`).
 
 ### Changed
 
@@ -62,10 +68,13 @@ screens without changing the 21-bone tracking or selection contract.
   and stays sticky while scrolling.
 - On 821–1080 px tablet layouts the HUD is retained, so the page intro now caps its width to clear
   the left rail instead of running underneath it.
+- Switching the interface language now updates `<html lang>` as well as the visible copy, so screen
+  readers and browser translation follow the chosen language.
+- The README now matches the Node 24 requirement used by `package.json` and Vercel.
 
 ### Verification
 
-- `npm test` 101/101, `npm run test:e2e` 8/8, `npm run typecheck`, `npm run lint` and
+- `npm test` 101/101, `npm run test:e2e` 9/9, `npm run typecheck`, `npm run lint` and
   `npm run build` pass.
 - Deterministic hand suite: 0 page errors, skin audit 1,149 vertices / 0 unweighted / 0 over-four
   influences / 21 bones, 0 px wrist offset, ≤0.2° static joint error, selection 10/10 at 0.6 px mean
