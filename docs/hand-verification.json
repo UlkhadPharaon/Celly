@@ -11,18 +11,20 @@
     "wristOffsetMaxPx": 0,
     "wristOffsetMeanPctHeight": 0,
     "wristOffsetMaxPctHeight": 0,
-    "meshOffsetMeanPx": 7.74,
-    "meshOffsetMaxPx": 12.86,
-    "meshOffsetMeanPctHeight": 0.969,
-    "meshOffsetMaxPctHeight": 1.61,
-    "applyMsMean": 9.9,
-    "applyMsMax": 96.6,
-    "angleErrorMeanDeg": 0.06,
+    "meshOffsetMeanPx": 5.38,
+    "meshOffsetMaxPx": 9.76,
+    "meshOffsetMeanPctHeight": 0.673,
+    "meshOffsetMaxPctHeight": 1.22,
+    "pinchMidpointOffsetMeanPx": 25.54,
+    "pinchMidpointOffsetMaxPx": 42.76,
+    "applyMsMean": 0.33,
+    "applyMsMax": 0.4,
+    "angleErrorMeanDeg": 0.05,
     "angleErrorMaxDeg": 0.2,
     "perFingerMeanDeg": {
       "thumb": 0.08,
-      "index": 0.05,
-      "middle": 0.06,
+      "index": 0.04,
+      "middle": 0.04,
       "ring": 0.04,
       "pinky": 0.04
     },
@@ -44,8 +46,20 @@
   "staticPerPose": {
     "open": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 4.51,
-      "meshOffsetPctHeight": 0.56,
+      "meshIndexOffsetPx": 3.74,
+      "meshIndexTip": [
+        823.5,
+        431.2
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 28.63,
       "angleErrorDeg": 0,
       "perFingerDeg": {
         "thumb": 0,
@@ -60,12 +74,24 @@
         -0.064,
         0.9979
       ],
-      "scale": 0.999
+      "scale": 0.998
     },
     "fist": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 9.65,
-      "meshOffsetPctHeight": 1.21,
+      "meshIndexOffsetPx": 6.28,
+      "meshIndexTip": [
+        826,
+        431.8
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 8.88,
       "angleErrorDeg": 0.08,
       "perFingerDeg": {
         "thumb": 0.03,
@@ -74,18 +100,30 @@
         "ring": 0.09,
         "pinky": 0.08
       },
-      "applyMs": 0.2,
+      "applyMs": 0.4,
       "palmNormal": [
         -0.0069,
         -0.064,
         0.9979
       ],
-      "scale": 1.004
+      "scale": 1.006
     },
     "pinch": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 12.6,
-      "meshOffsetPctHeight": 1.58,
+      "meshIndexOffsetPx": 9.76,
+      "meshIndexTip": [
+        812.4,
+        436.1
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 13.95,
       "angleErrorDeg": 0.06,
       "perFingerDeg": {
         "thumb": 0.03,
@@ -94,7 +132,7 @@
         "ring": 0.07,
         "pinky": 0.05
       },
-      "applyMs": 0.3,
+      "applyMs": 0.4,
       "palmNormal": [
         -0.0069,
         -0.064,
@@ -104,8 +142,20 @@
     },
     "point": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 8.01,
-      "meshOffsetPctHeight": 1,
+      "meshIndexOffsetPx": 4.77,
+      "meshIndexTip": [
+        824.5,
+        431.5
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 42.76,
       "angleErrorDeg": 0.06,
       "perFingerDeg": {
         "thumb": 0.03,
@@ -120,12 +170,24 @@
         -0.064,
         0.9979
       ],
-      "scale": 1
+      "scale": 0.998
     },
     "peace": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 7.27,
-      "meshOffsetPctHeight": 0.91,
+      "meshIndexOffsetPx": 4.38,
+      "meshIndexTip": [
+        824.2,
+        431.4
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 39.63,
       "angleErrorDeg": 0.02,
       "perFingerDeg": {
         "thumb": 0,
@@ -134,67 +196,7 @@
         "ring": 0.01,
         "pinky": 0
       },
-      "applyMs": 0.2,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 1
-    },
-    "thumbs-up": {
-      "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 12.86,
-      "meshOffsetPctHeight": 1.61,
-      "angleErrorDeg": 0.07,
-      "perFingerDeg": {
-        "thumb": 0.18,
-        "index": 0.07,
-        "middle": 0.08,
-        "ring": 0.01,
-        "pinky": 0.01
-      },
-      "applyMs": 96.6,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 1.005
-    },
-    "ok": {
-      "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 9.93,
-      "meshOffsetPctHeight": 1.24,
-      "angleErrorDeg": 0.06,
-      "perFingerDeg": {
-        "thumb": 0.04,
-        "index": 0.07,
-        "middle": 0.09,
-        "ring": 0.06,
-        "pinky": 0.05
-      },
       "applyMs": 0.3,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 1
-    },
-    "spread": {
-      "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 4.78,
-      "meshOffsetPctHeight": 0.6,
-      "angleErrorDeg": 0,
-      "perFingerDeg": {
-        "thumb": 0.01,
-        "index": 0,
-        "middle": 0,
-        "ring": 0,
-        "pinky": 0
-      },
-      "applyMs": 0.2,
       "palmNormal": [
         -0.0069,
         -0.064,
@@ -202,17 +204,61 @@
       ],
       "scale": 0.998
     },
-    "palm": {
+    "thumbs-up": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 4.53,
-      "meshOffsetPctHeight": 0.57,
+      "meshIndexOffsetPx": 6.43,
+      "meshIndexTip": [
+        826.2,
+        431.8
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 27.24,
+      "angleErrorDeg": 0.04,
+      "perFingerDeg": {
+        "thumb": 0.14,
+        "index": 0.02,
+        "middle": 0.03,
+        "ring": 0,
+        "pinky": 0
+      },
+      "applyMs": 0.3,
+      "palmNormal": [
+        -0.0069,
+        -0.064,
+        0.9979
+      ],
+      "scale": 1.007
+    },
+    "ok": {
+      "wristOffsetPctHeight": 0,
+      "meshIndexOffsetPx": 7.9,
+      "meshIndexTip": [
+        812.4,
+        432.2
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 12.79,
       "angleErrorDeg": 0.01,
       "perFingerDeg": {
-        "thumb": 0,
+        "thumb": 0.01,
         "index": 0.01,
-        "middle": 0,
-        "ring": 0,
-        "pinky": 0.02
+        "middle": 0.02,
+        "ring": 0.02,
+        "pinky": 0.01
       },
       "applyMs": 0.2,
       "palmNormal": [
@@ -222,10 +268,86 @@
       ],
       "scale": 0.999
     },
+    "spread": {
+      "wristOffsetPctHeight": 0,
+      "meshIndexOffsetPx": 4.28,
+      "meshIndexTip": [
+        823.9,
+        431.8
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 26.95,
+      "angleErrorDeg": 0.01,
+      "perFingerDeg": {
+        "thumb": 0.03,
+        "index": 0.01,
+        "middle": 0,
+        "ring": 0.01,
+        "pinky": 0.02
+      },
+      "applyMs": 0.3,
+      "palmNormal": [
+        -0.0069,
+        -0.064,
+        0.9979
+      ],
+      "scale": 0.996
+    },
+    "palm": {
+      "wristOffsetPctHeight": 0,
+      "meshIndexOffsetPx": 3.79,
+      "meshIndexTip": [
+        823.6,
+        431.3
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 28.69,
+      "angleErrorDeg": 0.01,
+      "perFingerDeg": {
+        "thumb": 0,
+        "index": 0.01,
+        "middle": 0,
+        "ring": 0,
+        "pinky": 0.02
+      },
+      "applyMs": 0.3,
+      "palmNormal": [
+        -0.0069,
+        -0.064,
+        0.9979
+      ],
+      "scale": 0.997
+    },
     "back": {
       "wristOffsetPctHeight": 0,
-      "meshOffsetPx": 3.3,
-      "meshOffsetPctHeight": 0.41,
+      "meshIndexOffsetPx": 2.49,
+      "meshIndexTip": [
+        817.5,
+        429.8
+      ],
+      "cursor": [
+        820,
+        430
+      ],
+      "landmarkIndexTip": [
+        820,
+        430
+      ],
+      "pinchMidpointOffsetPx": 25.91,
       "angleErrorDeg": 0.2,
       "perFingerDeg": {
         "thumb": 0.51,
@@ -234,13 +356,13 @@
         "ring": 0.13,
         "pinky": 0.16
       },
-      "applyMs": 0.3,
+      "applyMs": 0.4,
       "palmNormal": [
         0.0327,
         -0.064,
         -0.9974
       ],
-      "scale": 1.013
+      "scale": 1.008
     }
   },
   "allSummary": {
@@ -250,20 +372,22 @@
     "wristOffsetMaxPx": 0,
     "wristOffsetMeanPctHeight": 0,
     "wristOffsetMaxPctHeight": 0,
-    "meshOffsetMeanPx": 7.87,
-    "meshOffsetMaxPx": 15.78,
-    "meshOffsetMeanPctHeight": 0.985,
-    "meshOffsetMaxPctHeight": 1.97,
-    "applyMsMean": 2.26,
-    "applyMsMax": 96.6,
-    "angleErrorMeanDeg": 0.35,
-    "angleErrorMaxDeg": 1.75,
+    "meshOffsetMeanPx": 6.97,
+    "meshOffsetMaxPx": 15.19,
+    "meshOffsetMeanPctHeight": 0.871,
+    "meshOffsetMaxPctHeight": 1.899,
+    "pinchMidpointOffsetMeanPx": 31.45,
+    "pinchMidpointOffsetMaxPx": 46.9,
+    "applyMsMean": 0.67,
+    "applyMsMax": 12,
+    "angleErrorMeanDeg": 0.38,
+    "angleErrorMaxDeg": 1.77,
     "perFingerMeanDeg": {
-      "thumb": 0.5,
-      "index": 0.25,
-      "middle": 0.23,
-      "ring": 0.37,
-      "pinky": 0.39
+      "thumb": 0.53,
+      "index": 0.28,
+      "middle": 0.24,
+      "ring": 0.39,
+      "pinky": 0.45
     },
     "skin": [
       {
@@ -288,20 +412,22 @@
       "wristOffsetMaxPx": 0,
       "wristOffsetMeanPctHeight": 0,
       "wristOffsetMaxPctHeight": 0,
-      "meshOffsetMeanPx": 8.36,
-      "meshOffsetMaxPx": 11.68,
-      "meshOffsetMeanPctHeight": 1.046,
-      "meshOffsetMaxPctHeight": 1.46,
-      "applyMsMean": 0.26,
-      "applyMsMax": 0.4,
-      "angleErrorMeanDeg": 0.73,
+      "meshOffsetMeanPx": 10.08,
+      "meshOffsetMaxPx": 15.19,
+      "meshOffsetMeanPctHeight": 1.26,
+      "meshOffsetMaxPctHeight": 1.899,
+      "pinchMidpointOffsetMeanPx": 37.08,
+      "pinchMidpointOffsetMaxPx": 46.9,
+      "applyMsMean": 0.71,
+      "applyMsMax": 3.9,
+      "angleErrorMeanDeg": 0.8,
       "angleErrorMaxDeg": 1.61,
       "perFingerMeanDeg": {
-        "thumb": 0.62,
-        "index": 0.54,
-        "middle": 0.66,
-        "ring": 0.86,
-        "pinky": 0.94
+        "thumb": 0.65,
+        "index": 0.62,
+        "middle": 0.68,
+        "ring": 0.92,
+        "pinky": 1.11
       },
       "skin": [
         {
@@ -325,20 +451,22 @@
       "wristOffsetMaxPx": 0,
       "wristOffsetMeanPctHeight": 0,
       "wristOffsetMaxPctHeight": 0,
-      "meshOffsetMeanPx": 5.91,
-      "meshOffsetMaxPx": 11.62,
-      "meshOffsetMeanPctHeight": 0.739,
-      "meshOffsetMaxPctHeight": 1.45,
-      "applyMsMean": 0.58,
-      "applyMsMax": 3.3,
-      "angleErrorMeanDeg": 0.32,
-      "angleErrorMaxDeg": 1.75,
+      "meshOffsetMeanPx": 4.6,
+      "meshOffsetMaxPx": 11.09,
+      "meshOffsetMeanPctHeight": 0.575,
+      "meshOffsetMaxPctHeight": 1.386,
+      "pinchMidpointOffsetMeanPx": 29.44,
+      "pinchMidpointOffsetMaxPx": 32.16,
+      "applyMsMean": 1.35,
+      "applyMsMax": 12,
+      "angleErrorMeanDeg": 0.34,
+      "angleErrorMaxDeg": 1.77,
       "perFingerMeanDeg": {
-        "thumb": 0.63,
-        "index": 0.19,
+        "thumb": 0.68,
+        "index": 0.22,
         "middle": 0.13,
-        "ring": 0.33,
-        "pinky": 0.31
+        "ring": 0.34,
+        "pinky": 0.34
       },
       "skin": [
         {
@@ -362,20 +490,22 @@
       "wristOffsetMaxPx": 0,
       "wristOffsetMeanPctHeight": 0,
       "wristOffsetMaxPctHeight": 0,
-      "meshOffsetMeanPx": 9.79,
-      "meshOffsetMaxPx": 15.78,
-      "meshOffsetMeanPctHeight": 1.224,
-      "meshOffsetMaxPctHeight": 1.97,
-      "applyMsMean": 0.23,
-      "applyMsMax": 0.4,
-      "angleErrorMeanDeg": 0.25,
+      "meshOffsetMeanPx": 7.78,
+      "meshOffsetMaxPx": 12.54,
+      "meshOffsetMeanPctHeight": 0.972,
+      "meshOffsetMaxPctHeight": 1.567,
+      "pinchMidpointOffsetMeanPx": 32.82,
+      "pinchMidpointOffsetMaxPx": 35.47,
+      "applyMsMean": 0.25,
+      "applyMsMax": 0.5,
+      "angleErrorMeanDeg": 0.28,
       "angleErrorMaxDeg": 1.15,
       "perFingerMeanDeg": {
-        "thumb": 0.59,
-        "index": 0.19,
+        "thumb": 0.66,
+        "index": 0.22,
         "middle": 0.07,
-        "ring": 0.18,
-        "pinky": 0.2
+        "ring": 0.2,
+        "pinky": 0.23
       },
       "skin": [
         {
@@ -395,86 +525,90 @@
   },
   "boneStability": {
     "bones": 15,
-    "worstCvPct": 0.029,
-    "worstBone": "11_MIDDLE_DIP"
+    "worstCvPct": 0.028,
+    "worstBone": "15_RING_DIP"
   },
   "palmVsBackDot": -0.991,
   "left": {
     "present": true,
     "wristOffsetPctHeight": 0,
-    "meshOffsetPx": 3.44,
+    "meshIndexOffsetPx": 2.55,
     "angleErrorDeg": 0
   },
   "debug": {
     "present": true,
-    "pickRadius": 52.5,
+    "pickRadius": 52.6,
     "rigged": true,
-    "meshPinch": [
-      824.3,
-      431.4
-    ],
     "cursor": [
       820,
       430
     ],
-    "meshOffsetPx": 4.52
+    "landmarkIndexTip": [
+      820,
+      430
+    ],
+    "meshIndexTip": [
+      823.6,
+      431.2
+    ],
+    "meshIndexOffsetPx": 3.77
   },
   "selection": {
     "attempts": 10,
     "hits": 10,
     "hitRate": 1,
-    "meanAimErrorPx": 0.5,
+    "meanAimErrorPx": 2,
     "complete": true,
     "results": [
       {
         "target": "nucleus",
         "hit": true,
-        "errorPx": 0.7527404429127726
+        "errorPx": 14.757467400731084
       },
       {
         "target": "mitochondrion",
         "hit": true,
-        "errorPx": 0.8096116491455758
+        "errorPx": 0.44077925765621223
       },
       {
         "target": "golgi",
         "hit": true,
-        "errorPx": 0.6714697491630853
+        "errorPx": 0.16521468869339287
       },
       {
         "target": "rough-er",
         "hit": true,
-        "errorPx": 0.41718970596811084
+        "errorPx": 0.27022882787431834
       },
       {
         "target": "smooth-er",
         "hit": true,
-        "errorPx": 0.4584739623305391
+        "errorPx": 0.5653405821561077
       },
       {
         "target": "lysosome",
         "hit": true,
-        "errorPx": 0.10503544697082724
+        "errorPx": 0.5401927147135271
       },
       {
         "target": "vacuole",
         "hit": true,
-        "errorPx": 0.22952256154289186
+        "errorPx": 0.35449104290040406
       },
       {
         "target": "centriole",
         "hit": true,
-        "errorPx": 0.5702953504208802
+        "errorPx": 0.9497755645901821
       },
       {
         "target": "peroxisome",
         "hit": true,
-        "errorPx": 0.5363234878033926
+        "errorPx": 0.5140455942765821
       },
       {
         "target": "nucleolus",
         "hit": true,
-        "errorPx": 0.4847441899540274
+        "errorPx": 1.002076268443095
       }
     ],
     "driver": [
@@ -482,7 +616,7 @@
         "done": false,
         "id": "nucleus",
         "anchor": [
-          656,
+          631,
           387
         ],
         "advanced": true,
@@ -495,12 +629,12 @@
           "attempts": 1,
           "hits": 1,
           "hitRate": 1,
-          "meanAimErrorPx": 0.8,
+          "meanAimErrorPx": 14.8,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             }
           ]
         }
@@ -509,8 +643,8 @@
         "done": false,
         "id": "mitochondrion",
         "anchor": [
-          618,
-          327
+          716,
+          465
         ],
         "advanced": true,
         "state": {
@@ -522,17 +656,17 @@
           "attempts": 2,
           "hits": 2,
           "hitRate": 1,
-          "meanAimErrorPx": 0.8,
+          "meanAimErrorPx": 7.6,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             }
           ]
         }
@@ -541,8 +675,8 @@
         "done": false,
         "id": "golgi",
         "anchor": [
-          751,
-          295
+          686,
+          286
         ],
         "advanced": true,
         "state": {
@@ -554,22 +688,22 @@
           "attempts": 3,
           "hits": 3,
           "hitRate": 1,
-          "meanAimErrorPx": 0.7,
+          "meanAimErrorPx": 5.1,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             }
           ]
         }
@@ -578,8 +712,8 @@
         "done": false,
         "id": "rough-er",
         "anchor": [
-          737,
-          363
+          683,
+          359
         ],
         "advanced": true,
         "state": {
@@ -591,27 +725,27 @@
           "attempts": 4,
           "hits": 4,
           "hitRate": 1,
-          "meanAimErrorPx": 0.7,
+          "meanAimErrorPx": 3.9,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             }
           ]
         }
@@ -620,8 +754,8 @@
         "done": false,
         "id": "smooth-er",
         "anchor": [
-          735,
-          380
+          581,
+          395
         ],
         "advanced": true,
         "state": {
@@ -633,32 +767,32 @@
           "attempts": 5,
           "hits": 5,
           "hitRate": 1,
-          "meanAimErrorPx": 0.6,
+          "meanAimErrorPx": 3.2,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.4584739623305391
+              "errorPx": 0.5653405821561077
             }
           ]
         }
@@ -667,8 +801,8 @@
         "done": false,
         "id": "lysosome",
         "anchor": [
-          724,
-          471
+          789,
+          472
         ],
         "advanced": true,
         "state": {
@@ -680,37 +814,37 @@
           "attempts": 6,
           "hits": 6,
           "hitRate": 1,
-          "meanAimErrorPx": 0.5,
+          "meanAimErrorPx": 2.8,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.4584739623305391
+              "errorPx": 0.5653405821561077
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.10503544697082724
+              "errorPx": 0.5401927147135271
             }
           ]
         }
@@ -719,8 +853,8 @@
         "done": false,
         "id": "vacuole",
         "anchor": [
-          612,
-          366
+          700,
+          364
         ],
         "advanced": true,
         "state": {
@@ -732,42 +866,42 @@
           "attempts": 7,
           "hits": 7,
           "hitRate": 1,
-          "meanAimErrorPx": 0.5,
+          "meanAimErrorPx": 2.4,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.4584739623305391
+              "errorPx": 0.5653405821561077
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.10503544697082724
+              "errorPx": 0.5401927147135271
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.22952256154289186
+              "errorPx": 0.35449104290040406
             }
           ]
         }
@@ -776,8 +910,8 @@
         "done": false,
         "id": "centriole",
         "anchor": [
-          593,
-          308
+          592,
+          309
         ],
         "advanced": true,
         "state": {
@@ -789,47 +923,47 @@
           "attempts": 8,
           "hits": 8,
           "hitRate": 1,
-          "meanAimErrorPx": 0.5,
+          "meanAimErrorPx": 2.3,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.4584739623305391
+              "errorPx": 0.5653405821561077
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.10503544697082724
+              "errorPx": 0.5401927147135271
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.22952256154289186
+              "errorPx": 0.35449104290040406
             },
             {
               "target": "centriole",
               "hit": true,
-              "errorPx": 0.5702953504208802
+              "errorPx": 0.9497755645901821
             }
           ]
         }
@@ -838,8 +972,8 @@
         "done": false,
         "id": "peroxisome",
         "anchor": [
-          699,
-          291
+          633,
+          287
         ],
         "advanced": true,
         "state": {
@@ -851,52 +985,52 @@
           "attempts": 9,
           "hits": 9,
           "hitRate": 1,
-          "meanAimErrorPx": 0.5,
+          "meanAimErrorPx": 2.1,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.4584739623305391
+              "errorPx": 0.5653405821561077
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.10503544697082724
+              "errorPx": 0.5401927147135271
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.22952256154289186
+              "errorPx": 0.35449104290040406
             },
             {
               "target": "centriole",
               "hit": true,
-              "errorPx": 0.5702953504208802
+              "errorPx": 0.9497755645901821
             },
             {
               "target": "peroxisome",
               "hit": true,
-              "errorPx": 0.5363234878033926
+              "errorPx": 0.5140455942765821
             }
           ]
         }
@@ -905,8 +1039,8 @@
         "done": false,
         "id": "nucleolus",
         "anchor": [
-          651,
-          388
+          658,
+          385
         ],
         "advanced": true,
         "state": {
@@ -918,57 +1052,57 @@
           "attempts": 10,
           "hits": 10,
           "hitRate": 1,
-          "meanAimErrorPx": 0.5,
+          "meanAimErrorPx": 2,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 0.7527404429127726
+              "errorPx": 14.757467400731084
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.8096116491455758
+              "errorPx": 0.44077925765621223
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.6714697491630853
+              "errorPx": 0.16521468869339287
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.41718970596811084
+              "errorPx": 0.27022882787431834
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.4584739623305391
+              "errorPx": 0.5653405821561077
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.10503544697082724
+              "errorPx": 0.5401927147135271
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.22952256154289186
+              "errorPx": 0.35449104290040406
             },
             {
               "target": "centriole",
               "hit": true,
-              "errorPx": 0.5702953504208802
+              "errorPx": 0.9497755645901821
             },
             {
               "target": "peroxisome",
               "hit": true,
-              "errorPx": 0.5363234878033926
+              "errorPx": 0.5140455942765821
             },
             {
               "target": "nucleolus",
               "hit": true,
-              "errorPx": 0.4847441899540274
+              "errorPx": 1.002076268443095
             }
           ]
         }

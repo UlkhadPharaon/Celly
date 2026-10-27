@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REACH, mapNormalized, reach, unreach } from '../../src/gestures/cursor';
+import { REACH, mapNormalized, pinchContact, pointCursor, reach, unreach } from '../../src/gestures/cursor';
 import type { Vec3 } from '../../src/types';
 
 const VIEWPORT = { width: 1000, height: 800 };
@@ -51,5 +51,38 @@ describe('reach mapping', () => {
         expect(screen.x).toBeCloseTo(x, 4);
       }
     }
+  });
+});
+
+describe('pointer anchor', () => {
+  const map = { ...VIEWPORT, mirrorX: false, mirrorY: false };
+
+  function hand(): Vec3[] {
+    // Wrist at the origin, thumb tip to the left, index tip straight up: the two are far apart,
+    // exactly like an open hand.
+    const points = Array.from({ length: 21 }, () => at(0, 0));
+    points[4] = at(0.3, 0.5);
+    points[8] = at(0.3, 0.2);
+    return points;
+  }
+
+  it('puts the pointer on the index fingertip, not between thumb and index', () => {
+    const landmarks = hand();
+    const { cursor } = pointCursor(landmarks, map);
+    const expected = mapNormalized(landmarks[8], map);
+    expect(cursor.x).toBeCloseTo(expected.x, 6);
+    expect(cursor.y).toBeCloseTo(expected.y, 6);
+
+    const midpoint = mapNormalized(at(0.3, 0.35), map);
+    expect(Math.hypot(cursor.x - midpoint.x, cursor.y - midpoint.y)).toBeGreaterThan(10);
+  });
+
+  it('keeps the pinch contact between the two fingertips for the travel budget', () => {
+    const landmarks = hand();
+    const contact = pinchContact(landmarks, map);
+    const tip = mapNormalized(landmarks[8], map);
+    const thumb = mapNormalized(landmarks[4], map);
+    expect(contact.x).toBeCloseTo((tip.x + thumb.x) / 2, 6);
+    expect(contact.y).toBeCloseTo((tip.y + thumb.y) / 2, 6);
   });
 });

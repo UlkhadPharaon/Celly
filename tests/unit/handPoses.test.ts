@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildPose, buildPoseSequence } from '../../src/core/handPoses';
+import { mapNormalized } from '../../src/gestures/cursor';
 
 const FIXTURES = path.resolve('tests/fixtures/hand-poses');
 const VIEWPORT = { width: 1280, height: 800 };
@@ -94,6 +95,29 @@ describe('hand pose fixtures', () => {
     const live = buildPose('open', 'right', 700, 380, VIEWPORT, MIRROR);
     expect(fixture.landmarks).toEqual(live.landmarks);
     expect(fixture.world).toEqual(live.world);
+  });
+
+  it('anchors the pointer on the index fingertip, not on the thumb/index midpoint', () => {
+    const map = { ...VIEWPORT, mirrorX: MIRROR.mirrorX, mirrorY: MIRROR.mirrorY };
+    for (const name of ['open', 'point', 'peace', 'pinch'] as const) {
+      const pose = buildPose(name, 'right', 700, 380, VIEWPORT, MIRROR);
+      const tip = mapNormalized(pose.landmarks[8], map);
+      expect(tip.x, `${name}: index tip x`).toBeCloseTo(700, 4);
+      expect(tip.y, `${name}: index tip y`).toBeCloseTo(380, 4);
+
+      const midpoint = mapNormalized(
+        {
+          x: (pose.landmarks[4].x + pose.landmarks[8].x) / 2,
+          y: (pose.landmarks[4].y + pose.landmarks[8].y) / 2,
+          z: 0
+        },
+        map
+      );
+      if (name === 'open' || name === 'point' || name === 'peace') {
+        // An open hand has a wide gap: the old midpoint anchor would drift away from the finger.
+        expect(Math.hypot(midpoint.x - 700, midpoint.y - 380)).toBeGreaterThan(10);
+      }
+    }
   });
 
   it('produces a fast-movement sequence with large screen travel', () => {

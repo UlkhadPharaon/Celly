@@ -34,19 +34,19 @@ through the actual control-panel switch (`Procedural hand (diagnostic)`).
 | File | What it shows |
 |---|---|
 | `debug-hand.png` | `D` overlay: raw/filtered/locked cursors, 53 px pick radius, armed target, rig angle error, skin audit, recent pinch events, and the yellow raw-skeleton/axis overlay |
-| `selection-test-exact.png` | built-in Selection test complete: **10/10 hits**, **100 %**, **0.5 px mean aim error** |
+| `selection-test-exact.png` | built-in Selection test complete: **10/10 hits**, **100 %**, **2 px mean aim error** |
 | `procedural-hand.png` | diagnostic procedural hand selected in the control panel; it follows the same wrist/pose |
 | `rigged-restored.png` | switch restored to the rigged GLB hand, control-panel toggle off |
 
 ## Measured summary
 
 - Wrist projection offset: **0 px / 0 % of screen height** across 50 samples (static, motion, fast movement, left hand).
-- Cursor-to-mesh pinch offset: **3.3–12.9 px** on the static poses (mean **7.7 px**), **15.8 px** worst across all 50 samples (mean **7.9 px / 1.97 % of height**). The mesh is now scaled to the tracked wrist → middle-MCP span, so the wrist stays exact while the fingertips reach the cursor.
-- Joint-angle error: **0.06° mean / 0.20° max** on static poses; **0.35° mean / 1.75° max** across all 50 samples.
-- Per-finger static mean: index 0.05°, middle 0.06°, ring 0.04°, pinky 0.04°; thumb 0.08°.
-- CPU retarget solver `apply()`: **0.23–0.58 ms mean** in the motion sequences, **3.3 ms max**; one 96.6 ms cold sample in the static suite is retained in the JSON rather than discarded.
+- Pointer-to-mesh index-tip offset: **2.3–9.8 px** on the static poses (mean **5.4 px**), **15.2 px** worst across all 50 samples (mean **7.0 px / 0.87 % of height**). The pointer rides the index fingertip (landmark 8) and the mesh is scaled to the tracked wrist → middle-MCP span, so the mesh tip sits under the dot in every pose instead of beside it.
+- Joint-angle error: **0.05° mean / 0.20° max** on static poses; **0.38° mean / 1.77° max** across all 50 samples.
+- Per-finger static mean: index 0.04°, middle 0.04°, ring 0.04°, pinky 0.04°; thumb 0.08°.
+- CPU retarget solver `apply()`: **0.25–1.35 ms mean** in the motion sequences, **12 ms max** cold sample in the static suite, retained in the JSON rather than discarded.
 - Bone lengths: **15 bones, worst coefficient of variation 0.029 %** after normalising for the container scale.
 - Skin audit: `Hand_R`, 1,149 vertices, 0 unweighted, 0 over-4, weight sums 1.0, 21 bones, bind matrices finite.
 - Palm vs back palm-normal dot: **-0.991** (correct flip, no mirror quaternion).
-- Selection test: **10/10 hits, 100 %, 0.5 px mean aim error**.
+- Selection test: **10/10 hits, 100 %, 2 px mean aim error**; the single worst lock is 14.8 px (nucleus), far inside the 53 px pick radius.
 - Procedural fallback: both switches report `present: true`, wrist offset 0; rigged hand restored afterwards.

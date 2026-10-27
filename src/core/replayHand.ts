@@ -6,8 +6,8 @@ import type { HandSide, Vec3 } from '../types';
  * The real tracker needs a camera and a person; tests and docs still have to drive the whole
  * pipeline (pinch hysteresis, side resolution, rig retargeting, cursors). This module builds a
  * right/left hand with MediaPipe's 21-landmark topology, folds the thumb and index together to
- * the requested pinch value, and puts the pinch point exactly on the requested screen position,
- * so a synthetic hand behaves like a tracked one everywhere downstream.
+ * the requested pinch value, and puts the index fingertip exactly on the requested screen
+ * position, so a synthetic hand behaves like a tracked one everywhere downstream.
  */
 
 /** Metres from wrist to middle knuckle of the reference hand: the pinch denominator. */
@@ -48,8 +48,8 @@ export interface SynthHand {
 }
 
 /**
- * @param x  pinch point in CSS pixels
- * @param y  pinch point in CSS pixels
+ * @param x  index fingertip in CSS pixels
+ * @param y  index fingertip in CSS pixels
  * @param pinch 0 = open, 1 = thumb and index touching
  */
 export function synthHand(
@@ -75,12 +75,13 @@ export function synthHand(
   // Mirror for a left hand so the thumb sits on the other side.
   if (side === 'left') for (const point of points) point.x = -point.x;
 
-  // Put the pinch point on the requested screen position.
-  const pinchPoint = midpoint(points[4], points[8]);
+  // Put the index fingertip on the requested screen position: that is the pointer the user
+  // aims with, and it is also where the thumb converges during a pinch.
+  const pointer = points[8];
   const scale = viewport.height * PX_PER_METRE;
   const toPixels = (point: Vec3): { x: number; y: number } => ({
-    x: x + (point.x - pinchPoint.x) * scale,
-    y: y - (point.y - pinchPoint.y) * scale
+    x: x + (point.x - pointer.x) * scale,
+    y: y - (point.y - pointer.y) * scale
   });
 
   const landmarks = points.map((point) => {
@@ -88,14 +89,14 @@ export function synthHand(
     return {
       x: px.x / viewport.width,
       y: px.y / viewport.height,
-      z: ((point.z - pinchPoint.z) * scale) / viewport.width
+      z: ((point.z - pointer.z) * scale) / viewport.width
     };
   });
 
   const world = points.map((point) => ({
-    x: point.x - pinchPoint.x,
-    y: point.y - pinchPoint.y,
-    z: point.z - pinchPoint.z
+    x: point.x - pointer.x,
+    y: point.y - pointer.y,
+    z: point.z - pointer.z
   }));
 
   const wrist = toPixels(points[0]);

@@ -30,7 +30,7 @@ export type PoseName =
 export interface PoseData {
   name: PoseName;
   side: HandSide;
-  /** Display-space cursor (thumb/index midpoint) in CSS pixels. */
+  /** Display-space cursor (index fingertip) in CSS pixels. */
   cursor: { x: number; y: number };
   wrist: { x: number; y: number };
   palm: { x: number; y: number };
@@ -66,7 +66,7 @@ export function buildPose(
     viewport
   );
 
-  // synthHand.world is centred on the pinch midpoint. Move it to the wrist, which is the only
+  // synthHand.world is centred on the index fingertip. Move it to the wrist, which is the only
   // origin the rig is allowed to rotate around.
   const wristWorld = synthetic.world[0];
   let world: Vec3[] = synthetic.world.map((p) => ({
@@ -130,11 +130,11 @@ export function buildPose(
       break;
   }
 
-  const pinchPoint = midpoint(world[4], world[8]);
+  const pointerPoint = world[8];
   const scale = viewport.height * PX_PER_METRE;
   const toScreen = (p: Vec3) => ({
-    x: x + (p.x - pinchPoint.x) * scale,
-    y: y - (p.y - pinchPoint.y) * scale
+    x: x + (p.x - pointerPoint.x) * scale,
+    y: y - (p.y - pointerPoint.y) * scale
   });
 
   const landmarks = world.map((p) => {
@@ -144,7 +144,7 @@ export function buildPose(
     return {
       x: preX,
       y: preY,
-      z: ((p.z - pinchPoint.z) * scale) / viewport.width
+      z: ((p.z - pointerPoint.z) * scale) / viewport.width
     };
   });
 

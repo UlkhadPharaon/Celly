@@ -18,7 +18,15 @@ import { HandSideResolver } from '../tracking/handSide';
 import { LandmarkFilterBank, motionEnergy } from '../tracking/landmarkFilter';
 import { frameMargin, scoreQuality } from '../tracking/quality';
 import { DEFAULT_PINCH, PINCH_SENSITIVITY, initialPinch, isFist, pinchValue, updatePinch, type PinchState } from '../gestures/pinch';
-import { handRoll, mapNormalized, palmPoint, pinchCursor, toNDC, unreach } from '../gestures/cursor';
+import {
+  handRoll,
+  mapNormalized,
+  palmPoint,
+  pinchContact,
+  pointCursor,
+  toNDC,
+  unreach
+} from '../gestures/cursor';
 import { GestureEngine } from '../gestures/gestureEngine';
 import { AimTracker } from '../gestures/aim';
 import { HandLayer } from '../scene/handLayer';
@@ -478,8 +486,10 @@ export class CellyApp {
       const update = updatePinch(previous, value, { fist, valid, tMs: t }, DEFAULT_PINCH);
       this.pinchStates.set(side, update.state);
 
-      const { cursor, ndc } = pinchCursor(norm, map);
-      const rawCursor = pinchCursor(hand.landmarks, map).cursor;
+      // The pointer rides the index fingertip, so the dot always sits on the finger the user
+      // aims with (and on the thumb/index contact while pinching).
+      const { cursor, ndc } = pointCursor(norm, map);
+      const rawCursor = pointCursor(hand.landmarks, map).cursor;
       const wristScreen = mapNormalized(norm[0], map);
       const mcpScreen = mapNormalized(norm[9], map);
       const handSpan =
@@ -510,6 +520,7 @@ export class CellyApp {
         pinchStart: update.start,
         pinchEnd: update.end,
         cursor,
+        pinchPoint: pinchContact(norm, map),
         rawCursor,
         aim: { x: aimPoint.x, y: aimPoint.y },
         aimLocked,
@@ -897,6 +908,12 @@ export class CellyApp {
       pinchStart: start,
       pinchEnd: end,
       cursor,
+      pinchPoint: pinchContact(synthetic.landmarks, {
+        width: w,
+        height: h,
+        mirrorX: this.settings.mirrorX,
+        mirrorY: this.settings.mirrorY
+      }),
       rawCursor: { ...cursor },
       aim: { x: aimPoint.x, y: aimPoint.y },
       aimLocked,
@@ -982,6 +999,12 @@ export class CellyApp {
       pinchStart: start,
       pinchEnd: end,
       cursor,
+      pinchPoint: pinchContact(data.landmarks, {
+        width: w,
+        height: h,
+        mirrorX: this.settings.mirrorX,
+        mirrorY: this.settings.mirrorY
+      }),
       rawCursor: { ...cursor },
       aim: { x: aimPoint.x, y: aimPoint.y },
       aimLocked,
@@ -1028,18 +1051,25 @@ export class CellyApp {
     const frame = this.frames.find((f) => f.side === side && f.present);
     const container = this.hands.debugContainer(side);
     if (!frame || !container) return { side, present: false };
-    const mapped = mapNormalized(frame.landmarks[0], {
+    const map = {
       width: window.innerWidth,
       height: window.innerHeight,
       mirrorX: this.settings.mirrorX,
       mirrorY: this.settings.mirrorY
-    });
+    };
+    const mapped = mapNormalized(frame.landmarks[0], map);
+    const landmarkIndex = mapNormalized(frame.landmarks[8], map);
+    const landmarkThumb = mapNormalized(frame.landmarks[4], map);
     const p = container.position;
     const projected = this.scene.projectToScreen(p);
     const offsetPx = Math.hypot(projected.x - mapped.x, projected.y - mapped.y);
     const meshPinch = this.hands.debugPinch(side, this.scene.camera);
     const meshOffsetPx = meshPinch
       ? Math.hypot(meshPinch.x - frame.cursor.x, meshPinch.y - frame.cursor.y)
+      : null;
+    const meshIndexTip = this.hands.debugLandmark(side, this.scene.camera, 8);
+    const meshIndexOffsetPx = meshIndexTip
+      ? Math.hypot(meshIndexTip.x - frame.cursor.x, meshIndexTip.y - frame.cursor.y)
       : null;
     return {
       side,
@@ -1049,6 +1079,8 @@ export class CellyApp {
       aim: [Math.round(frame.aim.x), Math.round(frame.aim.y)],
       aimLocked: frame.aimLocked,
       wristScreen: [Math.round(mapped.x), Math.round(mapped.y)],
+      landmarkIndexTip: [Number(landmarkIndex.x.toFixed(1)), Number(landmarkIndex.y.toFixed(1))],
+      landmarkThumbTip: [Number(landmarkThumb.x.toFixed(1)), Number(landmarkThumb.y.toFixed(1))],
       containerScreen: [Math.round(projected.x), Math.round(projected.y)],
       offsetPx: Number(offsetPx.toFixed(2)),
       offsetPctHeight: Number(((offsetPx / window.innerHeight) * 100).toFixed(2)),
@@ -1060,6 +1092,11 @@ export class CellyApp {
         meshOffsetPx === null
           ? null
           : Number(((meshOffsetPx / window.innerHeight) * 100).toFixed(2)),
+      meshIndexTip: meshIndexTip
+        ? [Number(meshIndexTip.x.toFixed(1)), Number(meshIndexTip.y.toFixed(1))]
+        : null,
+      meshIndexOffsetPx:
+        meshIndexOffsetPx === null ? null : Number(meshIndexOffsetPx.toFixed(2)),
       pickRadius: Number(this.pickRadius.toFixed(1)),
       container: [Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3))],
       scale: Number(container.scale.x.toFixed(3)),

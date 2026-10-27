@@ -358,3 +358,17 @@ existing side panel and HUD. Audited at 390×844, 1024×768 and
 1440×900, plus the 820/821 px HUD breakpoint and 900 px intermediate width, with zero page errors
 and no horizontal overflow. At 821–1080 px the intro width is capped to leave the 210 px rail and
 its 14 px gap clear.
+
+## Pointer semantics (post-alignment pass)
+
+**D-55 — The pointer is the index fingertip, not the thumb/index midpoint.** The dot has to sit on
+the hand the user aims with. The midpoint of landmarks 4 and 8 is the middle of the gap between two
+fingers: on an open or pointing hand it lands 28–41 px from the index tip, in empty space, which is
+why the pointer read as detached from the 3D hand and why pointing at an organelle felt offset. The
+index tip (landmark 8) is where the user aims, where the thumb converges during a pinch, and what
+the CellLab reference uses. The 3D mesh already tracks that landmark, so the mesh tip and the
+pointer coincide within ~10 px once the mesh is scaled to the tracked wrist → middle-MCP span. The
+gesture engine measures its travel budget against the thumb/index contact point instead: closing the
+fingers slides the index tip by up to ~40 px, and that is a pinch closing, not a drag. The synthetic
+hand and the pose generator anchor the index tip on the requested screen point, so every fixture,
+screenshot and e2e injection keeps pointing exactly where it is asked to.

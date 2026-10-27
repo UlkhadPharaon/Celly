@@ -152,9 +152,9 @@ async function findBlankPoint(page: Page): Promise<{ x: number; y: number }> {
 }
 
 test.describe('synthetic hand replay', () => {
-  test('keeps the 3D pinch point under the cursor', async ({ page }) => {
+  test('keeps the 3D index fingertip under the cursor', async ({ page }) => {
     await enterWithMouse(page);
-    for (const pose of ['open', 'pinch'] as const) {
+    for (const pose of ['open', 'point', 'pinch'] as const) {
       await page.evaluate(
         (name) => window.__celly!.injectPose(name, 'right', 820, 430, 0),
         pose
@@ -163,7 +163,15 @@ test.describe('synthetic hand replay', () => {
       const debug = await page.evaluate(() => window.__celly!.debugHand('right'));
       expect(debug.present, `${pose}: hand present`).toBe(true);
       expect(debug.scale, `${pose}: palm-matched mesh scale`).toBeGreaterThan(0.85);
-      expect(debug.meshOffsetPx, `${pose}: mesh pinch vs cursor`).toBeLessThan(20);
+      // The pointer is the index fingertip, so the cursor has to sit on that landmark.
+      const cursor = debug.cursor as number[];
+      const landmark = debug.landmarkIndexTip as number[];
+      expect(
+        Math.hypot(cursor[0] - landmark[0], cursor[1] - landmark[1]),
+        `${pose}: cursor on the index fingertip`
+      ).toBeLessThan(1);
+      // ...and the 3D mesh has to draw that same fingertip under the cursor.
+      expect(debug.meshIndexOffsetPx, `${pose}: mesh index tip vs cursor`).toBeLessThan(20);
       expect(debug.offsetPx, `${pose}: wrist vs tracked wrist`).toBeLessThan(1);
     }
   });
@@ -193,8 +201,8 @@ test.describe('synthetic hand replay', () => {
     await expectOverlayClearOfChrome(page);
     await expect(page.locator('.overlay-anchor.is-open h2')).toContainText(titlePattern(picked));
 
-    // The wrist is anchored to landmark 0 and the mesh is scaled to the tracked palm, so the
-    // cursor sits on the mesh pinch instead of floating past smaller fingertips.
+    // The wrist is anchored to landmark 0, the mesh is scaled to the tracked palm and the pointer
+    // rides the index fingertip, so the cursor sits on the mesh instead of floating beside it.
     const debug = await page.evaluate(() => window.__celly!.debugHand('right'));
     expect(debug.present).toBe(true);
 

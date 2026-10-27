@@ -13,6 +13,7 @@ function hand(over: Partial<HandFrame> & { side: HandSide }): HandFrame {
     pinchStart: false,
     pinchEnd: false,
     cursor,
+    pinchPoint: over.pinchPoint ?? { ...cursor },
     rawCursor: over.rawCursor ?? { ...cursor },
     aim: over.aim ?? { ...cursor },
     aimLocked: false,

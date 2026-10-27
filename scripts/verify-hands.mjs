@@ -11,6 +11,7 @@ import { mkdir } from 'node:fs/promises';
 
 const URL = process.env.CELLY_URL ?? 'http://localhost:5173/';
 const OUT = 'docs/screenshots/hand-tests';
+const VIEWPORT = { width: 1280, height: 800 };
 const X = 820;
 const Y = 430;
 
@@ -95,6 +96,9 @@ function summarize(samples) {
     .filter((sample) => typeof sample?.offsetPx === 'number')
     .map((sample) => sample.offsetPx);
   const meshOffsets = samples
+    .filter((sample) => typeof sample?.meshIndexOffsetPx === 'number')
+    .map((sample) => sample.meshIndexOffsetPx);
+  const pinchOffsets = samples
     .filter((sample) => typeof sample?.meshOffsetPx === 'number')
     .map((sample) => sample.meshOffsetPx);
   const apply = rigged.map((sample) => sample.rig.applyMs);
@@ -120,15 +124,13 @@ function summarize(samples) {
     meshOffsetMeanPx: Number(average(meshOffsets).toFixed(2)),
     meshOffsetMaxPx: Number(Math.max(0, ...meshOffsets).toFixed(2)),
     meshOffsetMeanPctHeight: Number(
-      average(
-        samples
-          .filter((sample) => typeof sample?.meshOffsetPctHeight === 'number')
-          .map((sample) => sample.meshOffsetPctHeight)
-      ).toFixed(3)
+      average(meshOffsets.map((px) => (px / VIEWPORT.height) * 100)).toFixed(3)
     ),
     meshOffsetMaxPctHeight: Number(
-      Math.max(0, ...samples.map((sample) => sample.meshOffsetPctHeight ?? 0)).toFixed(3)
+      Math.max(0, ...meshOffsets.map((px) => (px / VIEWPORT.height) * 100)).toFixed(3)
     ),
+    pinchMidpointOffsetMeanPx: Number(average(pinchOffsets).toFixed(2)),
+    pinchMidpointOffsetMaxPx: Number(Math.max(0, ...pinchOffsets).toFixed(2)),
     applyMsMean: Number(average(apply).toFixed(2)),
     applyMsMax: Number(Math.max(0, ...apply).toFixed(2)),
     angleErrorMeanDeg: Number(average(joint).toFixed(2)),
@@ -326,15 +328,18 @@ console.log(
   JSON.stringify(
     {
       errors,
-      viewport: { width: 1280, height: 800 },
+      viewport: VIEWPORT,
       staticSummary,
       staticPerPose: Object.fromEntries(
         Object.entries(staticSamples).map(([name, sample]) => [
           name,
           {
             wristOffsetPctHeight: sample.offsetPctHeight,
-            meshOffsetPx: sample.meshOffsetPx,
-            meshOffsetPctHeight: sample.meshOffsetPctHeight,
+            meshIndexOffsetPx: sample.meshIndexOffsetPx,
+            meshIndexTip: sample.meshIndexTip,
+            cursor: sample.cursor,
+            landmarkIndexTip: sample.landmarkIndexTip,
+            pinchMidpointOffsetPx: sample.meshOffsetPx,
             angleErrorDeg: sample.rig?.angleErrorDeg ?? null,
             perFingerDeg: sample.rig?.perFingerDeg ?? null,
             applyMs: sample.rig?.applyMs ?? null,
@@ -352,16 +357,17 @@ console.log(
       left: {
         present: leftSample.present,
         wristOffsetPctHeight: leftSample.offsetPctHeight,
-        meshOffsetPx: leftSample.meshOffsetPx,
+        meshIndexOffsetPx: leftSample.meshIndexOffsetPx,
         angleErrorDeg: leftSample.rig?.angleErrorDeg ?? null
       },
       debug: {
         present: debugSample.present,
         pickRadius: debugSample.pickRadius ?? null,
         rigged: !debugSample.rig?.procedural,
-        meshPinch: debugSample.meshPinch,
         cursor: debugSample.cursor,
-        meshOffsetPx: debugSample.meshOffsetPx
+        landmarkIndexTip: debugSample.landmarkIndexTip,
+        meshIndexTip: debugSample.meshIndexTip,
+        meshIndexOffsetPx: debugSample.meshIndexOffsetPx
       },
       selection: {
         attempts: selection.attempts,

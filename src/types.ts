@@ -84,8 +84,13 @@ export interface HandFrame {
   pinchEnd: boolean;
   /** Set when the frame is a stale hold during the tracker's 250 ms loss tolerance. */
   lost?: boolean;
-  /** Screen-space pinch cursor in CSS pixels (filtered). */
+  /** Screen-space pinch cursor in CSS pixels (filtered): the index fingertip (landmark 8). */
   cursor: Vec2;
+  /**
+   * Screen-space thumb/index contact point in CSS pixels. It barely moves while the fingers
+   * close, so the gesture engine measures travel against it instead of the fingertip.
+   */
+  pinchPoint: Vec2;
   /** Cursor computed from the raw landmarks before One-Euro filtering, for debug comparison. */
   rawCursor: Vec2;
   /** Selection aim: live cursor, or the pre-pinch lock while a pinch is in flight. */

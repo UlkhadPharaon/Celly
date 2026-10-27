@@ -129,7 +129,7 @@ loop(now)
 1. side resolution (`HandSideResolver`) with the label flip and user swap;
 2. per-landmark One-Euro filtering (normalized and world);
 3. pinch value, fist check and hysteresis (`updatePinch`);
-4. cursor (thumb/index midpoint) in CSS pixels and NDC, palm point for rotation;
+4. cursor (index fingertip) in CSS pixels and NDC, palm point for rotation;
 5. presence and a 250 ms tolerance for momentary detection drops.
 
 `updateHover()` resolves two independent targets: a DOM button id from the `ButtonRegistry`

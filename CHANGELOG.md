@@ -60,11 +60,18 @@ screens without changing the 21-bone tracking or selection contract.
 
 ### Fixed
 
+- The on-screen pointer now rides the **index fingertip** (landmark 8) instead of the thumb/index
+  midpoint. The midpoint sits in the gap between two fingers on an open or pointing hand — 28–41 px
+  from the fingertip — so the dot read as detached from the 3D hand, while pointing at organelles
+  felt offset. The index tip is also where the thumb converges during a pinch, so aiming and
+  selecting now happen on the same spot, and it matches the CellLab reference behaviour.
+- The gesture travel budget is measured against the thumb/index contact point instead of the
+  fingertip: closing the fingers slides the index tip by up to ~40 px, which is a pinch closing,
+  not a drag.
 - The 3D hand was drawn roughly 30 % smaller than the tracked palm because the mesh used a fixed
-  visual scale. The cursor sits on the landmark thumb/index midpoint, so it floated past the mesh
-  fingertips. The mesh now scales to the filtered wrist → middle-MCP span at its actual camera-ray
-  depth: the wrist stays exactly on landmark 0, and the deterministic pose suite's cursor-to-mesh
-  pinch offset is ≤13 px instead of 27–47 px.
+  visual scale. The mesh now scales to the filtered wrist → middle-MCP span at its actual camera-ray
+  depth: the wrist stays exactly on landmark 0, and the mesh index tip sits within ~10 px of the
+  pointer across the deterministic pose suite.
 - The generated hand's bone inverses were all identity because the armature world matrices had not
   been updated before `Skeleton` construction; each part detached to its bone origin. The bind now
   runs after `updateMatrixWorld(true)`, giving a connected palm, four fingers, thumb and forearm.
@@ -79,12 +86,12 @@ screens without changing the 21-bone tracking or selection contract.
 
 ### Verification
 
-- `npm test` 101/101, `npm run test:e2e` 10/10, `npm run typecheck`, `npm run lint` and
+- `npm test` 104/104, `npm run test:e2e` 10/10, `npm run typecheck`, `npm run lint` and
   `npm run build` pass.
 - Deterministic hand suite: 0 page errors, skin audit 1,149 vertices / 0 unweighted / 0 over-four
-  influences / 21 bones, 0 px wrist offset, ≤12.9 px cursor-to-mesh pinch offset, ≤0.2° static
-  joint error, selection 10/10 at 0.5 px mean aim error, and a clean procedural→rigged fallback
-  round trip.
+  influences / 21 bones, 0 px wrist offset, ≤9.8 px pointer-to-mesh index-tip offset on static poses
+  (≤15.2 px incl. motion), ≤0.2° static joint error, selection 10/10 with a 2 px mean aim error, and
+  a clean procedural→rigged fallback round trip.
 - Responsive audits at 390×844, 1024×768 and 1440×900: zero page errors and no horizontal overflow;
   phones/tablets default to low, tablet sheet is 560 px wide, phone sheet is 374 px wide, and the
   structure rail/overlay clear the collapsed sheet.

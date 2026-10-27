@@ -81,6 +81,8 @@ export interface DrivenHand {
   apply(world: Vec3[], dt: number, confidence?: number): void;
   /** World-space midpoint of thumb tip and index tip after the last apply(). */
   pinchWorld(out: THREE.Vector3): THREE.Vector3 | null;
+  /** World-space position of the mesh bone that tracks a landmark (4 = thumb tip, 8 = index tip). */
+  landmarkWorld(out: THREE.Vector3, index: number): THREE.Vector3 | null;
   setFeedbackVisible(visible: boolean): void;
   setPinchGlow(active: boolean): void;
   resetCalibration(): void;
@@ -576,6 +578,12 @@ export class HandRig implements DrivenHand {
     return out.copy(this.tmpVecA).add(this.tmpVecB).multiplyScalar(0.5);
   }
 
+  landmarkWorld(out: THREE.Vector3, index: number): THREE.Vector3 | null {
+    const bone = this.bones.get(index);
+    if (!bone) return null;
+    return bone.getWorldPosition(out);
+  }
+
   private updateMarkers(): void {
     if (!this.markers.visible) return;
     const attr = this.markerGeometry.getAttribute('position') as THREE.BufferAttribute;
@@ -818,6 +826,14 @@ export class ProceduralHand implements DrivenHand {
     if (this.joints.length < 9) return null;
     this.container.updateMatrixWorld(true);
     out.copy(this.joints[4].position).add(this.joints[8].position).multiplyScalar(0.5);
+    return this.container.localToWorld(out);
+  }
+
+  landmarkWorld(out: THREE.Vector3, index: number): THREE.Vector3 | null {
+    const joint = this.joints[index];
+    if (!joint) return null;
+    this.container.updateMatrixWorld(true);
+    out.copy(joint.position);
     return this.container.localToWorld(out);
   }
 

@@ -168,20 +168,23 @@ export class GestureEngine {
       } else {
         // ---------------------------------------------------------- primary pinch
         if (primary.pinchStart) {
+          // Candidates are anchored on the thumb/index contact point, not on the fingertip that
+          // carries the pointer: closing the fingers slides the index tip towards the thumb, and
+          // that slide must not read as "the hand moved".
           if (ctx.uiHover) {
             this.clickCandidate = {
               id: ctx.uiHover,
               t: ctx.t,
-              x: primary.cursor.x,
-              y: primary.cursor.y
+              x: primary.pinchPoint.x,
+              y: primary.pinchPoint.y
             };
           } else {
             const candidateAt = primary.pinchCandidateAt >= 0 ? primary.pinchCandidateAt : ctx.t;
             this.selectCandidate = {
               target: ctx.sceneHover,
               t: candidateAt,
-              x: primary.cursor.x,
-              y: primary.cursor.y,
+              x: primary.pinchPoint.x,
+              y: primary.pinchPoint.y,
               aim: { x: primary.aim.x, y: primary.aim.y }
             };
             if (!ctx.sceneHover && primaryIsLeft) {
@@ -195,18 +198,18 @@ export class GestureEngine {
               // drag is a navigation gesture, not a selection candidate.
               intents.push({ type: 'unselect', aim: { x: primary.aim.x, y: primary.aim.y } });
               this.selectCandidate = null;
-              this.swipe = { startX: primary.cursor.x, t: ctx.t };
+              this.swipe = { startX: primary.pinchPoint.x, t: ctx.t };
             }
           }
         }
 
         if (primary.pinching) {
           if (this.clickCandidate) {
-            const moved = dist2(primary.cursor, this.clickCandidate);
+            const moved = dist2(primary.pinchPoint, this.clickCandidate);
             if (moved > this.cfg.clickMaxTravelPx) this.clickCandidate = null;
           }
           if (this.swipe) {
-            const progress = (primary.cursor.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
+            const progress = (primary.pinchPoint.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
             intents.push({
               type: 'swipe',
               direction: progress >= 0 ? 'right' : 'left',
@@ -219,7 +222,7 @@ export class GestureEngine {
         if (primary.pinchEnd) {
           if (this.clickCandidate) {
             const held = ctx.t - this.clickCandidate.t;
-            const moved = dist2(primary.cursor, this.clickCandidate);
+            const moved = dist2(primary.pinchPoint, this.clickCandidate);
             if (held <= this.cfg.clickMaxMs && moved <= this.cfg.clickMaxTravelPx) {
               intents.push({ type: 'click', id: this.clickCandidate.id });
               this.logPinch({
@@ -238,7 +241,7 @@ export class GestureEngine {
 
           if (this.selectCandidate) {
             const held = ctx.t - this.selectCandidate.t;
-            const travel = dist2(primary.cursor, this.selectCandidate);
+            const travel = dist2(primary.pinchPoint, this.selectCandidate);
             if (this.selectCandidate.target && held >= this.cfg.selectionHoldMs && travel <= this.cfg.selectionMaxTravelPx) {
               intents.push({
                 type: 'select',
@@ -283,7 +286,7 @@ export class GestureEngine {
           }
 
           if (this.swipe) {
-            const progress = (primary.cursor.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
+            const progress = (primary.pinchPoint.x - this.swipe.startX) / this.cfg.swipeThresholdPx;
             intents.push({
               type: 'swipe',
               direction: progress >= 0 ? 'right' : 'left',

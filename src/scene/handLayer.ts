@@ -11,6 +11,7 @@ const DIR = new THREE.Vector3();
 const FORWARD = new THREE.Vector3();
 const NDC = new THREE.Vector3();
 const PINCH = new THREE.Vector3();
+const LANDMARK = new THREE.Vector3();
 
 /**
  * Places the two tracked hands in front of the cell.
@@ -91,8 +92,7 @@ export class HandLayer {
       // 2) Scale: match the digital palm to the tracked palm. The wrist → middle-MCP span is
       // stable under finger curl and shrinks with distance from the camera, so the mesh keeps
       // the same apparent size as the landmark hand instead of sitting well inside it. The
-      // previous constant-factor scale made the cursor (at the landmark thumb/index midpoint)
-      // float past the mesh fingertips.
+      // previous constant-factor scale made the pointer float past the mesh fingertips.
       const span = frame.handSpan > 1e-5 ? frame.handSpan : 0.1;
       // Points on a view ray are at a fixed Euclidean distance from the camera; their depth
       // along the optical axis (what perspective divides by) is shorter towards the frame edge.
@@ -138,13 +138,31 @@ export class HandLayer {
   }
 
   /**
-   * Test hook: the 3D hand's thumb/index midpoint projected into CSS pixels. The screen cursor is
-   * driven by the tracked landmarks, so this offset is the visible hand/pointer alignment.
+   * Test hook: the 3D hand's thumb/index contact midpoint projected into CSS pixels. The screen
+   * cursor rides the index fingertip instead, so this is only a secondary alignment metric.
    */
   debugPinch(side: HandSide, camera: THREE.PerspectiveCamera): { x: number; y: number } | null {
     const pinch = this.hands.get(side)?.pinchWorld(PINCH);
     if (!pinch) return null;
     const p = NDC.copy(pinch).project(camera);
+    return {
+      x: (p.x * 0.5 + 0.5) * window.innerWidth,
+      y: (0.5 - p.y * 0.5) * window.innerHeight
+    };
+  }
+
+  /**
+   * Test hook: a tracked landmark as the 3D mesh draws it, projected into CSS pixels. Index 8 is
+   * the index fingertip, which is where the on-screen pointer sits.
+   */
+  debugLandmark(
+    side: HandSide,
+    camera: THREE.PerspectiveCamera,
+    index: number
+  ): { x: number; y: number } | null {
+    const landmark = this.hands.get(side)?.landmarkWorld(LANDMARK, index);
+    if (!landmark) return null;
+    const p = NDC.copy(landmark).project(camera);
     return {
       x: (p.x * 0.5 + 0.5) * window.innerWidth,
       y: (0.5 - p.y * 0.5) * window.innerHeight
