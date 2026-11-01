@@ -72,9 +72,9 @@ length) — required, otherwise a hand close to the camera is always "pinching".
 Grab enter ≈ 0.28, release ≈ 0.42 (hysteresis band). Open palm (all tips far from MCPs) = release.
 Index-point: tip(8) far from thumb, middle/ring/pinky curled.
 
-**Decision D5 — hand mesh is procedural.** Capsules per phalanx + spheres per joint, driven by the
-21 landmarks. Robust, zero asset, zero licensing, always in sync, cheap (instanced/merged geometry).
-A CC0 rigged GLB retargeting path is documented as an optional extension (roadmap), not built.
+**Decision D5 — hand overlay is procedural.** The shipped version draws 21 rounded joints and 21
+line segments directly from the landmarks (see D-56); the earlier capsule/sphere mesh idea was
+dropped along with the GLB retargeting path because the lines are lighter and clearer over the cell.
 
 ## 3. Open-license 3D cell models
 

@@ -13,6 +13,8 @@ interface NodeVisual {
   material: THREE.MeshStandardMaterial;
   label: THREE.Sprite;
   labelMaterial: THREE.SpriteMaterial;
+  /** Width / height of the label texture, used when the sprite is resized for legibility. */
+  labelAspect: number;
   baseScale: number;
   radius: number;
 }
@@ -26,6 +28,8 @@ const CATEGORY_ORDER: Record<string, number> = {
 
 /** World-space height of a node label sprite. */
 const LABEL_HEIGHT = 0.3;
+/** Labels stay near this CSS-pixel height instead of shrinking with the camera distance. */
+const LABEL_TARGET_PX = 19;
 
 export class KnowledgeScene {
   readonly root = new THREE.Group();
@@ -131,6 +135,7 @@ export class KnowledgeScene {
         material,
         label,
         labelMaterial,
+        labelAspect: aspect,
         baseScale: 1,
         radius
       });
@@ -260,6 +265,7 @@ export class KnowledgeScene {
       visual.labelMaterial.map = texture;
       visual.labelMaterial.needsUpdate = true;
       const aspect = texture.image instanceof HTMLCanvasElement ? texture.image.width / texture.image.height : 3;
+      visual.labelAspect = aspect;
       visual.label.scale.set(LABEL_HEIGHT * aspect, LABEL_HEIGHT, 1);
       previous?.dispose();
     }
@@ -383,11 +389,11 @@ export class KnowledgeScene {
       const dist = this.cameraDistance(v.mesh);
       const distanceFade = clamp(1.55 - dist / 16, 0.2, 1);
       const labelTarget = !this.focused
-        ? distanceFade * (this.hovered === v.node.id ? 1 : 0.82)
+        ? distanceFade * (this.hovered === v.node.id ? 1 : 0.9)
         : isFocused
           ? 1
           : isNeighbour
-            ? 0.62
+            ? 0.75
             : 0.06;
       v.labelMaterial.opacity = damp(v.labelMaterial.opacity, labelTarget, 6, dt);
       v.label.position.set(v.position.x, v.position.y + v.radius * s + 0.16, v.position.z);
@@ -441,13 +447,27 @@ export class KnowledgeScene {
         v.label.visible = false;
         continue;
       }
+      // Keep labels readable on a phone: a sprite at a fixed world height shrinks with the
+      // portrait camera pull-back, so compensate up to 2.4x and let the collision pass decide
+      // which of the now larger labels can stay.
+      const screenPx = (LABEL_HEIGHT / (2 * dist * tan)) * window.innerHeight;
+      const legibility = clamp(LABEL_TARGET_PX / Math.max(1, screenPx), 1, 2.4);
+      v.label.scale.set(LABEL_HEIGHT * v.labelAspect * legibility, LABEL_HEIGHT * legibility, 1);
+      // Keep the text just above its node even after the sprite grows; a fixed 0.16 gap would
+      // let a legibility-scaled label sink into the node ball.
+      v.label.position.set(
+        v.position.x,
+        v.position.y + v.radius * v.mesh.scale.x + 0.01 + (LABEL_HEIGHT * legibility) / 2,
+        v.position.z
+      );
+      v.label.getWorldPosition(this.labelWorld);
       this.labelProjection.copy(this.labelWorld).project(camera);
       if (this.labelProjection.z < -1 || this.labelProjection.z > 1) {
         v.label.visible = false;
         continue;
       }
       // Full sprite height in clip space at this depth, converted to viewport fractions.
-      const ndcH = LABEL_HEIGHT / (dist * tan);
+      const ndcH = (LABEL_HEIGHT * legibility) / (dist * tan);
       const aspect = v.label.scale.x / Math.max(0.0001, v.label.scale.y);
       const prio =
         v.node.id === this.hovered
@@ -481,8 +501,8 @@ export class KnowledgeScene {
     for (const box of boxes) {
       const clash = kept.some(
         (k) =>
-          Math.abs(k.cx - box.cx) < (k.w + box.w) * 0.5 + 0.004 &&
-          Math.abs(k.cy - box.cy) < (k.h + box.h) * 0.5 + 0.002
+          Math.abs(k.cx - box.cx) < (k.w + box.w) * 0.5 + 0.012 &&
+          Math.abs(k.cy - box.cy) < (k.h + box.h) * 0.5 + 0.006
       );
       box.v.label.visible = !clash;
       if (!clash) kept.push(box);

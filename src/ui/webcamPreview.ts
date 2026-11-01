@@ -29,7 +29,7 @@ export class WebcamPreview {
         <span class="preview-empty-icon"></span>
         <span>Camera off</span>
       </div>
-      <div class="preview-badge"><i></i><span>LIVE</span></div>
+      <div class="preview-badge is-hidden"><i></i><span>LIVE</span></div>
       <div class="preview-reach"></div>
       <div class="preview-corner tl"></div><div class="preview-corner tr"></div>
       <div class="preview-corner bl"></div><div class="preview-corner br"></div>
@@ -86,7 +86,7 @@ export class WebcamPreview {
 
     for (const hand of hands) {
       if (!hand.present) continue;
-      const color = hand.side === 'left' ? '#57c8ff' : '#b39dff';
+      const color = hand.side === 'left' ? '#7ee0c3' : '#ffd166';
       const points = hand.landmarks.map((p) => ({
         x: (settings.mirrorX ? 1 - p.x : p.x) * w,
         y: p.y * h

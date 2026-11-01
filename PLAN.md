@@ -3,7 +3,8 @@
 Order follows §14 of the brief. Each milestone is shippable on its own and ended with a commit.
 
 **Status: all milestones complete.** v0.2.0 shipped 2026-10-22; v0.2.1 (real-device pass)
-shipped 2026-10-23. See [`CHANGELOG.md`](CHANGELOG.md).
+shipped 2026-10-23; the 2026-10-31 hand-overlay and onboarding pass replaced the mesh hands with a
+skeleton and rebuilt the first-run flow. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## M0 — Inventory & decisions
 - [x] Recursive asset sweep, GLB introspection, Blender/Node audit
@@ -26,12 +27,13 @@ shipped 2026-10-23. See [`CHANGELOG.md`](CHANGELOG.md).
 - [x] Select → ghost-isolate + centre + scale + anchored overlay
 - [x] Unselect on blank pinch; hover chip; halo + emissive pulse
 
-## M3 — 3D hand meshes
+## M3 — Hand overlay (original mesh plan)
 - [x] GLB load, bone→landmark map, hand-local-frame retargeting, slerp
 - [x] Screen→scene placement with depth cue, mirror X/Y, swap
 - [x] Translucent material, pinch glow
 - [x] Procedural skeletal fallback
 - [x] Pinch-midpoint anchoring so the fingertips meet the virtual cursor
+- [x] Replaced by the 21-joint / 21-bone skeleton in M8; mesh, rig and retargeting removed
 
 ## M4 — Knowledge network
 - [x] `knowledge.json` (36 nodes, ~90 edges) + deterministic 3D force layout
@@ -61,6 +63,14 @@ shipped 2026-10-23. See [`CHANGELOG.md`](CHANGELOG.md).
 - [x] `npm run lint && npm run typecheck && npm test && npm run build` all green
 - [x] 11 screenshots in `docs/screenshots` via `scripts/shots.mjs`
 - [ ] Demo recording — not captured; the screenshot harness covers every key state
+
+## M8 — Skeleton hands + onboarding pass (2026-10-31)
+- [x] 21-joint / 21-bone skeleton, mint/amber palette, dark underlay, rimmed joints, pinch glow
+- [x] Display-space world mapping; index tip anchored to the cursor; metric hand scale
+- [x] Removed `handRig`, `lowPolyHand`, `handMath`, `?hands=glb`, procedural fallback and 9 MB GLBs
+- [x] Live onboarding webcam preview with inline enable/retry, visible skip, Esc/backdrop, 12 s timeout
+- [x] HUD idle collapse, Test rail removal, toast docking, per-page portrait framing, label legibility
+- [x] Skeleton verification harness and e2e assertions; docs and screenshots regenerated
 
 ## Performance budget
 
@@ -94,3 +104,14 @@ shipped 2026-10-23. See [`CHANGELOG.md`](CHANGELOG.md).
 | `npm run test:e2e` | 8 tests passed; overlay visibility and chrome-clearance assertions included |
 | `npm run build` | production bundle written to `dist/` |
 | `node scripts/shots.mjs` | 11 screenshots; focused knowledge card visible and clear of both rails |
+
+## Verification log — 2026-10-31 (skeleton hands)
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors (strict) |
+| `npm run lint` | 0 errors |
+| `npm test` | 9 files, 91 tests passed |
+| `npm run test:e2e` | 10 tests passed; skeleton counts, index-tip placement and two-hand scale included |
+| `npm run build` | production bundle written to `dist/` |
+| `node scripts/verify-hands.mjs` | 50 samples, 21 points / 21 segments, 0 px index-tip offset, selection 10/10 |

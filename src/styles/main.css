@@ -768,6 +768,20 @@ svg.icon {
   opacity: 0.9;
 }
 
+/* With no hands in frame the HUD keeps only its header and hand count; the telemetry rows
+   reappear as soon as tracking does, so the left rail stays quiet during mouse-only use. */
+.hud.is-idle .hud-pinch,
+.hud.is-idle .hud-grid,
+.hud.is-idle .hud-debug,
+.hud.is-idle .hud-foot {
+  display: none;
+}
+
+/* The test page carries its own live stats; a second telemetry stack would duplicate it. */
+.app[data-page='test'] .left-rail {
+  display: none;
+}
+
 /* ----------------------------------------------------------------------- legend ---- */
 .legend {
   position: relative;
@@ -1876,8 +1890,9 @@ svg.icon {
 }
 
 .onboarding-card {
+  position: relative;
   width: min(880px, 100%);
-  max-height: min(660px, 92vh);
+  max-height: min(760px, 92vh);
   overflow: auto;
   display: grid;
   grid-template-columns: 0.85fr 1.15fr;
@@ -1983,6 +1998,83 @@ svg.icon {
   color: var(--ink-dim);
   max-width: 56ch;
   margin-top: -4px;
+}
+
+/* Hands step: a live thumbnail replaces the old fixed illustration. The camera bar doubles as
+   the status line, so the state lives next to the video instead of at the bottom of the card. */
+.onboarding-preview {
+  display: grid;
+  width: min(100%, 440px);
+  justify-self: center;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: #03080f;
+  overflow: hidden;
+}
+
+.onboarding-preview-slot .preview {
+  border: 0;
+  border-radius: 0;
+}
+
+.onboarding-camera-bar {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.camera-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.camera-state i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+
+.onboarding-camera-bar[data-state='live'] .camera-state i {
+  background: var(--green);
+  box-shadow: 0 0 9px var(--green);
+}
+
+.onboarding-camera-bar[data-state='requesting'] .camera-state i {
+  background: var(--amber);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.onboarding-camera-bar[data-state='denied'] .camera-state i,
+.onboarding-camera-bar[data-state='timeout'] .camera-state i,
+.onboarding-camera-bar[data-state='unsupported'] .camera-state i,
+.onboarding-camera-bar[data-state='in-use'] .camera-state i,
+.onboarding-camera-bar[data-state='not-found'] .camera-state i {
+  background: var(--rose);
+}
+
+.onboarding-camera-actions {
+  display: flex;
+  justify-self: start;
+}
+
+.onboarding-camera-actions .btn {
+  width: auto;
+}
+
+.onboarding-skip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  background: rgba(6, 14, 26, 0.6);
 }
 
 .onboarding-privacy {
@@ -2183,15 +2275,17 @@ svg.icon {
 }
 
 /* ------------------------------------------------------------------------ toasts ---- */
+/* Toasts sit under the topbar, clear of the bottom rails (structure chips, lab hint, controls)
+   and of the onboarding card. They are informational, so they never intercept a pinch. */
 .toast-host {
   position: fixed;
-  bottom: 22px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 84px;
+  right: 22px;
   z-index: 90;
   display: grid;
   gap: 8px;
-  justify-items: center;
+  justify-items: end;
+  max-width: min(360px, calc(100vw - 44px));
   pointer-events: none;
 }
 
@@ -3111,8 +3205,12 @@ svg.icon {
   }
 
   .toast-host {
-    bottom: calc(var(--sheet-peek) + var(--safe-bottom) + 14px);
+    top: auto;
+    right: 16px;
+    bottom: calc(var(--sheet-peek) + var(--safe-bottom) + 76px);
     width: calc(100vw - 32px);
+    max-width: none;
+    justify-items: stretch;
   }
 
   .toast {
@@ -3233,6 +3331,15 @@ svg.icon {
 
   .onboarding-body {
     padding: 22px 20px 20px;
+  }
+
+  .onboarding-skip {
+    top: 10px;
+    right: 10px;
+  }
+
+  .onboarding-preview {
+    width: 100%;
   }
 
   .onboarding-body h1 {

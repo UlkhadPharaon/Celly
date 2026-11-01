@@ -1,16 +1,21 @@
 /* eslint-disable no-undef */
 /**
- * Deterministic hand-suite capture and measurement.
+ * Deterministic hand-suite capture and measurement for the skeleton overlay.
  *
  * Run with the dev server on :5173 (`npm run dev -- --port 5173`). It drives the real production
  * pipeline through window.__celly, writes screenshots to docs/screenshots/hand-tests/, and prints
  * JSON metrics for the final report.
+ *
+ * The hand is drawn as 21 joints and 21 bones, not a mesh. The metric that matters is therefore the
+ * screen-space error between the drawn index tip and the pointer, plus the fact that every sample
+ * reports the skeleton source and full point/segment counts.
  */
 import { chromium } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 
 const URL = process.env.CELLY_URL ?? 'http://localhost:5173/';
 const OUT = 'docs/screenshots/hand-tests';
+const REPORT = 'docs/hand-verification.json';
 const VIEWPORT = { width: 1280, height: 800 };
 const X = 820;
 const Y = 430;
@@ -55,7 +60,7 @@ async function prepareLab() {
   await page.evaluate(() => {
     const app = window.__celly;
     app.toggle('showWebcam', false);
-    app.toggle('showFeedback', false);
+    app.toggle('showFeedback', true);
     app.current?.setAutoRotate?.(false);
     app.toggleDebugOverlay(false);
     app.current?.stopSelectionTest?.();
@@ -70,13 +75,19 @@ async function debug(side = 'right') {
 
 async function injectPose(name, side = 'right', x = X, y = Y, phase = 0) {
   return page.evaluate(
-    ([pose, hand, px, py, ph]) => window.__celly.injectPose(pose, hand, px, py, ph),
+    ([pose, hand, px, py, ph]) => {
+      window.__celly.current?.closeOverlay?.();
+      return window.__celly.injectPose(pose, hand, px, py, ph);
+    },
     [name, side, x, y, phase]
   );
 }
 
 async function injectPoseData(data) {
-  await page.evaluate((frameData) => window.__celly.injectPoseData(frameData), data);
+  await page.evaluate((frameData) => {
+    window.__celly.current?.closeOverlay?.();
+    window.__celly.injectPoseData(frameData);
+  }, data);
 }
 
 async function settle(n = 4) {
@@ -88,78 +99,51 @@ async function shot(name) {
   await page.screenshot({ path: `${OUT}/${name}.png` });
 }
 
+const average = (values) =>
+  values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+
 function summarize(samples) {
-  const rigged = samples.filter(
-    (sample) => sample?.rig && typeof sample.rig.angleErrorDeg === 'number'
-  );
   const offsets = samples
     .filter((sample) => typeof sample?.offsetPx === 'number')
     .map((sample) => sample.offsetPx);
-  const meshOffsets = samples
-    .filter((sample) => typeof sample?.meshIndexOffsetPx === 'number')
-    .map((sample) => sample.meshIndexOffsetPx);
+  const indexOffsets = samples
+    .filter((sample) => typeof sample?.skeletonIndexOffsetPx === 'number')
+    .map((sample) => sample.skeletonIndexOffsetPx);
   const pinchOffsets = samples
-    .filter((sample) => typeof sample?.meshOffsetPx === 'number')
-    .map((sample) => sample.meshOffsetPx);
-  const apply = rigged.map((sample) => sample.rig.applyMs);
-  const joint = rigged.map((sample) => sample.rig.angleErrorDeg);
-  const perFinger = {};
-  for (const sample of rigged) {
-    for (const [finger, value] of Object.entries(sample.rig.perFingerDeg ?? {})) {
-      (perFinger[finger] ??= []).push(value);
-    }
-  }
-  const average = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0);
+    .filter((sample) => typeof sample?.skeletonPinchOffsetPx === 'number')
+    .map((sample) => sample.skeletonPinchOffsetPx);
+  const points = samples.map((sample) => sample.skeletonPoints).filter((n) => typeof n === 'number');
+  const segments = samples
+    .map((sample) => sample.skeletonSegments)
+    .filter((n) => typeof n === 'number');
   return {
     samples: samples.length,
-    riggedSamples: rigged.length,
+    skeletonSource: samples.find((sample) => sample?.skeletonSource)?.skeletonSource ?? null,
+    points: points.length ? Math.min(...points) : 0,
+    segments: segments.length ? Math.min(...segments) : 0,
     wristOffsetMeanPx: Number(average(offsets).toFixed(2)),
     wristOffsetMaxPx: Number(Math.max(0, ...offsets).toFixed(2)),
     wristOffsetMeanPctHeight: Number(
-      average(samples.filter((sample) => typeof sample?.offsetPctHeight === 'number').map((sample) => sample.offsetPctHeight)).toFixed(3)
+      average(
+        samples
+          .filter((sample) => typeof sample?.offsetPctHeight === 'number')
+          .map((sample) => sample.offsetPctHeight)
+      ).toFixed(3)
     ),
     wristOffsetMaxPctHeight: Number(
       Math.max(0, ...samples.map((sample) => sample.offsetPctHeight ?? 0)).toFixed(3)
     ),
-    meshOffsetMeanPx: Number(average(meshOffsets).toFixed(2)),
-    meshOffsetMaxPx: Number(Math.max(0, ...meshOffsets).toFixed(2)),
-    meshOffsetMeanPctHeight: Number(
-      average(meshOffsets.map((px) => (px / VIEWPORT.height) * 100)).toFixed(3)
+    indexOffsetMeanPx: Number(average(indexOffsets).toFixed(2)),
+    indexOffsetMaxPx: Number(Math.max(0, ...indexOffsets).toFixed(2)),
+    indexOffsetMeanPctHeight: Number(
+      average(indexOffsets.map((px) => (px / VIEWPORT.height) * 100)).toFixed(3)
     ),
-    meshOffsetMaxPctHeight: Number(
-      Math.max(0, ...meshOffsets.map((px) => (px / VIEWPORT.height) * 100)).toFixed(3)
+    indexOffsetMaxPctHeight: Number(
+      Math.max(0, ...indexOffsets.map((px) => (px / VIEWPORT.height) * 100)).toFixed(3)
     ),
-    pinchMidpointOffsetMeanPx: Number(average(pinchOffsets).toFixed(2)),
-    pinchMidpointOffsetMaxPx: Number(Math.max(0, ...pinchOffsets).toFixed(2)),
-    applyMsMean: Number(average(apply).toFixed(2)),
-    applyMsMax: Number(Math.max(0, ...apply).toFixed(2)),
-    angleErrorMeanDeg: Number(average(joint).toFixed(2)),
-    angleErrorMaxDeg: Number(Math.max(0, ...joint).toFixed(2)),
-    perFingerMeanDeg: Object.fromEntries(
-      Object.entries(perFinger).map(([finger, values]) => [finger, Number(average(values).toFixed(2))])
-    ),
-    skin: rigged[0]?.rig?.skin ?? null
+    pinchOffsetMeanPx: Number(average(pinchOffsets).toFixed(2)),
+    pinchOffsetMaxPx: Number(Math.max(0, ...pinchOffsets).toFixed(2))
   };
-}
-
-function boneStability(samples) {
-  const lengths = new Map();
-  for (const sample of samples) {
-    const rig = sample?.rig;
-    if (!rig?.boneLengths || typeof sample.scale !== 'number') continue;
-    for (const [bone, value] of Object.entries(rig.boneLengths)) {
-      const normalized = value / Math.max(1e-6, sample.scale);
-      (lengths.get(bone) ?? lengths.set(bone, []).get(bone)).push(normalized);
-    }
-  }
-  let worst = { bone: null, cvPct: 0 };
-  for (const [bone, values] of lengths) {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
-    const cv = mean > 1e-8 ? (Math.sqrt(variance) / mean) * 100 : 0;
-    if (cv > worst.cvPct) worst = { bone, cvPct: Number(cv.toFixed(3)) };
-  }
-  return { bones: lengths.size, worstCvPct: worst.cvPct, worstBone: worst.bone };
 }
 
 await prepareLab();
@@ -207,11 +191,12 @@ for (const name of ['wiggle', 'wrist-rotation-slow', 'fast-movement']) {
     samples.push(await debug());
     if (i === shotAt) await shot(`pose-${name}`);
   }
-  motion[name] = { samples, summary: summarize(samples), bones: boneStability(samples) };
+  motion[name] = { samples, summary: summarize(samples) };
 }
 
 // ------------------------------------------------------------------- debug overlay
 await page.evaluate(() => {
+  window.__celly.current?.closeOverlay?.();
   window.__celly.toggle('showFeedback', true);
   window.__celly.toggleDebugOverlay(true);
   window.__celly.injectPose('open', 'right', 820, 430, 0);
@@ -221,12 +206,12 @@ await shot('debug-hand');
 const debugSample = await debug();
 await page.evaluate(() => {
   window.__celly.toggleDebugOverlay(false);
-  window.__celly.toggle('showFeedback', false);
 });
 
 // ------------------------------------------------------------- selection test (exact)
 await page.evaluate(() => {
   const app = window.__celly;
+  app.current?.closeOverlay?.();
   app.injectHand('right', 0, 0, 0, false);
   app.current?.stopSelectionTest?.();
   app.current?.startSelectionTest?.(true);
@@ -243,13 +228,17 @@ async function selectionAttempt(index) {
     ([x, y]) => window.__celly.injectHand('right', x, y, 0.05),
     [Math.round(anchor.x - 110), Math.round(anchor.y + 50)]
   );
-  await frame(1);
-  for (let k = 0; k < 3; k++) {
+  // Give the 100 ms pre-pinch aim look-back time to fill with the target position. Without this
+  // settle a slow SwiftShader frame can leave the lock on the previous approach point, which
+  // shows up as a one-off miss even though the hand is on target.
+  await page.waitForTimeout(160);
+  for (let k = 0; k < 4; k++) {
     await page.evaluate(
       ([x, y]) => window.__celly.injectHand('right', x, y, 0.05),
       [Math.round(anchor.x), Math.round(anchor.y)]
     );
-    await page.waitForTimeout(35);
+    await frame(1);
+    await page.waitForTimeout(50);
   }
   await frame(1);
   await page.evaluate(
@@ -257,6 +246,7 @@ async function selectionAttempt(index) {
     [Math.round(anchor.x), Math.round(anchor.y)]
   );
   await frame(2);
+  await page.waitForTimeout(120);
   await page.evaluate(
     ([x, y]) => window.__celly.injectHand('right', x, y, 0.05),
     [Math.round(anchor.x), Math.round(anchor.y)]
@@ -284,111 +274,64 @@ for (let i = 0; i < 10; i++) {
 await shot('selection-test-exact');
 const selection = await page.evaluate(() => window.__celly.selectionTestState());
 
-// ---------------------------------------------------------- procedural-hand fallback
-await page.evaluate(() => window.__celly.toggle('proceduralHand', true));
-await page.waitForFunction(
-  () => !!window.__celly.debugHand('right')?.rig?.procedural,
-  null,
-  { timeout: 30000 }
-);
-await page.evaluate(() => window.__celly.injectPose('open', 'right', 820, 430, 0));
-await frame(3);
-const proceduralSample = await debug();
-await shot('procedural-hand');
-await page.evaluate(() => window.__celly.toggle('proceduralHand', false));
-await page.waitForFunction(
-  () => Array.isArray(window.__celly.debugHand('right')?.rig?.skin),
-  null,
-  { timeout: 30000 }
-);
-await page.evaluate(() => window.__celly.injectPose('open', 'right', 820, 430, 0));
-await frame(3);
-const restoredSample = await debug();
-await shot('rigged-restored');
-
 // ------------------------------------------------------------------------- report
 const allStatic = Object.values(staticSamples);
 const allSamples = [...allStatic, leftSample, ...Object.values(motion).flatMap((entry) => entry.samples)];
 const staticSummary = summarize(allStatic);
 const allSummary = summarize(allSamples);
-const palm = staticSamples.palm?.rig?.palmNormal;
-const back = staticSamples.back?.rig?.palmNormal;
-const palmDot =
-  palm && back
-    ? Number(
-        (
-          palm[0] * back[0] +
-          palm[1] * back[1] +
-          palm[2] * back[2]
-        ).toFixed(3)
-      )
-    : null;
 
-console.log(
-  JSON.stringify(
-    {
-      errors,
-      viewport: VIEWPORT,
-      staticSummary,
-      staticPerPose: Object.fromEntries(
-        Object.entries(staticSamples).map(([name, sample]) => [
-          name,
-          {
-            wristOffsetPctHeight: sample.offsetPctHeight,
-            meshIndexOffsetPx: sample.meshIndexOffsetPx,
-            meshIndexTip: sample.meshIndexTip,
-            cursor: sample.cursor,
-            landmarkIndexTip: sample.landmarkIndexTip,
-            pinchMidpointOffsetPx: sample.meshOffsetPx,
-            angleErrorDeg: sample.rig?.angleErrorDeg ?? null,
-            perFingerDeg: sample.rig?.perFingerDeg ?? null,
-            applyMs: sample.rig?.applyMs ?? null,
-            palmNormal: sample.rig?.palmNormal ?? null,
-            scale: sample.scale
-          }
-        ])
-      ),
-      allSummary,
-      motion: Object.fromEntries(
-        Object.entries(motion).map(([name, entry]) => [name, entry.summary])
-      ),
-      boneStability: boneStability(allSamples),
-      palmVsBackDot: palmDot,
-      left: {
-        present: leftSample.present,
-        wristOffsetPctHeight: leftSample.offsetPctHeight,
-        meshIndexOffsetPx: leftSample.meshIndexOffsetPx,
-        angleErrorDeg: leftSample.rig?.angleErrorDeg ?? null
-      },
-      debug: {
-        present: debugSample.present,
-        pickRadius: debugSample.pickRadius ?? null,
-        rigged: !debugSample.rig?.procedural,
-        cursor: debugSample.cursor,
-        landmarkIndexTip: debugSample.landmarkIndexTip,
-        meshIndexTip: debugSample.meshIndexTip,
-        meshIndexOffsetPx: debugSample.meshIndexOffsetPx
-      },
-      selection: {
-        attempts: selection.attempts,
-        hits: selection.hits,
-        hitRate: selection.hitRate,
-        meanAimErrorPx: selection.meanAimErrorPx,
-        complete: selection.complete,
-        results: selection.results,
-        driver: selectionAttempts
-      },
-      procedural: {
-        procedural: !!proceduralSample.rig?.procedural,
-        present: proceduralSample.present,
-        offsetPctHeight: proceduralSample.offsetPctHeight,
-        restoredRigged: Array.isArray(restoredSample.rig?.skin),
-        restoredPresent: restoredSample.present
+const report = {
+  errors,
+  viewport: VIEWPORT,
+  staticSummary,
+  staticPerPose: Object.fromEntries(
+    Object.entries(staticSamples).map(([name, sample]) => [
+      name,
+      {
+        wristOffsetPctHeight: sample.offsetPctHeight,
+        indexOffsetPx: sample.skeletonIndexOffsetPx,
+        indexTip: sample.skeletonIndexTip,
+        cursor: sample.cursor,
+        landmarkIndexTip: sample.landmarkIndexTip,
+        pinchMidpointOffsetPx: sample.skeletonPinchOffsetPx,
+        points: sample.skeletonPoints,
+        segments: sample.skeletonSegments,
+        source: sample.skeletonSource,
+        scale: sample.scale
       }
-    },
-    null,
-    2
-  )
-);
+    ])
+  ),
+  allSummary,
+  motion: Object.fromEntries(Object.entries(motion).map(([name, entry]) => [name, entry.summary])),
+  left: {
+    present: leftSample.present,
+    wristOffsetPctHeight: leftSample.offsetPctHeight,
+    indexOffsetPx: leftSample.skeletonIndexOffsetPx,
+    points: leftSample.skeletonPoints,
+    segments: leftSample.skeletonSegments,
+    source: leftSample.skeletonSource
+  },
+  debug: {
+    present: debugSample.present,
+    pickRadius: debugSample.pickRadius ?? null,
+    source: debugSample.skeletonSource,
+    cursor: debugSample.cursor,
+    landmarkIndexTip: debugSample.landmarkIndexTip,
+    indexTip: debugSample.skeletonIndexTip,
+    indexOffsetPx: debugSample.skeletonIndexOffsetPx
+  },
+  selection: {
+    attempts: selection.attempts,
+    hits: selection.hits,
+    hitRate: selection.hitRate,
+    meanAimErrorPx: selection.meanAimErrorPx,
+    complete: selection.complete,
+    results: selection.results,
+    driver: selectionAttempts
+  }
+};
+
+await writeFile(REPORT, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+console.log(JSON.stringify(report, null, 2));
 
 await browser.close();

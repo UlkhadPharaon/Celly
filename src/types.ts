@@ -105,6 +105,8 @@ export interface HandFrame {
   landmarks: Vec3[];
   /** Filtered world landmarks (metres). */
   world: Vec3[];
+  /** False when `world` fell back to normalized image coordinates because the detector omitted it. */
+  worldMetric?: boolean;
   handScale: number;
   /** Image-space wrist → middle-MCP length, 0..1 viewport height; drives depth/scale. */
   handSpan: number;
@@ -126,7 +128,8 @@ export type CameraStatus =
   | 'not-found'
   | 'in-use'
   | 'insecure-context'
-  | 'unsupported';
+  | 'unsupported'
+  | 'timeout';
 
 export type TrackingStatus = 'idle' | 'initializing' | 'gpu' | 'cpu' | 'error';
 
@@ -241,8 +244,6 @@ export interface Settings {
   pinchSensitivity: number;
   reducedMotion: boolean;
   highContrast: boolean;
-  /** Diagnostics: force the procedural skeletal hand instead of the rigged GLB. */
-  proceduralHand: boolean;
   quality: QualityMode;
 }
 

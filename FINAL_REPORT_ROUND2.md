@@ -1,5 +1,11 @@
 # Final report — Celly v0.2.1 hand-tracking round 2
 
+> **Historical.** This report describes the mesh/retargeting era. The 2026-10-31 pass replaced the
+> mesh with a 21-joint skeleton; current numbers live in
+> [`docs/screenshots/hand-tests/README.md`](docs/screenshots/hand-tests/README.md) and
+> [`docs/hand-verification.json`](docs/hand-verification.json). Selection, wrist anchoring and
+> gesture semantics were preserved.
+
 **Baseline:** `709c150` · **Release:** v0.2.1 (`9c6e566` tag, plus this work)
 
 **Scope:** right-hand selection, wrist pivot/orbit, and finger retargeting, fixed at their root causes.

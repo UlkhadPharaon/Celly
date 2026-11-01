@@ -12,6 +12,8 @@ export interface Framing {
   position: THREE.Vector3;
   target: THREE.Vector3;
   fov: number;
+  /** Page-specific cap for the narrow-viewport pullback (see `REFERENCE_ASPECT`). */
+  maxPullback?: number;
 }
 
 export interface SceneRenderStats {
@@ -28,10 +30,35 @@ export interface SceneRenderStats {
 }
 
 const FRAMINGS: Record<PageId, Framing> = {
-  interactive: { position: new THREE.Vector3(0, 0.14, 7.15), target: new THREE.Vector3(0, 0, 0), fov: 42 },
-  knowledge: { position: new THREE.Vector3(0, 0.85, 16.4), target: new THREE.Vector3(0, 0.5, 0), fov: 42 },
-  test: { position: new THREE.Vector3(0, 0.4, 10.6), target: new THREE.Vector3(0, 0, 0), fov: 42 }
+  // The lab only has to clear the cell's silhouette: 1.7x keeps it large enough to read on a
+  // portrait phone, while the graph needs the full 2.35x to show more of its wide layout.
+  interactive: {
+    position: new THREE.Vector3(0, 0.14, 7.15),
+    target: new THREE.Vector3(0, 0, 0),
+    fov: 42,
+    maxPullback: 1.7
+  },
+  knowledge: {
+    position: new THREE.Vector3(0, 0.85, 16.4),
+    target: new THREE.Vector3(0, 0.5, 0),
+    fov: 42,
+    maxPullback: 2.35
+  },
+  test: {
+    position: new THREE.Vector3(0, 0.4, 10.6),
+    target: new THREE.Vector3(0, 0, 0),
+    fov: 42,
+    maxPullback: 1.8
+  }
 };
+
+/**
+ * Above this aspect the camera keeps its authored framing. Below it (tablets in portrait,
+ * phones) the camera pulls back along the view ray so the scene is not cropped. The raw scale
+ * is capped globally, then each page applies its own tighter cap so the lab does not become tiny.
+ */
+const REFERENCE_ASPECT = 1.35;
+const MAX_FRAMING_SCALE = 2.35;
 
 /**
  * One renderer, one scene, one camera. Pages live in sibling groups and the camera
@@ -59,6 +86,7 @@ export class SceneManager {
   private quality: QualityMode;
   private page: PageId = 'interactive';
   private transitioning = false;
+  private framingScale = 1;
 
   // Reused vectors keep the render loop allocation-free.
   private readonly viewDirection = new THREE.Vector3();
@@ -300,7 +328,7 @@ export class SceneManager {
   goToPage(page: PageId, animate = true): void {
     if (this.page === page && !this.transitioning) return;
     this.page = page;
-    const framing = FRAMINGS[page];
+    const framing = this.framingFor(page);
     this.transitioning = animate;
     const fromPos = this.camera.position.clone();
     const fromTarget = this.target.clone();
@@ -332,16 +360,29 @@ export class SceneManager {
 
   /** Nudge the camera for a "fly to" feel without moving it off its framing. */
   nudgeCamera(offset: THREE.Vector3, duration = 700): void {
-    const framing = FRAMINGS[this.page];
+    const framing = this.framingFor(this.page);
     const from = this.camera.position.clone();
     const to = framing.position.clone().add(offset);
     this.tweens.add(duration, (t) => this.camera.position.lerpVectors(from, to, t), ease.inOutCubic);
   }
 
   resetCamera(duration = 700): void {
-    const framing = FRAMINGS[this.page];
+    const framing = this.framingFor(this.page);
     const from = this.camera.position.clone();
     this.tweens.add(duration, (t) => this.camera.position.lerpVectors(from, framing.position, t), ease.inOutCubic);
+  }
+
+  /** Authored framing, pulled back along the view ray on narrow viewports. */
+  private framingFor(page: PageId): Framing {
+    const base = FRAMINGS[page];
+    const scale = Math.min(this.framingScale, base.maxPullback ?? MAX_FRAMING_SCALE);
+    if (scale <= 1.0001) return base;
+    return {
+      fov: base.fov,
+      target: base.target,
+      maxPullback: base.maxPullback,
+      position: base.target.clone().add(base.position.clone().sub(base.target).multiplyScalar(scale))
+    };
   }
 
   // --------------------------------------------------------------------- quality
@@ -437,12 +478,31 @@ export class SceneManager {
   private onResize = (): void => {
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
-    this.camera.aspect = w / h;
+    const aspect = w / h;
+    this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this.dustUniforms.uPixelRatio.value = this.renderer.getPixelRatio();
     this.dustUniforms.uScale.value = h * 0.5;
+
+    const nextScale =
+      aspect >= REFERENCE_ASPECT
+        ? 1
+        : Math.min(MAX_FRAMING_SCALE, REFERENCE_ASPECT / Math.max(0.38, aspect));
+    if (Math.abs(nextScale - this.framingScale) > 0.02) {
+      this.framingScale = nextScale;
+      if (!this.transitioning) {
+        const framing = this.framingFor(this.page);
+        const from = this.camera.position.clone();
+        this.target.copy(framing.target);
+        this.tweens.add(
+          360,
+          (t) => this.camera.position.lerpVectors(from, framing.position, t),
+          ease.inOutCubic
+        );
+      }
+    }
   };
 
   dispose(): void {

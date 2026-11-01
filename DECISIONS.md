@@ -51,9 +51,9 @@ weight. Blender export was possible but would freeze the part hierarchy.
 
 **D-10 — Hands get a material override.** The GLBs ship with either no material or photographic
 hologram textures. To guarantee the "semi-transparent / stylised, never hides the cell" requirement
-in every lighting state, the loaded meshes are re-materialled at runtime: dark glass body, cyan
-fresnel rim, additive pinch glow. The GLB's textures are ignored (they remain in the file, unused).
-The default source is now the generated low-poly mesh (D-52); the material treatment is unchanged.
+in every lighting state, the loaded meshes were re-materialled at runtime: dark glass body, fresnel
+rim, additive pinch glow. The GLB's textures were ignored. The mesh itself was later replaced by a
+skeleton overlay (**D-56**), so the material treatment no longer applies to the shipped hand.
 
 **D-11 — DOM for text-heavy UI, WebGL for space.** MCQ options, overlay text and flashcards live in
 DOM (crisp at any DPR, accessible, keyboard-navigable, ARIA-able) while the stage, cell, network and
@@ -223,9 +223,9 @@ scene.
 **D-41 — Knowledge labels render above the graph but below the hands.** `depthTest: false` alone
 was not enough: transparent nodes are sorted by distance and still painted over nearer text, and a
 node's bloom halo washed out a label in the same colour. Labels get `renderOrder = 1`, graph meshes
-stay at 0, and hand meshes/sprites get `renderOrder = 2`. The texture is now near-white text with a
-dark halo and a category-coloured glow, so it stays readable when it does pass over a node or a
-bloom. Hand meshes still occlude labels correctly.
+stay at 0, and the skeleton uses 4–7 (underlay, bones, joints, pinch glow). The texture is near-white
+text with a dark halo and a category-coloured glow, so it stays readable when it does pass over a
+node or a bloom.
 
 **D-42 — The screenshot harness waits for camera tweens.** Camera moves are `dt`-driven and `dt` is
 clamped to 50 ms; SwiftShader renders at 2–4 fps, so a 780 ms transition takes several wall-clock
@@ -265,13 +265,11 @@ them produced a left-handed frame and non-unit quaternions. The left and right G
 separate, with no negative scales. Acceptance: 0 px wrist offset at every sampled pose and a
 palm/back dot of -0.991.
 
-**D-47 — Reimplementation, not a port, of the MIT reference rig.** `bandinopla/three-mediapipe-rig`
-was studied for its wrist-centred root, rest-pose capture, parent-first local rotations and angle
-comparison. It is MIT-licensed, but its scene graph, bone names and frame conventions are not
-Celly's. Copying it would have imported a second set of assumptions and made the GLB-specific
-calibration and Celly's constraints harder to audit. Celly therefore reimplements the principles in
-`src/scene/handMath.ts` / `handRig.ts` with its own rest table, joint limits, skin audit and
-procedural fallback. The reference is credited in `CREDITS.md`; its code is not shipped.
+**D-47 — Reimplementation, not a port, of the MIT reference rig.** *(Superseded by D-56; kept for
+history.)* `bandinopla/three-mediapipe-rig` was studied for its wrist-centred root, rest-pose
+capture, parent-first local rotations and angle comparison. It is MIT-licensed, but its scene graph,
+bone names and frame conventions are not Celly's. Copying it would have imported a second set of
+assumptions. The reference was credited in `CREDITS.md`; its code was never shipped.
 
 **D-48 — Selection commits on release, from a frozen pre-pinch aim.** Committing on pinch start made
 a crossing pinch select before the user could hold or abort. The engine now captures the target on
@@ -294,38 +292,34 @@ memory; choosing “largest every frame” made a vacuole/Golgi ring jump 279 px
 first implementation’s “least contested point” experiment was rejected because it placed labels in
 empty space at the edge of large bounding spheres.
 
-**D-50 — Rest calibration, parent-first rotations, and a healthy-skin fallback.** Each driven bone
-captures its rest direction in parent space, rest local quaternion and a soft flexion limit. The
-solver walks parent first and solves only local rotations, so bone lengths cannot change. Quaternion
-targets use shortest-arc damping; low tracker confidence eases to rest. A missing/invalid opt-in GLB
-now falls back to the generated low-poly hand, then to a procedural glass hand that follows the same
-wrist and landmarks. On load, skin weights are normalised to four influences and audited (unweighted
-vertices, weight sums, finite bind matrices); failures are logged in the debug overlay instead of
-producing silent tearing.
+**D-50 — Rest calibration, parent-first rotations, and a healthy-skin fallback.** *(Superseded by
+D-56.)* Each driven bone captured its rest direction in parent space, rest local quaternion and a
+soft flexion limit. The solver walked parent first and solved only local rotations, so bone lengths
+could not change. A missing/invalid opt-in GLB fell back to the generated low-poly hand. Skin
+weights were normalised to four influences and audited on load. The skeleton overlay has none of
+these failure modes.
 
 **D-51 — Acceptance uses the deterministic exact test, not SwiftShader jitter.** The built-in
 Selection test is the acceptance instrument: it freezes auto-rotation, follows one instance per
 target, reports hits and mean aim error, and uses the real gesture engine. Under ANGLE SwiftShader a
 frame can take 1–2 s, which exceeds the real 220 ms sticky window; a synthetic 12 px step/jitter test
-therefore tests frame pacing, not hand selection. The exact 10-target run is the reported E2E result
-(10/10; 0.5 px in 0.2.1, 0.6 px after the low-poly/hot-path pass). Timing-sensitive hysteresis is
-exercised with synthetic timestamps in unit tests,
-and the pose suite uses deterministic landmark replays rather than webcam footage. `applyMs`
-measures only the CPU retarget solver, not MediaPipe inference or rendering.
+therefore tests frame pacing, not hand selection. The exact 10-target run in the skeleton suite is the
+reported result (10/10; 0.5 px in 0.2.1, 0.6 px after the low-poly pass, 1.6 px with the skeleton
+overlay — the first approach from 110 px away dominates the mean, the other nine attempts are
+≤1.4 px). Timing-sensitive hysteresis is exercised with synthetic timestamps in unit tests, and the
+pose suite uses deterministic landmark replays rather than webcam footage. `applyMs` measures only
+the skeleton point/line upload, not MediaPipe inference or rendering.
 
 ## Efficiency and touch pass
 
-**D-52 — The default hand is a generated low-poly skinned mesh, not the authored GLB.** The GLB is
-1.3 MB and carries far more geometry than the translucent hand reads at interaction distance. The
-default boot now builds one connected low-poly mesh per hand (1,149 vertices), binds it to the same
-21-bone contract and uses the same wrist root, palm basis and rest table. The GLB stays available
-with `?hands=glb` for comparison and screenshots; the old skeletal `ProceduralHand` is the explicit
-diagnostic fallback. `createLowPolyHand()` must call `armature.updateMatrixWorld(true)` before
-`new THREE.Skeleton(...)` and `mesh.bind(...)`; without that, every bone inverse is identity and each
-body part is drawn at its bone origin. Verification keeps the 21-bone contract: 0 px wrist offset,
-≤0.2° static joint error, 0 unweighted/over-4 vertices, finite bind matrices and stable bone lengths.
-Generated geometry won over decimating the GLB because it removes the asset download, keeps the
-skin audit deterministic, and preserves a clean rest pose for the retargeter.
+**D-52 — The default hand is a generated low-poly skinned mesh, not the authored GLB.**
+*(Superseded by D-56.)* The GLB was 1.3 MB and carried far more geometry than the translucent hand
+reads at interaction distance, so the default boot built one connected low-poly mesh per hand
+(1,149 vertices) on the same 21-bone contract and wrist root. `?hands=glb` kept the authored mesh as
+an opt-in comparison, and the old skeletal `ProceduralHand` was the diagnostic fallback. Bone
+inverses had to be built after `armature.updateMatrixWorld(true)` or every part detached to its bone
+origin. It removed the download and made the bind deterministic, but still required a retarget solver,
+skinning, a skin audit and three render paths; D-56 replaces all of that with a joint/bone overlay.
 
 **D-53 — Device budgets are explicit, and quality is independent of CSS breakpoints.** `device.ts`
 classifies the primary pointer and shortest viewport dimension into phone/tablet/desktop, then derives
@@ -366,9 +360,50 @@ the hand the user aims with. The midpoint of landmarks 4 and 8 is the middle of 
 fingers: on an open or pointing hand it lands 28–41 px from the index tip, in empty space, which is
 why the pointer read as detached from the 3D hand and why pointing at an organelle felt offset. The
 index tip (landmark 8) is where the user aims, where the thumb converges during a pinch, and what
-the CellLab reference uses. The 3D mesh already tracks that landmark, so the mesh tip and the
-pointer coincide within ~10 px once the mesh is scaled to the tracked wrist → middle-MCP span. The
+the CellLab reference uses. The skeleton places its index-tip joint on the camera ray through that
+same cursor, so the drawn tip and the pointer coincide at any viewport size. The
 gesture engine measures its travel budget against the thumb/index contact point instead: closing the
 fingers slides the index tip by up to ~40 px, and that is a pinch closing, not a drag. The synthetic
 hand and the pose generator anchor the index tip on the requested screen point, so every fixture,
 screenshot and e2e injection keeps pointing exactly where it is asked to.
+
+## Hand overlay and interaction pass (2026-10-31)
+
+**D-56 — The hand is a skeleton overlay, not a skinned mesh.** The Cellab reference proves the
+lighter treatment works: 21 rounded joints and 21 bone lines read instantly, track perfectly, and
+cost almost nothing. The mesh added visual flex but no learning value, while consuming a retarget
+solver, skinning, a 1,149-vertex skin audit, three render paths, a 9 MB GLB set and a large share of
+the frame budget. The shipped hand is therefore 21 points plus 21 segments: the five finger chains
+and four palm links (`0→17`, `5→9`, `9→13`, `13→17`) so the palm reads as a hand. Left is mint
+(`#7ee0c3`), right is amber (`#ffd166`); the index tip is white, the pinch tips warm white and a soft
+additive glow marks the contact. A 4.5 px near-black underlay sits beneath the 2.2 px coloured bones
+and every joint mixes in a dark rim, because the membrane and bloom are bright enough to erase a
+plain line. Joints keep a constant CSS-pixel size and draw with `depthTest: false` above the cell.
+`frame.world` is display-oriented; `HandLayer` places each joint on the camera ray through its world
+delta, anchors landmark 8 to the cursor, and scales the hand from metric `handScale / 0.094`
+(clamped 0.7–1.4) rather than the screen span. That makes the index-tip projection exact at any
+viewport or field of view. The change deletes `handRig.ts`, `lowPolyHand.ts`, `handMath.ts`,
+`?hands=glb`, the procedural-hand setting, the GLB copy step and the deployed `hands_*.glb` files.
+The trade-off is deliberate: no skin deformation and no cast hand shadow, in exchange for an honest,
+legible joint display and a much smaller render and asset budget.
+
+**D-57 — Onboarding runs the real camera, not a checklist.** The first-run flow must prove the
+pipeline the user is about to rely on, and it must put the camera action where the user is looking.
+The hands step now embeds the live mirrored preview with the skeleton and landmark counters, and an
+inline **Enable camera** / retry button. The old flow could sit on "No hands yet" with the actual
+camera control elsewhere and no visible way forward. Camera startup now has a 12 s timeout, reports
+`idle / requesting / live / denied / not-found / in-use / insecure-context / unsupported / timeout`
+inline, and leaves **Skip** visible at every step. Escape and the backdrop close the flow, focus is
+trapped while it is open, and camera/tracking toasts are suppressed behind it because the card
+already carries the same message.
+The mouse-only path remains a first-class choice and never requests the camera.
+
+**D-58 — Chrome yields to the scene, and framing follows the viewport.** The HUD keeps only its header
+and hand count while no hands are detected; the Test page hides the left rail entirely because its
+cards already show live stats. Toasts dock top-right under the topbar on desktop and above the
+collapsed control sheet/structure rail at ≤1080 px, so they never cover the controls they describe.
+Below a 1.35 aspect ratio the camera pulls back along its view ray (up to 2.35×) instead of cropping
+the cell or the graph; knowledge labels are distance-compensated to a ~19 px target (clamped
+1–2.4×) with padded collision boxes, so a portrait viewport does not turn the graph into unreadable
+specks. These are presentation changes only: gesture thresholds, selection timing and content are
+unchanged.

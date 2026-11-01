@@ -52,9 +52,10 @@ Chrome or Edge give the most predictable MediaPipe performance; Safari 17+ also 
 
 1. copies the MediaPipe WASM runtime out of the pinned npm package into `public/mediapipe-wasm/`,
 2. downloads `public/models/hand_landmarker.task` (7.8 MB) once if it is missing, and
-3. copies any vendored `hands_*.glb` files into `public/`.
+3. removes any stale `public/hands_*.glb` left by an older checkout.
 
-Everything is served locally after that — no CDN, no per-frame network calls.
+Everything is served locally after that — no CDN, no per-frame network calls. The hands are drawn from
+MediaPipe landmarks at runtime, so there are no hand meshes or hand textures to download.
 
 > **No camera?** Choose **Continue with mouse** on the welcome card. Every gesture has a pointer
 > equivalent (click = pinch, drag = rotate, wheel = scale), so the app is fully usable without one.
@@ -87,9 +88,8 @@ No environment variables, server functions or database are required. Vercel prov
 secure context the camera needs; the response headers allow `camera` for the same origin, disable
 microphone and geolocation, and cache the hashed bundles immutably. `npm run build` runs
 `fetch-assets.mjs` as a `prebuild` step, so the pinned MediaPipe WASM and model are present even
-when install scripts are restored from cache. The generated low-poly hands are the deployed
-default; the optional `?hands=glb` comparison asset is intentionally uncommitted, and the app
-falls back safely when it is absent.
+when install scripts are restored from cache. Hand geometry is generated at runtime, so the
+deployment carries no hand mesh, rig or texture assets.
 
 ---
 
@@ -133,8 +133,9 @@ pinch always overrides a rotate in progress.
 
 The **HUD** (top-left) reports hands seen, L/R chips, live pinch value and bar, landmark count,
 tracking quality (`Good / Medium / Poor` + %), mirror state, and both tracker and render FPS. The
-gesture legend sits directly beneath it in the same left rail; it collapses automatically on short
-viewports and on the Test page so telemetry never covers the question cards.
+gesture legend sits directly beneath it in the same left rail; the rail collapses automatically on
+short viewports, the HUD keeps only its header and hand count while no hands are detected, and the
+Test page hides the rail entirely so telemetry never covers the question cards.
 
 On phones and tablets the shell becomes touch-first: the HUD is hidden at ≤820 px, the control panel
 collapses into a bottom sheet, the structure rail sits above the collapsed sheet, overlays reserve
@@ -215,19 +216,20 @@ with the gesture button registry.
   and debounced for 150 ms so the labels never flicker.
 - **Quality:** a 0–100 score from landmark confidence, hand size and frame coverage drives the
   Good/Medium/Poor readout.
-- **Mirroring:** `Mirror X` (on by default) and `Mirror Y` (off) are display-only; the raw tracking
-  frame is never rewritten.
-- **3D hands:** the default is a **generated low-poly skinned hand** — one connected mesh, 1,149
-  vertices and the same 21 bones per hand. The high-detail authored GLB (bone names `00_WRIST` …
-  `20_PINKY_TIP`) is opt-in with `?hands=glb`; the old procedural glass hand remains the diagnostic
-  fallback. Every path is wrist-rooted: the container origin is the tracked wrist and the palm basis
-  is orthonormal (Gram–Schmidt). A rest table stores each bone's rest direction and local
-  orientation; the solver walks parent first, applies shortest-arc local rotations and soft joint
-  limits, and never changes bone lengths. `root.position` follows the wrist directly — only
-  orientation and fingers are damped. Mirror/swap is a screen-position transform, never a
-  reflection of the orientation data, and the left/right meshes stay separate with positive scales.
-  The generated skeleton's world matrices are updated before `THREE.Skeleton` binds, so no part can
-  detach at the origin.
+- **Mirroring:** `Mirror X` (on by default) and `Mirror Y` (off) are display transforms. The tracker
+  output is untouched; each frame's world landmarks are mirrored once into display space, and the
+  pointer mapping mirrors normalized image coordinates. The skeleton therefore matches the mirrored
+  preview without ever flipping the underlying hand data twice.
+- **3D hands:** a **lightweight 21-joint skeleton**, not a skinned mesh. Each hand is 21 rounded
+  points plus 21 bone segments — the five finger chains and four palm links (`0→17`, `5→9`, `9→13`,
+  `13→17`) so the palm reads as a hand. Left is mint (`#7ee0c3`), right is amber (`#ffd166`); the
+  index tip is white, the pinch tips warm white, and a soft amber glow marks the pinch point. A dark
+  4.5 px underlay beneath the 2.2 px coloured bones and a rimmed joint shader keep the skeleton
+  readable over the bright membrane and bloom. Joints use a constant CSS-pixel size, draw on top of
+  the cell, and are scaled from the metric palm span rather than screen distance. The index tip is
+  placed on the camera ray through the tracked cursor, so the skeleton tip and the pointer coincide
+  at any viewport size or field of view. There are no GLB, low-poly or procedural hand paths left:
+  the skeleton is the only hand renderer.
 - **Selection:** every organelle instance has its own pick anchor and enlarged proxy. A pinch
   freezes the hovered target, uses the aim from ~100 ms before the pinch, then commits on **release**
   after a ≥100 ms hold within 36 px. The built-in Selection test (`T`) reports hit rate and mean aim
@@ -247,8 +249,8 @@ src/
                device profiles (phone/tablet/desktop budgets and quality defaults)
   tracking/    camera, HandLandmarker, One-Euro filter, side resolver, quality
   gestures/    pinch hysteresis, gesture state machine, virtual cursors
-  scene/       one renderer/scene: cellModel, knowledgeScene, handRig, lowPolyHand, handMath,
-               handLayer, textures, shapes
+  scene/       one renderer/scene: cellModel, knowledgeScene, skeletonHand, handLayer, textures,
+               shapes
   ui/          shell, tabs, HUD, overlay, collapsible control panel, onboarding, cursor layer,
                webcam preview
   pages/       interactiveLab, knowledge, testing/{testingPage, leitner, progress, session}
@@ -258,7 +260,7 @@ tests/
   unit/        pinch, side resolution, gesture engine, Leitner/progress, data integrity
   e2e/         smoke + synthetic-hand replay (Playwright)
 scripts/
-  fetch-assets.mjs   local WASM/model/GLB provisioning
+  fetch-assets.mjs   local WASM/model provisioning + stale hand-mesh cleanup
   shots.mjs          11 docs screenshots via synthetic hands
 ```
 
@@ -282,8 +284,8 @@ research and asset audit are in [`docs/RESEARCH.md`](docs/RESEARCH.md) and
 ## Testing
 
 ```bash
-npm test             # Vitest: 101 unit tests
-npm run test:e2e     # Playwright: 9 tests (smoke + gesture replay)
+npm test             # Vitest: 91 unit tests
+npm run test:e2e     # Playwright: 10 tests (smoke + gesture replay)
 npm run lint         # ESLint (flat config, typescript-eslint)
 npm run typecheck    # tsc --noEmit, strict
 npm run build        # typecheck + production bundle
@@ -295,8 +297,8 @@ Unit coverage:
 - MediaPipe side flip, manual swap, nearest-wrist slot matching, 150 ms debounce, loss handling;
 - every gesture-state transition: select/unselect, click budget, swipe, rotate, two-hand scale,
   cooldown, hand-loss reset, dwell-to-click;
-- pre-pinch aim look-back, screen-space proximity, palm basis/quaternion delta, parent-first bone
-  solving, joint-angle error, bone-length preservation, and all 13 deterministic hand poses;
+- pre-pinch aim look-back, screen-space proximity, cursor mapping and reach;
+- 13 deterministic hand-pose fixtures, index-tip anchoring and fast-movement sequences;
 - phone/tablet/desktop device profiles, DPR clamps, quality defaults, antialias policy, camera
   constraints and touch-laptop classification;
 - Leitner promotion/demotion, ordering, persistence and corrupt-storage sanitising;
@@ -343,10 +345,12 @@ compositor cannot capture a half-faded card.
 ## Performance and browser support
 
 Rendering is capped at the display refresh; tracking runs at 24 fps on phones and 30 fps on
-tablets/desktops. The generated hands are one skinned mesh per hand (1,149 vertices), not the
-multi-mesh GLB. At 1440×900 the Lab measured **80 draw calls and 79,270 triangles**; the Knowledge
-graph remains the heaviest page. `window.__celly.renderStats` exposes live quality, device class,
-DPR, calls, triangles, points and texture counts for audits.
+tablets/desktops. The hands are a skeleton overlay — 21 points and 21 line segments per hand — not a
+skinned mesh: no bone matrices, skinning pass or hand textures. Each hand adds three draw calls (dark
+bone underlay, coloured bones, joints) and an optional pinch sprite. With one skeleton hand in frame,
+the Lab measured **83 draw calls and 79,522 triangles** at 1280×800. The Knowledge graph remains the
+heaviest page. `window.__celly.renderStats` exposes live quality, device class, DPR, calls,
+triangles, points and texture counts for audits.
 
 Device profiles in `src/core/device.ts` choose the budget before the first frame:
 
@@ -362,9 +366,10 @@ off on phones). The dust drift is a GPU vertex shader — no per-frame CPU posit
 render loop avoids camera, look-at, projection and preview allocations. The webcam thumbnail is
 drawn at ~15 fps and skipped entirely while its sheet is collapsed.
 
-The high-detail GLB is never on the startup path; append `?hands=glb` to load it for comparison. If
-that fails, the app falls back to the generated low-poly hand, then to the procedural diagnostic
-hand.
+The skeleton is drawn with depth testing off, above the cell and its bloom, with a dark line underlay
+and a rimmed joint shader so it stays legible against the bright membrane. Its joints keep a constant
+CSS-pixel size while the hand's 3D span still follows the tracked palm, so moving closer to the
+camera does not turn the overlay into a wall of dots.
 
 | Browser | Status |
 |---|---|

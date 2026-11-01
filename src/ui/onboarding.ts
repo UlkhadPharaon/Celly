@@ -1,6 +1,8 @@
 import type { ButtonRegistry } from './buttons';
+import type { CameraStatus, HandFrame, Settings } from '../types';
 import { svgIcon, ICONS } from './dom';
 import { createProjectLink, registerProjectLink } from './projectLinks';
+import { WebcamPreview } from './webcamPreview';
 
 const COPY = {
   en: {
@@ -18,6 +20,14 @@ const COPY = {
     hands0: 'No hands yet',
     hands1: '1 hand detected',
     hands2: '2 hands detected',
+    cameraOff: 'Camera is off. You can turn it on here, or keep exploring with the mouse.',
+    cameraOffShort: 'Camera off',
+    cameraConnecting: 'Connecting…',
+    cameraRequesting: 'Waiting for camera permission…',
+    cameraLive: 'Camera live — show one hand to check the skeleton.',
+    cameraError: 'Camera unavailable. You can still explore with the mouse.',
+    enableHere: 'Enable camera',
+    retry: 'Try again',
     next: 'Continue',
     step3kicker: 'Step 2 of 2',
     step3title: 'Four gestures, that is all',
@@ -32,6 +42,7 @@ const COPY = {
     g4s: 'Pinch with both hands',
     enter: 'Enter the lab',
     skip: 'Skip tour',
+    back: 'Back',
     settings: 'Camera settings',
     blocked: 'Camera unavailable. You can still explore with the mouse.',
     projectLinks: 'Project links',
@@ -55,6 +66,14 @@ const COPY = {
     hands0: 'Aucune main',
     hands1: '1 main détectée',
     hands2: '2 mains détectées',
+    cameraOff: 'La caméra est éteinte. Activez-la ici, ou continuez à la souris.',
+    cameraOffShort: 'Caméra éteinte',
+    cameraConnecting: 'Connexion…',
+    cameraRequesting: 'En attente de l’autorisation caméra…',
+    cameraLive: 'Caméra active — montrez une main pour vérifier le squelette.',
+    cameraError: 'Caméra indisponible. Vous pouvez explorer à la souris.',
+    enableHere: 'Activer la caméra',
+    retry: 'Réessayer',
     next: 'Continuer',
     step3kicker: 'Étape 2 sur 2',
     step3title: 'Quatre gestes, c’est tout',
@@ -69,6 +88,7 @@ const COPY = {
     g4s: 'Pincement des deux mains',
     enter: 'Entrer au laboratoire',
     skip: 'Passer la visite',
+    back: 'Retour',
     settings: 'Réglages caméra',
     blocked: 'Caméra indisponible. Vous pouvez explorer à la souris.',
     projectLinks: 'Liens du projet',
@@ -87,12 +107,17 @@ type Language = keyof typeof COPY;
 
 export class Onboarding {
   readonly root: HTMLElement;
+  readonly preview = new WebcamPreview();
   private readonly card: HTMLElement;
   private step = 0;
   private language: Language = 'en';
   private hands = 0;
   private cameraRequested = false;
+  private cameraStatus: CameraStatus = 'idle';
+  private cameraDetail = '';
+  private error = '';
   private unregister: Array<() => void> = [];
+  private previousFocus: HTMLElement | null = null;
 
   constructor(
     private readonly registry: ButtonRegistry,
@@ -102,9 +127,14 @@ export class Onboarding {
     this.root.className = 'onboarding';
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-modal', 'true');
+    this.root.setAttribute('aria-labelledby', 'celly-onboarding-title');
     this.card = document.createElement('div');
     this.card.className = 'onboarding-card';
     this.root.append(this.card);
+    this.root.addEventListener('click', (event) => {
+      if (event.target === this.root) this.skip();
+    });
+    document.addEventListener('keydown', this.onKeyDown);
     this.render();
   }
 
@@ -113,19 +143,35 @@ export class Onboarding {
   }
 
   open(): void {
+    this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.step = 0;
+    this.hands = 0;
     this.root.classList.add('is-open');
     this.render();
+    requestAnimationFrame(() => {
+      this.card.querySelector<HTMLElement>('[data-celly="enable"]')?.focus();
+    });
   }
 
   close(): void {
     this.root.classList.remove('is-open');
     this.teardown();
+    this.previousFocus?.focus?.();
+    this.previousFocus = null;
   }
 
   setLanguage(language: Language): void {
     this.language = language;
     if (this.isOpen) this.render();
+  }
+
+  attachVideo(video: HTMLVideoElement | null): void {
+    this.preview.attach(video);
+  }
+
+  drawPreview(frames: HandFrame[], settings: Settings): void {
+    if (!this.isOpen || this.step !== 1) return;
+    this.preview.draw(frames, settings);
   }
 
   setHands(count: number): void {
@@ -140,12 +186,23 @@ export class Onboarding {
     }
   }
 
-  cameraBlocked(message: string): void {
-    const node = this.card.querySelector('.onboarding-error');
-    if (node) {
-      node.textContent = message;
-      node.classList.add('is-visible');
-    }
+  /**
+   * Camera UI lives in the hands step, so errors must be re-rendered there instead of being
+   * written once into the intro. Keeping the message in state also survives Back/Next.
+   */
+  setCameraStatus(status: CameraStatus, detail?: string): void {
+    this.cameraStatus = status;
+    this.cameraDetail = detail ?? '';
+    if (status === 'live') this.error = '';
+    else if (isCameraError(status)) this.error = detail || COPY[this.language].blocked;
+    else if (status === 'requesting') this.error = '';
+    this.syncError();
+    this.syncCameraStep();
+  }
+
+  private skip(): void {
+    this.close();
+    this.opts.onComplete(this.cameraRequested);
   }
 
   private render(): void {
@@ -175,15 +232,38 @@ export class Onboarding {
       btn.addEventListener('click', handler);
       this.unregister.push(this.registry.register(`onboarding:${id}`, btn, handler));
     }
-    if (this.step === 1) this.setHands(this.hands);
+
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.className = 'onboarding-skip ghost-btn small';
+    skip.dataset.celly = 'skip';
+    skip.textContent = copy.skip;
+    const skipHandler = this.handlerFor('skip');
+    if (skipHandler) {
+      skip.addEventListener('click', skipHandler);
+      this.unregister.push(this.registry.register('onboarding:skip', skip, skipHandler));
+    }
+    this.card.append(skip);
+
+    if (this.step === 1) {
+      const slot = this.card.querySelector('.onboarding-preview-slot');
+      if (slot) slot.append(this.preview.root);
+      this.preview.setVisible(true);
+      this.setHands(this.hands);
+      this.syncCameraStep();
+    }
+    this.syncError();
+    this.registry.refreshAll();
   }
 
   private handlerFor(id: string): (() => void) | null {
     switch (id) {
       case 'enable':
         return () => {
-          this.cameraRequested = true;
-          this.opts.onEnableCamera();
+          if (this.cameraStatus !== 'live') {
+            this.cameraRequested = true;
+            this.opts.onEnableCamera();
+          }
           this.goTo(1);
         };
       case 'mouse':
@@ -200,10 +280,7 @@ export class Onboarding {
           this.opts.onComplete(this.cameraRequested);
         };
       case 'skip':
-        return () => {
-          this.close();
-          this.opts.onComplete(this.cameraRequested);
-        };
+        return () => this.skip();
       default:
         return null;
     }
@@ -212,7 +289,10 @@ export class Onboarding {
   private goTo(step: number): void {
     this.step = step;
     this.render();
-    requestAnimationFrame(() => this.registry.refreshAll());
+    requestAnimationFrame(() => {
+      this.registry.refreshAll();
+      this.card.querySelector<HTMLElement>('[data-celly="next"], [data-celly="enter"]')?.focus();
+    });
   }
 
   private renderIntro(copy: (typeof COPY)['en']): string {
@@ -223,7 +303,7 @@ export class Onboarding {
       </div>
       <div class="onboarding-body">
         <span class="eyebrow">${copy.kicker}</span>
-        <h1>${copy.title}</h1>
+        <h1 id="celly-onboarding-title">${copy.title}</h1>
         <p class="onboarding-lead">${copy.lead}</p>
         <div class="onboarding-privacy">
           ${svgIcon(ICONS.privacy).outerHTML}
@@ -236,7 +316,7 @@ export class Onboarding {
           </button>
           <button class="btn ghost" type="button" data-celly="mouse"><span>${copy.mouse}</span></button>
         </div>
-        <div class="onboarding-error"></div>
+        ${this.errorMarkup()}
       </div>
     `;
   }
@@ -245,8 +325,14 @@ export class Onboarding {
     return `
       <div class="onboarding-body narrow">
         <span class="eyebrow">${copy.step2kicker}</span>
-        <h2>${copy.step2title}</h2>
+        <h2 id="celly-onboarding-title">${copy.step2title}</h2>
         <p class="onboarding-lead">${copy.step2lead}</p>
+        <div class="onboarding-preview">
+          <div class="onboarding-preview-slot"></div>
+          <div class="onboarding-camera-bar">
+            <span class="camera-state"><i></i><span data-camera-state></span></span>
+          </div>
+        </div>
         <p class="onboarding-hint">${copy.step2hint}</p>
         <div class="hands-status">
           <div class="hand-hand">
@@ -255,16 +341,16 @@ export class Onboarding {
           </div>
           <span class="hands-label">${this.hands === 0 ? copy.hands0 : this.hands === 1 ? copy.hands1 : copy.hands2}</span>
         </div>
-        <div class="onboarding-frame">
-          <div class="frame-corner tl"></div><div class="frame-corner tr"></div>
-          <div class="frame-corner bl"></div><div class="frame-corner br"></div>
-          <div class="frame-scan"></div>
-          <span>${this.language === 'fr' ? 'CADRE DE DÉTECTION' : 'TRACKING FRAME'}</span>
+        <div class="onboarding-camera-actions" data-camera-actions>
+          <button class="btn primary small" type="button" data-celly="enable">
+            ${svgIcon(ICONS.camera).outerHTML}<span data-enable-label>${copy.enableHere}</span>
+          </button>
         </div>
         <div class="onboarding-actions">
-          <button class="btn ghost" type="button" data-celly="back"><span>${this.language === 'fr' ? 'Retour' : 'Back'}</span></button>
+          <button class="btn ghost" type="button" data-celly="back"><span>${copy.back}</span></button>
           <button class="btn primary" type="button" data-celly="next"><span>${copy.next}</span></button>
         </div>
+        ${this.errorMarkup()}
       </div>
     `;
   }
@@ -279,7 +365,7 @@ export class Onboarding {
     return `
       <div class="onboarding-body wide">
         <span class="eyebrow">${copy.step3kicker}</span>
-        <h2>${copy.step3title}</h2>
+        <h2 id="celly-onboarding-title">${copy.step3title}</h2>
         <p class="onboarding-lead">${copy.step3lead}</p>
         <div class="gesture-cards">
           ${cards
@@ -295,17 +381,104 @@ export class Onboarding {
             .join('')}
         </div>
         <div class="onboarding-actions">
-          <button class="btn ghost" type="button" data-celly="back"><span>${this.language === 'fr' ? 'Retour' : 'Back'}</span></button>
+          <button class="btn ghost" type="button" data-celly="back"><span>${copy.back}</span></button>
           <button class="btn primary" type="button" data-celly="enter">
             ${svgIcon(ICONS.lab).outerHTML}<span>${copy.enter}</span>
           </button>
         </div>
+        ${this.errorMarkup()}
       </div>
     `;
   }
+
+  private errorMarkup(): string {
+    return `<div class="onboarding-error${this.error ? ' is-visible' : ''}" role="status" aria-live="polite">${escapeHtml(this.error)}</div>`;
+  }
+
+  private syncError(): void {
+    const node = this.card.querySelector<HTMLElement>('.onboarding-error');
+    if (!node) return;
+    node.textContent = this.error;
+    node.classList.toggle('is-visible', !!this.error);
+  }
+
+  private syncCameraStep(): void {
+    if (this.step !== 1) return;
+    const copy = COPY[this.language];
+    const status = this.cameraStatus;
+    const state = this.card.querySelector<HTMLElement>('[data-camera-state]');
+    const bar = this.card.querySelector<HTMLElement>('.onboarding-camera-bar');
+    if (state) {
+      state.textContent =
+        status === 'live'
+          ? copy.cameraLive
+          : status === 'requesting'
+            ? copy.cameraRequesting
+            : status === 'idle'
+              ? copy.cameraOff
+              : this.cameraDetail || copy.cameraError;
+    }
+    if (bar) bar.dataset.state = status;
+    this.preview.setStatus(
+      status === 'live',
+      status === 'requesting' ? copy.cameraConnecting : copy.cameraOffShort
+    );
+    const enable = this.card.querySelector<HTMLButtonElement>('[data-camera-actions] [data-celly="enable"]');
+    if (!enable) return;
+    enable.hidden = status === 'live';
+    enable.disabled = status === 'requesting';
+    enable.classList.toggle('is-hidden', status === 'live');
+    const label = enable.querySelector('[data-enable-label]');
+    if (label) {
+      label.textContent = status === 'requesting' ? copy.cameraRequesting : isCameraError(status) ? copy.retry : copy.enableHere;
+    }
+  }
+
+  private onKeyDown = (event: KeyboardEvent): void => {
+    if (!this.isOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.skip();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...this.card.querySelectorAll<HTMLElement>(
+      'button:not([disabled]):not([hidden]), a[href], [tabindex]:not([tabindex="-1"])'
+    )].filter((node) => node.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   private teardown(): void {
     for (const fn of this.unregister) fn();
     this.unregister = [];
   }
+}
+
+function isCameraError(status: CameraStatus): boolean {
+  return (
+    status === 'denied' ||
+    status === 'not-found' ||
+    status === 'in-use' ||
+    status === 'insecure-context' ||
+    status === 'unsupported' ||
+    status === 'timeout'
+  );
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }

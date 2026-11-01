@@ -11,7 +11,6 @@ a binary, model or font needs a row here before it merges.**
 | `hand_landmarker.task` model (7.8 MB) | Google LLC | <https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task> (model card: <https://aka.ms/hand_landmarker_model>) | Apache-2.0 | `public/models/` (committed) |
 | Space Grotesk (latin, 400/500/700) | Florian Karsten | `@fontsource/space-grotesk@5` | SIL OFL 1.1 | bundled by Vite |
 | Inter (latin, 400/500/600/700) | Rasmus Andersson | `@fontsource/inter@5` | SIL OFL 1.1 | bundled by Vite |
-| Rigged hand meshes (`hands_rigged.glb` and optional skin variants) | Ulkhad Pharaon | Original Blender source `3d models/Hands/hand ulkhad rigging.blend`, exported for this project | MIT (project original) | `public/hands_*.glb` at runtime; **not committed** (see note) |
 
 ## Code dependencies (npm)
 
@@ -43,12 +42,11 @@ Full transitive licence texts live in `node_modules/` and in `package-lock.json`
 - **Metadata texts** (organelle summaries, functions, structures, fun facts, knowledge nodes,
   questions, flashcards — EN + FR) are original summaries written for this project, checked against
   open biology references (LibreTexts Biology, CC-BY; OpenStax Biology 2e, CC-BY) for accuracy.
+- **Hand skeleton** — the 21-joint / 21-bone overlay, geometry, shaders and placement code are
+  original to this repository. The visual approach was inspired by the Cellab reference; no Cellab
+  code or assets are copied.
 - **Icons** are hand-authored inline SVG (`src/ui/dom.ts`). No icon font.
 - **Screenshots** in `docs/screenshots/` are renders of this software captured with Playwright.
-- **Hand-retargeting reference** — [`bandinopla/three-mediapipe-rig`](https://github.com/bandinopla/three-mediapipe-rig),
-  MIT. Studied for wrist-rooted rest-pose retargeting, parent-first local rotations and angle
-  comparison. Celly's implementation is a reimplementation of those principles, not a copy of its
-  code; see D-47 in [`DECISIONS.md`](DECISIONS.md).
 
 ## Writing
 
@@ -60,10 +58,8 @@ Full transitive licence texts live in `node_modules/` and in `package-lock.json`
 
 - The MediaPipe model and WASM are redistributed unmodified, satisfying Apache-2.0 attribution; the
   NOTICE and LICENSE texts ship inside `node_modules/@mediapipe/tasks-vision/`.
-- The rigged hand GLB is kept out of git because of its size and because the app is designed to run
-  without it: `scripts/fetch-assets.mjs` copies any `hands_*.glb` vendored at the repository root
-  into `public/`, and `HandRig` falls back to a fully procedural glass hand when the file is absent.
-  Screenshots and the demo use the rigged version.
+- No hand mesh, rig or hand texture ships with v0.2. The skeleton is generated from MediaPipe
+  landmarks at runtime; older `hands_*.glb` files are removed by `scripts/fetch-assets.mjs`.
 - No audio assets are used in v0.2.
 - This project's own code is MIT-licensed (see [`LICENSE`](LICENSE)), © 2026 Ulkhad Pharaon and
   Celly contributors.

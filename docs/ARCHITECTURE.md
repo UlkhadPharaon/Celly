@@ -48,10 +48,8 @@ src/
     cellModel.ts          procedural cell, 15 organelles, picking, isolation, selection halo
     knowledgeScene.ts     nodes, labels, edges, focus transform, picking
     knowledgeLayout.ts    deterministic seeded 3D force layout
-    lowPolyHand.ts        generated 21-bone skinned hand mesh (default source)
-    handMath.ts           palm basis, quaternion deltas, joint-angle metrics, scratch helpers
-    handRig.ts            GLB/low-poly retargeting, procedural fallback, DrivenHand interface
-    handLayer.ts          wrist→world placement, mirroring, scale cue, feedback
+    skeletonHand.ts       21-joint / 21-bone hand overlay (points, lines, pinch glow)
+    handLayer.ts          display-space placement, wrist→world mapping, scale, feedback
     shapes.ts             geometry factories shared by organelles
     textures.ts           procedural canvases (speckle, glow, cristae, grain…)
     types.ts              scene-side shared types
@@ -92,15 +90,17 @@ main.ts
        ├─ Shell (top bar, tabs, HUD, legend, control panel, cursor layer, overlay)
        ├─ SceneManager (renderer, camera, environment, bloom)
        ├─ HandTracker (lazy: only after the user enables the camera)
-       ├─ HandLayer → loadHands() (generated low-poly default; GLB opt-in; procedural fallback)
+       ├─ HandLayer → SkeletonHand per side (21 joints + 21 bones, no mesh assets)
        ├─ pages: InteractiveLab, KnowledgePage, TestingPage
        ├─ setPage('interactive', animate: false)
        └─ start(): requestAnimationFrame(loop)
 ```
 
-On a first visit, `Onboarding.open()` runs before the camera is requested. The onboarding "Enable
-camera" path calls `startCamera()`; the "Continue with mouse" path skips the tracker entirely. The
-camera is also started automatically after onboarding if permission was already granted.
+On a first visit, `Onboarding.open()` runs before the camera is requested. The hands step embeds a
+live, mirrored webcam preview with the skeleton and landmark counters drawn on top, plus an inline
+**Enable camera** button and a 12 s connection timeout. "Skip" and the backdrop/Escape close are
+always available. The "Continue with mouse" path skips the tracker entirely. The camera is also
+started automatically after onboarding if permission was already granted.
 
 ## 4. Frame loop
 
@@ -223,6 +223,11 @@ It exposes three framings and tweens between them when pages change:
 | Knowledge | `(0, 0.85, 16.4)` | slightly above origin | 42° |
 | Test | `(0, 0.4, 10.6)` | origin | 42° |
 
+On viewports narrower than `REFERENCE_ASPECT` (1.35), the camera pulls back along its view ray up to
+2.35× so the cell and the knowledge graph stay inside the safe area instead of being cropped by the
+portrait frame. The offset is recomputed from the live aspect and clamped, so resizing never leaves
+the camera between two framings.
+
 The cell rig is a nested transform:
 
 ```
@@ -242,8 +247,11 @@ Picking is a single raycast down the cell tree. Hits are ranked by specificity
 prevents the membrane and nuclear envelope from swallowing every pick.
 
 The knowledge graph has its own root (`knowledgeGroup`), nodes as emissive spheres, billboard label
-sprites and a single `LineSegments` buffer for edges with an animated time uniform. Focus tweens the
-root, dims non-neighbours and restricts picking to the focused node's neighbours.
+sprites and a single `LineSegments` buffer for edges with an animated time uniform. Label sprites are
+distance-compensated to a ~19 px target (clamped 1–2.4×) and their collision boxes are padded, so
+labels stay legible when the camera pulls back on a narrow screen instead of collapsing into
+unreadable specks. Focus tweens the root, dims non-neighbours and restricts picking to the focused
+node's neighbours.
 
 ## 8. Pages
 
@@ -273,25 +281,29 @@ updates the tabs and the auto-rotate control, and keeps the hands mounted.
 
 ## 9. Hands
 
-`HandLayer` owns one `DrivenHand` per side. Each frame it
+`HandLayer` owns one `SkeletonHand` per side. Each frame it
 
-1. maps the wrist's normalized position to a world point on the camera ray at the fixed hand
-   distance, so the projected wrist is exactly the tracked wrist;
-2. damps only the scale (wrist→middle-MCP span, clamped) — position is assigned directly because
-   the One-Euro filter has already removed camera noise;
-3. passes the **unmirrored** world landmarks to the rig; `mirrorX`/`mirrorY` are screen-position
-   transforms only;
-4. applies the 21-joint retarget and updates the pinch glow, landmark markers and feedback.
+1. takes the 21 display-space world landmarks from `HandFrame` and places every joint on the camera
+   ray through its screen position; the index-tip joint sits exactly on the tracked cursor;
+2. derives a pixels-per-metre factor from the metric `handScale / 0.094` (clamped 0.7–1.4) and
+   offsets each joint from the index tip by its world delta, so the hand keeps the tracked shape
+   without using the screen-space span;
+3. lets that placement put the wrist within ~0.5 px of the tracked wrist while the aim point stays
+   exact at every viewport size and field of view;
+4. passes the thumb/index contact to the skeleton for the additive pinch glow and updates the
+   feedback visibility from `showFeedback`.
 
-`loadHands()` returns a generated low-poly skinned hand by default. Each hand is one mesh
-(1,149 vertices) bound to 21 bones; `createLowPolyHand()` updates the armature world matrices before
-constructing `THREE.Skeleton` and binding, so bone inverses are real and the palm/fingers stay
-connected. `?hands=glb` opts into the authored `hands_rigged.glb` (mapped by `00_WRIST …
-20_PINKY_TIP`); if that load fails the generated low-poly hand is used, and if generation fails too
-the procedural glass hand takes over. All three implement `DrivenHand`, so the selection pipeline,
-debug view and gesture engine do not know which is active.
-Hot-path palm-basis and per-finger metric helpers use reusable out-parameters rather than allocating
-per frame.
+If a detector omits world landmarks, the same loop falls back to the normalized image positions, so
+the skeleton still follows the pointer with its projected shape.
+
+`SkeletonHand` draws 21 rounded points and 21 `LineSegments2` bones: the five finger chains plus the
+four palm links `0→17`, `5→9`, `9→13`, `13→17`. A wider dark underlay sits beneath the 2.2 px
+coloured lines and the point shader mixes a dark rim into each joint, so the overlay survives the
+bright membrane and bloom. Left is mint, right is amber, the index tip is white and the pinch tips
+warm white. Both the points and the lines use `depthTest: false` and explicit render orders, keeping
+the hand visible over the cell; joints are sized in CSS pixels so they do not balloon as the hand
+approaches the camera. There is no mesh, rig, skinning or GLB path: the skeleton is the only hand
+renderer, and disposal releases its geometries, materials and glow texture.
 
 ## 10. Data and persistence
 
@@ -332,8 +344,14 @@ them too. The top-bar pair collapses at ≤900 px, where the sheet and onboardin
 Only real controls receive pointer events. The HUD and legend opt out entirely, so they can overlap
 the scene — or a page card — without stealing a click. They share one flex-column rail so the legend
 follows the HUD when it grows instead of being pinned at 50 % of the viewport; on viewports shorter
-than 860 px and on the Test page the legend collapses to its header. The cursor layer is purely
-visual.
+than 860 px and on the Test page the legend collapses to its header, and the Test page hides the rail
+altogether because its cards carry their own live stats. When no hands are in frame the HUD drops its
+telemetry rows and keeps only the header and hand count, so mouse-only sessions leave the scene
+clear. The cursor layer is purely visual.
+
+Toasts dock top-right under the topbar on desktop, and above the collapsed sheet/structure rail at
+≤1080 px. Camera and tracking toasts are suppressed while onboarding is open, because the card
+carries the same message inline; otherwise an error could cover the step that explains it.
 
 At ≤1080 px the control panel becomes a centred bottom sheet (`max-width: 560px`) with a 78 px
 collapsed header and a scrollable open state. Its header is sticky, its internal grid uses
@@ -360,13 +378,13 @@ one intent pipeline.
 | `injectHand(side, x, y, pinch, present)` | Build a synthetic 21-landmark hand and run it through the real pipeline |
 | `clearInjectedHands()` | Remove synthetic hands and reset gesture state |
 | `sceneAnchor(id)` | Project a scene element's world position to CSS pixels |
-| `debugHand(side)` | Container/wrist/scale diagnostics, rig source and skin audit |
+| `debugHand(side)` | Skeleton source/counts, cursor vs drawn index-tip and pinch offsets, wrist offset, scale |
 | `renderStats` | Quality, device class, DPR, calls, triangles, points, textures, shadows/bloom |
 | `state` | Page, hands, hover, pinch, tracker and renderer snapshot |
 
-Injected hands are built in `replayHand.ts` from the same anatomical model the filter and rig expect,
-including the inverse mirror transform, so the cursor lands exactly on the requested pixel. E2E and
-screenshots therefore exercise real hover, real pinch hysteresis and real intents.
+Injected hands are built in `replayHand.ts` from the same anatomical model the filter and skeleton
+expect, including the display-space mirror transform, so the cursor lands exactly on the requested
+pixel. E2E and screenshots therefore exercise real hover, real pinch hysteresis and real intents.
 
 ## 13. Extension points
 

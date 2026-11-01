@@ -61,7 +61,6 @@ export const DEFAULT_SETTINGS: Settings = {
   pinchSensitivity: PINCH_SENSITIVITY.normal,
   reducedMotion: false,
   highContrast: false,
-  proceduralHand: false,
   quality: preferredQuality()
 };
 
@@ -124,9 +123,8 @@ export class CellyApp {
       onRetryCamera: () => void this.startCamera(),
       onAutoRotate: () => this.toggleAutoRotate(),
       onEnableCamera: () => void this.startCamera(),
-      onOnboardingComplete: (requested) => {
+      onOnboardingComplete: () => {
         saveJSON(ONBOARD_KEY, true);
-        if (!requested && !this.tracker.ready) this.shell.toast(this.t('mouseMode'), 'info');
       },
       onOverlayClose: () => this.current?.closeOverlay()
     });
@@ -144,16 +142,25 @@ export class CellyApp {
     this.tracker = new HandTracker({
       onCamera: (status, detail) => {
         this.shell.controls.setCameraStatus(status, detail);
+        this.shell.onboarding.setCameraStatus(status, detail);
         if (status === 'live') {
           this.shell.controls.preview.attach(this.tracker.video);
-        } else if (status === 'denied' || status === 'not-found' || status === 'in-use' || status === 'insecure-context') {
-          this.shell.toast(detail ?? this.t('cameraUnavailable'), 'warn');
-          this.shell.onboarding.cameraBlocked(detail ?? this.t('cameraUnavailable'));
+          this.shell.onboarding.attachVideo(this.tracker.video);
+        } else if (isCameraError(status)) {
+          // The onboarding carries the same message inline in its camera step; a toast behind
+          // the modal would only duplicate it and cover the card.
+          if (!this.shell.onboarding.isOpen) {
+            this.shell.toast(detail ?? this.t('cameraUnavailable'), 'warn');
+          }
         }
       },
       onTracking: (status, detail) => {
-        if (status === 'error') this.shell.toast(this.t('trackingFailed'), 'warn');
-        if (status === 'gpu' && detail) this.shell.toast(detail, 'success');
+        if (status === 'error' && !this.shell.onboarding.isOpen) {
+          this.shell.toast(this.t('trackingFailed'), 'warn');
+        }
+        if (status === 'gpu' && detail && !this.shell.onboarding.isOpen) {
+          this.shell.toast(detail, 'success');
+        }
       }
     });
 
@@ -202,7 +209,6 @@ export class CellyApp {
 
     this.bindInput();
     this.scene.handGroup.add(this.hands.group);
-    void this.hands.init(this.settings.proceduralHand);
     this.boot();
   }
 
@@ -222,8 +228,10 @@ export class CellyApp {
     if (this.cameraRequested && this.tracker.camera === 'requesting') return;
     this.cameraRequested = true;
     this.shell.controls.setCameraStatus('requesting');
+    this.shell.onboarding.setCameraStatus('requesting');
     await this.tracker.start();
     this.shell.controls.setCameraStatus(this.tracker.camera, this.tracker.detail ?? undefined);
+    this.shell.onboarding.setCameraStatus(this.tracker.camera, this.tracker.detail ?? undefined);
     if (this.tracker.camera === 'live') {
       this.hands.resetCalibration();
     }
@@ -259,10 +267,6 @@ export class CellyApp {
       case 'highContrast':
         this.settings.highContrast = value;
         break;
-      case 'proceduralHand':
-        this.settings.proceduralHand = value;
-        void this.reloadHands();
-        break;
       default:
         break;
     }
@@ -275,11 +279,6 @@ export class CellyApp {
     this.settings.autoRotate = !this.settings.autoRotate;
     this.applySettings();
     this.saveSettings();
-  }
-
-  private async reloadHands(): Promise<void> {
-    this.hands.dispose();
-    await this.hands.init(this.settings.proceduralHand);
   }
 
   private setLanguage(language: Language): void {
@@ -321,8 +320,7 @@ export class CellyApp {
       language: this.settings.language,
       quality: this.settings.quality,
       reducedMotion: this.settings.reducedMotion,
-      highContrast: this.settings.highContrast,
-      proceduralHand: this.settings.proceduralHand
+      highContrast: this.settings.highContrast
     };
   }
 
@@ -476,7 +474,15 @@ export class CellyApp {
       const norm = this.normFilters.filter(`n:${side}`, hand.landmarks, dt);
       const hasWorld = hand.worldLandmarks.length === 21;
       const world = hasWorld
-        ? this.worldFilters.filter(`w:${side}`, hand.worldLandmarks, dt)
+        ? this.worldFilters
+            .filter(`w:${side}`, hand.worldLandmarks, dt)
+            // MediaPipe world is image-aligned. The skeleton is drawn in display space, so apply
+            // the same mirror the pointer mapping applies, once, at the frame boundary.
+            .map((p) => ({
+              x: this.settings.mirrorX ? -p.x : p.x,
+              y: this.settings.mirrorY ? -p.y : p.y,
+              z: p.z
+            }))
         : norm.map((p) => ({ ...p }));
 
       const valid = handVisible(norm) && hand.score > 0.35;
@@ -528,6 +534,7 @@ export class CellyApp {
         palm: palmPoint(norm, map),
         landmarks: norm,
         world,
+        worldMetric: hasWorld,
         handScale: Math.max(0.03, dist3(world[0], world[9])),
         handSpan,
         confidence: hand.score,
@@ -781,9 +788,16 @@ export class CellyApp {
     }
 
     this.tick();
-    this.hands.update(this.frames, this.settings, dt, this.scene.camera);
+    this.hands.update(
+      this.frames,
+      this.settings,
+      dt,
+      this.scene.camera,
+      this.scene.renderer.getPixelRatio()
+    );
     this.current?.update(dt, this.elapsed);
     this.shell.controls.preview.draw(this.frames, this.settings);
+    this.shell.onboarding.drawPreview(this.frames, this.settings);
     this.updateCursors();
     this.updateHud(now);
     this.updateDebugOverlay();
@@ -1063,14 +1077,15 @@ export class CellyApp {
     const p = container.position;
     const projected = this.scene.projectToScreen(p);
     const offsetPx = Math.hypot(projected.x - mapped.x, projected.y - mapped.y);
-    const meshPinch = this.hands.debugPinch(side, this.scene.camera);
-    const meshOffsetPx = meshPinch
-      ? Math.hypot(meshPinch.x - frame.cursor.x, meshPinch.y - frame.cursor.y)
+    const pinch = this.hands.debugPinch(side, this.scene.camera);
+    const pinchOffsetPx = pinch
+      ? Math.hypot(pinch.x - frame.pinchPoint.x, pinch.y - frame.pinchPoint.y)
       : null;
-    const meshIndexTip = this.hands.debugLandmark(side, this.scene.camera, 8);
-    const meshIndexOffsetPx = meshIndexTip
-      ? Math.hypot(meshIndexTip.x - frame.cursor.x, meshIndexTip.y - frame.cursor.y)
+    const indexTip = this.hands.debugLandmark(side, this.scene.camera, 8);
+    const skeletonIndexOffsetPx = indexTip
+      ? Math.hypot(indexTip.x - frame.cursor.x, indexTip.y - frame.cursor.y)
       : null;
+    const rig = this.hands.debugHand(side);
     return {
       side,
       present: true,
@@ -1084,23 +1099,22 @@ export class CellyApp {
       containerScreen: [Math.round(projected.x), Math.round(projected.y)],
       offsetPx: Number(offsetPx.toFixed(2)),
       offsetPctHeight: Number(((offsetPx / window.innerHeight) * 100).toFixed(2)),
-      meshPinch: meshPinch
-        ? [Number(meshPinch.x.toFixed(1)), Number(meshPinch.y.toFixed(1))]
+      skeletonPinch: pinch
+        ? [Number(pinch.x.toFixed(1)), Number(pinch.y.toFixed(1))]
         : null,
-      meshOffsetPx: meshOffsetPx === null ? null : Number(meshOffsetPx.toFixed(2)),
-      meshOffsetPctHeight:
-        meshOffsetPx === null
-          ? null
-          : Number(((meshOffsetPx / window.innerHeight) * 100).toFixed(2)),
-      meshIndexTip: meshIndexTip
-        ? [Number(meshIndexTip.x.toFixed(1)), Number(meshIndexTip.y.toFixed(1))]
+      skeletonPinchOffsetPx: pinchOffsetPx === null ? null : Number(pinchOffsetPx.toFixed(2)),
+      skeletonIndexTip: indexTip
+        ? [Number(indexTip.x.toFixed(1)), Number(indexTip.y.toFixed(1))]
         : null,
-      meshIndexOffsetPx:
-        meshIndexOffsetPx === null ? null : Number(meshIndexOffsetPx.toFixed(2)),
+      skeletonIndexOffsetPx:
+        skeletonIndexOffsetPx === null ? null : Number(skeletonIndexOffsetPx.toFixed(2)),
+      skeletonPoints: rig?.points ?? null,
+      skeletonSegments: rig?.segments ?? null,
+      skeletonSource: rig?.source ?? null,
       pickRadius: Number(this.pickRadius.toFixed(1)),
       container: [Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3))],
       scale: Number(container.scale.x.toFixed(3)),
-      rig: this.hands.debugHand(side)
+      rig
     };
   }
 
@@ -1125,6 +1139,17 @@ function primaryHand(frames: HandFrame[]): HandFrame | null {
   return frames.find((f) => f.present && f.side === 'right') ?? frames.find((f) => f.present) ?? null;
 }
 
+function isCameraError(status: string): boolean {
+  return (
+    status === 'denied' ||
+    status === 'not-found' ||
+    status === 'in-use' ||
+    status === 'insecure-context' ||
+    status === 'unsupported' ||
+    status === 'timeout'
+  );
+}
+
 /** Every pinch landmark must sit inside the frame for a pinch to register. */
 function handVisible(landmarks: Vec3[]): boolean {
   for (const index of [0, 4, 8, 9]) {
@@ -1142,7 +1167,6 @@ function prettify(id: string): string {
 
 const STRINGS = {
   en: {
-    mouseMode: 'Mouse mode — pinch gestures need a camera.',
     cameraUnavailable: 'Camera unavailable.',
     trackingFailed: 'Hand model failed to load. Reload the page to retry.',
     saved: 'Saved',
@@ -1151,7 +1175,6 @@ const STRINGS = {
     qualityFast: 'Fast mode'
   },
   fr: {
-    mouseMode: 'Mode souris — les gestes nécessitent une caméra.',
     cameraUnavailable: 'Caméra indisponible.',
     trackingFailed: 'Le modèle de main n’a pas pu être chargé. Rechargez la page.',
     saved: 'Enregistré',

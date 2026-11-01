@@ -38,6 +38,8 @@ export class HandTracker {
   private fpsClock = 0;
   private starting: Promise<void> | null = null;
   private startingFlag = false;
+  private attempt = 0;
+  private requestTimer: number | null = null;
 
   constructor(private readonly cb: TrackerCallbacks = {}) {}
 
@@ -48,14 +50,19 @@ export class HandTracker {
   async start(): Promise<void> {
     if (this.startingFlag) return this.starting ?? Promise.resolve();
     this.startingFlag = true;
-    this.starting = this.doStart().finally(() => {
-      this.startingFlag = false;
-      this.starting = null;
+    const attempt = ++this.attempt;
+    this.starting = this.doStart(attempt).finally(() => {
+      // A timed-out request has already advanced `attempt` and released the flags so Retry can
+      // start a fresh request; this old settlement must not clear the new one's state.
+      if (attempt === this.attempt) {
+        this.startingFlag = false;
+        this.starting = null;
+      }
     });
     return this.starting;
   }
 
-  private async doStart(): Promise<void> {
+  private async doStart(attempt: number): Promise<void> {
     if (!window.isSecureContext) {
       this.setCamera('insecure-context', 'Camera needs https:// or localhost.');
       return;
@@ -66,6 +73,7 @@ export class HandTracker {
     }
 
     this.setCamera('requesting');
+    this.armRequestTimeout(attempt);
     try {
       const camera = deviceProfile();
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -77,6 +85,13 @@ export class HandTracker {
         },
         audio: false
       });
+      if (attempt !== this.attempt) {
+        // The prompt was abandoned while the browser still held the permission request. Stop the
+        // late stream instead of leaving the camera light on behind a "retry" UI.
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      this.clearRequestTimeout();
       this.stream = stream;
       const video = document.createElement('video');
       video.autoplay = true;
@@ -87,24 +102,55 @@ export class HandTracker {
         video.onloadedmetadata = () => resolve();
         video.onerror = () => reject(new Error('video element failed to load the camera stream'));
       });
+      if (attempt !== this.attempt) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       await video.play().catch(() => undefined);
       this.video = video;
       this.setCamera('live');
     } catch (err) {
+      if (attempt !== this.attempt) return;
+      this.clearRequestTimeout();
       this.setCamera(this.classifyCameraError(err), describeCameraError(err));
       return;
     }
 
-    await this.initLandmarker();
+    await this.initLandmarker(attempt);
   }
 
-  private async initLandmarker(): Promise<void> {
+  /**
+   * getUserMedia can stay pending forever when the permission prompt is dismissed by the browser
+   * chrome rather than denied. Twelve seconds is long enough for a person to answer the prompt and
+   * short enough that the onboarding can offer a mouse path instead of a spinner.
+   */
+  private armRequestTimeout(attempt: number): void {
+    this.clearRequestTimeout();
+    this.requestTimer = window.setTimeout(() => {
+      if (attempt !== this.attempt) return;
+      this.attempt += 1;
+      this.startingFlag = false;
+      this.starting = null;
+      this.setCamera(
+        'timeout',
+        'Camera did not respond. Allow camera access in the browser prompt, then retry — or continue with the mouse.'
+      );
+    }, 12_000);
+  }
+
+  private clearRequestTimeout(): void {
+    if (this.requestTimer === null) return;
+    window.clearTimeout(this.requestTimer);
+    this.requestTimer = null;
+  }
+
+  private async initLandmarker(generation: number): Promise<void> {
     this.setTracking('initializing');
     const modelPath = resolveAssetPath('models/hand_landmarker.task');
 
     type Attempt = { landmarker: HandLandmarker; delegate: 'gpu' | 'cpu' };
 
-    const attempt = async (wasmBase: string): Promise<Attempt> => {
+    const createLandmarker = async (wasmBase: string): Promise<Attempt> => {
       const vision = await FilesetResolver.forVisionTasks(wasmBase);
       try {
         const landmarker = await HandLandmarker.createFromOptions(vision, {
@@ -130,19 +176,28 @@ export class HandTracker {
     };
 
     try {
-      const local = await attempt(resolveAssetPath('mediapipe-wasm'));
+      const local = await createLandmarker(resolveAssetPath('mediapipe-wasm'));
+      if (generation !== this.attempt) {
+        local.landmarker.close();
+        return;
+      }
       this.landmarker = local.landmarker;
       this.detail = `local · ${local.delegate.toUpperCase()}`;
       this.setTracking(local.delegate);
     } catch (localErr) {
+      if (generation !== this.attempt) return;
       try {
         const cdn = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm';
-        const remote = await attempt(cdn);
+        const remote = await createLandmarker(cdn);
+        if (generation !== this.attempt) {
+          remote.landmarker.close();
+          return;
+        }
         this.landmarker = remote.landmarker;
         this.detail = `cdn · ${remote.delegate.toUpperCase()} (CDN fallback)`;
         this.setTracking(remote.delegate);
       } catch {
-        this.setTracking('error', String(localErr));
+        if (generation === this.attempt) this.setTracking('error', String(localErr));
       }
     }
   }
@@ -192,6 +247,10 @@ export class HandTracker {
   }
 
   async stop(): Promise<void> {
+    this.attempt += 1;
+    this.clearRequestTimeout();
+    this.startingFlag = false;
+    this.starting = null;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     if (this.video) {

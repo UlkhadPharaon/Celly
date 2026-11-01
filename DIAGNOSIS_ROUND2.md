@@ -1,5 +1,9 @@
 # Round 2 diagnosis — hand pivot, retargeting and selection
 
+> **Historical.** This diagnosis covers the mesh/retargeting path removed by the 2026-10-31 skeleton
+> pass (D-56). It is kept as the root-cause record for the selection and wrist fixes that still
+> apply.
+
 **Scope:** Celly v0.2.1, the rigged `Hand_L` / `Hand_R` GLB path and the right-hand selection path.
 **Order:** fix Issue 2 (pivot) → Issue 3 (retargeting) → Issue 1 (selection). Issue 2 had to be
 correct before angle error or selection could be measured on a stable hand.

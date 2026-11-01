@@ -162,7 +162,9 @@ test.describe('synthetic hand replay', () => {
       await waitFrames(page, 8);
       const debug = await page.evaluate(() => window.__celly!.debugHand('right'));
       expect(debug.present, `${pose}: hand present`).toBe(true);
-      expect(debug.scale, `${pose}: palm-matched mesh scale`).toBeGreaterThan(0.85);
+      expect(debug.skeletonSource, `${pose}: skeleton source`).toBe('skeleton');
+      expect(debug.skeletonPoints, `${pose}: joint count`).toBe(21);
+      expect(debug.skeletonSegments, `${pose}: bone count`).toBe(21);
       // The pointer is the index fingertip, so the cursor has to sit on that landmark.
       const cursor = debug.cursor as number[];
       const landmark = debug.landmarkIndexTip as number[];
@@ -170,9 +172,10 @@ test.describe('synthetic hand replay', () => {
         Math.hypot(cursor[0] - landmark[0], cursor[1] - landmark[1]),
         `${pose}: cursor on the index fingertip`
       ).toBeLessThan(1);
-      // ...and the 3D mesh has to draw that same fingertip under the cursor.
-      expect(debug.meshIndexOffsetPx, `${pose}: mesh index tip vs cursor`).toBeLessThan(20);
-      expect(debug.offsetPx, `${pose}: wrist vs tracked wrist`).toBeLessThan(1);
+      // ...and the drawn skeleton joint has to sit under the cursor.
+      expect(debug.skeletonIndexOffsetPx, `${pose}: skeleton index tip vs cursor`).toBeLessThan(8);
+      // Sub-pixel placement; allow two pixels for device-pixel rounding on CI displays.
+      expect(debug.offsetPx, `${pose}: wrist vs tracked wrist`).toBeLessThan(2);
     }
   });
 
@@ -201,10 +204,11 @@ test.describe('synthetic hand replay', () => {
     await expectOverlayClearOfChrome(page);
     await expect(page.locator('.overlay-anchor.is-open h2')).toContainText(titlePattern(picked));
 
-    // The wrist is anchored to landmark 0, the mesh is scaled to the tracked palm and the pointer
-    // rides the index fingertip, so the cursor sits on the mesh instead of floating beside it.
+    // Every joint is placed on the camera ray through its mapped screen position and the pointer
+    // rides the index fingertip, so the cursor sits on the skeleton instead of floating beside it.
     const debug = await page.evaluate(() => window.__celly!.debugHand('right'));
     expect(debug.present).toBe(true);
+    expect(debug.skeletonSource).toBe('skeleton');
 
     await pinchAt(page, 90, 880);
     await expect(page.locator('.overlay-anchor')).not.toHaveClass(/is-open/);

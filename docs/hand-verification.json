@@ -6,50 +6,27 @@
   },
   "staticSummary": {
     "samples": 10,
-    "riggedSamples": 10,
-    "wristOffsetMeanPx": 0,
-    "wristOffsetMaxPx": 0,
-    "wristOffsetMeanPctHeight": 0,
-    "wristOffsetMaxPctHeight": 0,
-    "meshOffsetMeanPx": 5.38,
-    "meshOffsetMaxPx": 9.76,
-    "meshOffsetMeanPctHeight": 0.673,
-    "meshOffsetMaxPctHeight": 1.22,
-    "pinchMidpointOffsetMeanPx": 25.54,
-    "pinchMidpointOffsetMaxPx": 42.76,
-    "applyMsMean": 0.33,
-    "applyMsMax": 0.4,
-    "angleErrorMeanDeg": 0.05,
-    "angleErrorMaxDeg": 0.2,
-    "perFingerMeanDeg": {
-      "thumb": 0.08,
-      "index": 0.04,
-      "middle": 0.04,
-      "ring": 0.04,
-      "pinky": 0.04
-    },
-    "skin": [
-      {
-        "mesh": "Hand_R",
-        "vertices": 1149,
-        "unweighted": 0,
-        "over4": 0,
-        "weightSumMin": 1,
-        "weightSumMax": 1,
-        "repaired": false,
-        "bindMatricesFinite": true,
-        "bones": 21,
-        "boneLengthStable": true
-      }
-    ]
+    "skeletonSource": "skeleton",
+    "points": 21,
+    "segments": 21,
+    "wristOffsetMeanPx": 0.37,
+    "wristOffsetMaxPx": 0.43,
+    "wristOffsetMeanPctHeight": 0.044,
+    "wristOffsetMaxPctHeight": 0.05,
+    "indexOffsetMeanPx": 0,
+    "indexOffsetMaxPx": 0,
+    "indexOffsetMeanPctHeight": 0,
+    "indexOffsetMaxPctHeight": 0,
+    "pinchOffsetMeanPx": 0.07,
+    "pinchOffsetMaxPx": 0.12
   },
   "staticPerPose": {
     "open": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 3.74,
-      "meshIndexTip": [
-        823.5,
-        431.2
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -59,29 +36,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 28.63,
-      "angleErrorDeg": 0,
-      "perFingerDeg": {
-        "thumb": 0,
-        "index": 0,
-        "middle": 0,
-        "ring": 0,
-        "pinky": 0
-      },
-      "applyMs": 0.4,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 0.998
+      "pinchMidpointOffsetPx": 0.08,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "fist": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 6.28,
-      "meshIndexTip": [
-        826,
-        431.8
+      "wristOffsetPctHeight": 0.02,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -91,29 +57,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 8.88,
-      "angleErrorDeg": 0.08,
-      "perFingerDeg": {
-        "thumb": 0.03,
-        "index": 0.09,
-        "middle": 0.09,
-        "ring": 0.09,
-        "pinky": 0.08
-      },
-      "applyMs": 0.4,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 1.006
+      "pinchMidpointOffsetPx": 0.04,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "pinch": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 9.76,
-      "meshIndexTip": [
-        812.4,
-        436.1
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -123,29 +78,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 13.95,
-      "angleErrorDeg": 0.06,
-      "perFingerDeg": {
-        "thumb": 0.03,
-        "index": 0.07,
-        "middle": 0.09,
-        "ring": 0.07,
-        "pinky": 0.05
-      },
-      "applyMs": 0.4,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
+      "pinchMidpointOffsetPx": 0,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
       "scale": 1
     },
     "point": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 4.77,
-      "meshIndexTip": [
-        824.5,
-        431.5
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -155,29 +99,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 42.76,
-      "angleErrorDeg": 0.06,
-      "perFingerDeg": {
-        "thumb": 0.03,
-        "index": 0.01,
-        "middle": 0.09,
-        "ring": 0.08,
-        "pinky": 0.07
-      },
-      "applyMs": 0.3,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 0.998
+      "pinchMidpointOffsetPx": 0.12,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "peace": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 4.38,
-      "meshIndexTip": [
-        824.2,
-        431.4
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -187,29 +120,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 39.63,
-      "angleErrorDeg": 0.02,
-      "perFingerDeg": {
-        "thumb": 0,
-        "index": 0,
-        "middle": 0.08,
-        "ring": 0.01,
-        "pinky": 0
-      },
-      "applyMs": 0.3,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 0.998
+      "pinchMidpointOffsetPx": 0.11,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "thumbs-up": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 6.43,
-      "meshIndexTip": [
-        826.2,
-        431.8
+      "wristOffsetPctHeight": 0.02,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -219,29 +141,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 27.24,
-      "angleErrorDeg": 0.04,
-      "perFingerDeg": {
-        "thumb": 0.14,
-        "index": 0.02,
-        "middle": 0.03,
-        "ring": 0,
-        "pinky": 0
-      },
-      "applyMs": 0.3,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 1.007
+      "pinchMidpointOffsetPx": 0.11,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "ok": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 7.9,
-      "meshIndexTip": [
-        812.4,
-        432.2
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -251,29 +162,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 12.79,
-      "angleErrorDeg": 0.01,
-      "perFingerDeg": {
-        "thumb": 0.01,
-        "index": 0.01,
-        "middle": 0.02,
-        "ring": 0.02,
-        "pinky": 0.01
-      },
-      "applyMs": 0.2,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 0.999
+      "pinchMidpointOffsetPx": 0.01,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "spread": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 4.28,
-      "meshIndexTip": [
-        823.9,
-        431.8
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -283,29 +183,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 26.95,
-      "angleErrorDeg": 0.01,
-      "perFingerDeg": {
-        "thumb": 0.03,
-        "index": 0.01,
-        "middle": 0,
-        "ring": 0.01,
-        "pinky": 0.02
-      },
-      "applyMs": 0.3,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 0.996
+      "pinchMidpointOffsetPx": 0.07,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "palm": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 3.79,
-      "meshIndexTip": [
-        823.6,
-        431.3
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -315,29 +204,18 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 28.69,
-      "angleErrorDeg": 0.01,
-      "perFingerDeg": {
-        "thumb": 0,
-        "index": 0.01,
-        "middle": 0,
-        "ring": 0,
-        "pinky": 0.02
-      },
-      "applyMs": 0.3,
-      "palmNormal": [
-        -0.0069,
-        -0.064,
-        0.9979
-      ],
-      "scale": 0.997
+      "pinchMidpointOffsetPx": 0.08,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     },
     "back": {
-      "wristOffsetPctHeight": 0,
-      "meshIndexOffsetPx": 2.49,
-      "meshIndexTip": [
-        817.5,
-        429.8
+      "wristOffsetPctHeight": 0.05,
+      "indexOffsetPx": 0,
+      "indexTip": [
+        820,
+        430
       ],
       "cursor": [
         820,
@@ -347,198 +225,91 @@
         820,
         430
       ],
-      "pinchMidpointOffsetPx": 25.91,
-      "angleErrorDeg": 0.2,
-      "perFingerDeg": {
-        "thumb": 0.51,
-        "index": 0.16,
-        "middle": 0.05,
-        "ring": 0.13,
-        "pinky": 0.16
-      },
-      "applyMs": 0.4,
-      "palmNormal": [
-        0.0327,
-        -0.064,
-        -0.9974
-      ],
-      "scale": 1.008
+      "pinchMidpointOffsetPx": 0.08,
+      "points": 21,
+      "segments": 21,
+      "source": "skeleton",
+      "scale": 1
     }
   },
   "allSummary": {
     "samples": 50,
-    "riggedSamples": 50,
-    "wristOffsetMeanPx": 0,
-    "wristOffsetMaxPx": 0,
-    "wristOffsetMeanPctHeight": 0,
-    "wristOffsetMaxPctHeight": 0,
-    "meshOffsetMeanPx": 6.97,
-    "meshOffsetMaxPx": 15.19,
-    "meshOffsetMeanPctHeight": 0.871,
-    "meshOffsetMaxPctHeight": 1.899,
-    "pinchMidpointOffsetMeanPx": 31.45,
-    "pinchMidpointOffsetMaxPx": 46.9,
-    "applyMsMean": 0.67,
-    "applyMsMax": 12,
-    "angleErrorMeanDeg": 0.38,
-    "angleErrorMaxDeg": 1.77,
-    "perFingerMeanDeg": {
-      "thumb": 0.53,
-      "index": 0.28,
-      "middle": 0.24,
-      "ring": 0.39,
-      "pinky": 0.45
-    },
-    "skin": [
-      {
-        "mesh": "Hand_R",
-        "vertices": 1149,
-        "unweighted": 0,
-        "over4": 0,
-        "weightSumMin": 1,
-        "weightSumMax": 1,
-        "repaired": false,
-        "bindMatricesFinite": true,
-        "bones": 21,
-        "boneLengthStable": true
-      }
-    ]
+    "skeletonSource": "skeleton",
+    "points": 21,
+    "segments": 21,
+    "wristOffsetMeanPx": 0.42,
+    "wristOffsetMaxPx": 0.47,
+    "wristOffsetMeanPctHeight": 0.05,
+    "wristOffsetMaxPctHeight": 0.06,
+    "indexOffsetMeanPx": 0,
+    "indexOffsetMaxPx": 0,
+    "indexOffsetMeanPctHeight": 0,
+    "indexOffsetMaxPctHeight": 0,
+    "pinchOffsetMeanPx": 0.08,
+    "pinchOffsetMaxPx": 0.12
   },
   "motion": {
     "wiggle": {
       "samples": 13,
-      "riggedSamples": 13,
-      "wristOffsetMeanPx": 0,
-      "wristOffsetMaxPx": 0,
-      "wristOffsetMeanPctHeight": 0,
-      "wristOffsetMaxPctHeight": 0,
-      "meshOffsetMeanPx": 10.08,
-      "meshOffsetMaxPx": 15.19,
-      "meshOffsetMeanPctHeight": 1.26,
-      "meshOffsetMaxPctHeight": 1.899,
-      "pinchMidpointOffsetMeanPx": 37.08,
-      "pinchMidpointOffsetMaxPx": 46.9,
-      "applyMsMean": 0.71,
-      "applyMsMax": 3.9,
-      "angleErrorMeanDeg": 0.8,
-      "angleErrorMaxDeg": 1.61,
-      "perFingerMeanDeg": {
-        "thumb": 0.65,
-        "index": 0.62,
-        "middle": 0.68,
-        "ring": 0.92,
-        "pinky": 1.11
-      },
-      "skin": [
-        {
-          "mesh": "Hand_R",
-          "vertices": 1149,
-          "unweighted": 0,
-          "over4": 0,
-          "weightSumMin": 1,
-          "weightSumMax": 1,
-          "repaired": false,
-          "bindMatricesFinite": true,
-          "bones": 21,
-          "boneLengthStable": true
-        }
-      ]
+      "skeletonSource": "skeleton",
+      "points": 21,
+      "segments": 21,
+      "wristOffsetMeanPx": 0.45,
+      "wristOffsetMaxPx": 0.47,
+      "wristOffsetMeanPctHeight": 0.056,
+      "wristOffsetMaxPctHeight": 0.06,
+      "indexOffsetMeanPx": 0,
+      "indexOffsetMaxPx": 0,
+      "indexOffsetMeanPctHeight": 0,
+      "indexOffsetMaxPctHeight": 0,
+      "pinchOffsetMeanPx": 0.09,
+      "pinchOffsetMaxPx": 0.12
     },
     "wrist-rotation-slow": {
       "samples": 13,
-      "riggedSamples": 13,
-      "wristOffsetMeanPx": 0,
-      "wristOffsetMaxPx": 0,
-      "wristOffsetMeanPctHeight": 0,
-      "wristOffsetMaxPctHeight": 0,
-      "meshOffsetMeanPx": 4.6,
-      "meshOffsetMaxPx": 11.09,
-      "meshOffsetMeanPctHeight": 0.575,
-      "meshOffsetMaxPctHeight": 1.386,
-      "pinchMidpointOffsetMeanPx": 29.44,
-      "pinchMidpointOffsetMaxPx": 32.16,
-      "applyMsMean": 1.35,
-      "applyMsMax": 12,
-      "angleErrorMeanDeg": 0.34,
-      "angleErrorMaxDeg": 1.77,
-      "perFingerMeanDeg": {
-        "thumb": 0.68,
-        "index": 0.22,
-        "middle": 0.13,
-        "ring": 0.34,
-        "pinky": 0.34
-      },
-      "skin": [
-        {
-          "mesh": "Hand_R",
-          "vertices": 1149,
-          "unweighted": 0,
-          "over4": 0,
-          "weightSumMin": 1,
-          "weightSumMax": 1,
-          "repaired": false,
-          "bindMatricesFinite": true,
-          "bones": 21,
-          "boneLengthStable": true
-        }
-      ]
+      "skeletonSource": "skeleton",
+      "points": 21,
+      "segments": 21,
+      "wristOffsetMeanPx": 0.42,
+      "wristOffsetMaxPx": 0.43,
+      "wristOffsetMeanPctHeight": 0.05,
+      "wristOffsetMaxPctHeight": 0.05,
+      "indexOffsetMeanPx": 0,
+      "indexOffsetMaxPx": 0,
+      "indexOffsetMeanPctHeight": 0,
+      "indexOffsetMaxPctHeight": 0,
+      "pinchOffsetMeanPx": 0.08,
+      "pinchOffsetMaxPx": 0.08
     },
     "fast-movement": {
       "samples": 13,
-      "riggedSamples": 13,
-      "wristOffsetMeanPx": 0,
-      "wristOffsetMaxPx": 0,
-      "wristOffsetMeanPctHeight": 0,
-      "wristOffsetMaxPctHeight": 0,
-      "meshOffsetMeanPx": 7.78,
-      "meshOffsetMaxPx": 12.54,
-      "meshOffsetMeanPctHeight": 0.972,
-      "meshOffsetMaxPctHeight": 1.567,
-      "pinchMidpointOffsetMeanPx": 32.82,
-      "pinchMidpointOffsetMaxPx": 35.47,
-      "applyMsMean": 0.25,
-      "applyMsMax": 0.5,
-      "angleErrorMeanDeg": 0.28,
-      "angleErrorMaxDeg": 1.15,
-      "perFingerMeanDeg": {
-        "thumb": 0.66,
-        "index": 0.22,
-        "middle": 0.07,
-        "ring": 0.2,
-        "pinky": 0.23
-      },
-      "skin": [
-        {
-          "mesh": "Hand_R",
-          "vertices": 1149,
-          "unweighted": 0,
-          "over4": 0,
-          "weightSumMin": 1,
-          "weightSumMax": 1,
-          "repaired": false,
-          "bindMatricesFinite": true,
-          "bones": 21,
-          "boneLengthStable": true
-        }
-      ]
+      "skeletonSource": "skeleton",
+      "points": 21,
+      "segments": 21,
+      "wristOffsetMeanPx": 0.42,
+      "wristOffsetMaxPx": 0.43,
+      "wristOffsetMeanPctHeight": 0.05,
+      "wristOffsetMaxPctHeight": 0.05,
+      "indexOffsetMeanPx": 0,
+      "indexOffsetMaxPx": 0,
+      "indexOffsetMeanPctHeight": 0,
+      "indexOffsetMaxPctHeight": 0,
+      "pinchOffsetMeanPx": 0.08,
+      "pinchOffsetMaxPx": 0.08
     }
   },
-  "boneStability": {
-    "bones": 15,
-    "worstCvPct": 0.028,
-    "worstBone": "15_RING_DIP"
-  },
-  "palmVsBackDot": -0.991,
   "left": {
     "present": true,
-    "wristOffsetPctHeight": 0,
-    "meshIndexOffsetPx": 2.55,
-    "angleErrorDeg": 0
+    "wristOffsetPctHeight": 0.05,
+    "indexOffsetPx": 0,
+    "points": 21,
+    "segments": 21,
+    "source": "skeleton"
   },
   "debug": {
     "present": true,
     "pickRadius": 52.6,
-    "rigged": true,
+    "source": "skeleton",
     "cursor": [
       820,
       430
@@ -547,68 +318,68 @@
       820,
       430
     ],
-    "meshIndexTip": [
-      823.6,
-      431.2
+    "indexTip": [
+      820,
+      430
     ],
-    "meshIndexOffsetPx": 3.77
+    "indexOffsetPx": 0
   },
   "selection": {
     "attempts": 10,
     "hits": 10,
     "hitRate": 1,
-    "meanAimErrorPx": 2,
+    "meanAimErrorPx": 0.5,
     "complete": true,
     "results": [
       {
         "target": "nucleus",
         "hit": true,
-        "errorPx": 14.757467400731084
+        "errorPx": 0.7210513434244638
       },
       {
         "target": "mitochondrion",
         "hit": true,
-        "errorPx": 0.44077925765621223
+        "errorPx": 0.6581069708897367
       },
       {
         "target": "golgi",
         "hit": true,
-        "errorPx": 0.16521468869339287
+        "errorPx": 0.4369217248014566
       },
       {
         "target": "rough-er",
         "hit": true,
-        "errorPx": 0.27022882787431834
+        "errorPx": 0.16036160553600098
       },
       {
         "target": "smooth-er",
         "hit": true,
-        "errorPx": 0.5653405821561077
+        "errorPx": 0.5099695631749962
       },
       {
         "target": "lysosome",
         "hit": true,
-        "errorPx": 0.5401927147135271
+        "errorPx": 0.21988986588002357
       },
       {
         "target": "vacuole",
         "hit": true,
-        "errorPx": 0.35449104290040406
+        "errorPx": 0.23738941789431137
       },
       {
         "target": "centriole",
         "hit": true,
-        "errorPx": 0.9497755645901821
+        "errorPx": 0.531941141341934
       },
       {
         "target": "peroxisome",
         "hit": true,
-        "errorPx": 0.5140455942765821
+        "errorPx": 0.48022112213774715
       },
       {
         "target": "nucleolus",
         "hit": true,
-        "errorPx": 1.002076268443095
+        "errorPx": 0.6193985266585091
       }
     ],
     "driver": [
@@ -616,7 +387,7 @@
         "done": false,
         "id": "nucleus",
         "anchor": [
-          631,
+          658,
           387
         ],
         "advanced": true,
@@ -629,12 +400,12 @@
           "attempts": 1,
           "hits": 1,
           "hitRate": 1,
-          "meanAimErrorPx": 14.8,
+          "meanAimErrorPx": 0.7,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             }
           ]
         }
@@ -643,8 +414,8 @@
         "done": false,
         "id": "mitochondrion",
         "anchor": [
-          716,
-          465
+          556,
+          512
         ],
         "advanced": true,
         "state": {
@@ -656,17 +427,17 @@
           "attempts": 2,
           "hits": 2,
           "hitRate": 1,
-          "meanAimErrorPx": 7.6,
+          "meanAimErrorPx": 0.7,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             }
           ]
         }
@@ -675,8 +446,8 @@
         "done": false,
         "id": "golgi",
         "anchor": [
-          686,
-          286
+          758,
+          301
         ],
         "advanced": true,
         "state": {
@@ -688,22 +459,22 @@
           "attempts": 3,
           "hits": 3,
           "hitRate": 1,
-          "meanAimErrorPx": 5.1,
+          "meanAimErrorPx": 0.6,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             }
           ]
         }
@@ -712,8 +483,8 @@
         "done": false,
         "id": "rough-er",
         "anchor": [
-          683,
-          359
+          742,
+          366
         ],
         "advanced": true,
         "state": {
@@ -725,27 +496,27 @@
           "attempts": 4,
           "hits": 4,
           "hitRate": 1,
-          "meanAimErrorPx": 3.9,
+          "meanAimErrorPx": 0.5,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             }
           ]
         }
@@ -754,8 +525,8 @@
         "done": false,
         "id": "smooth-er",
         "anchor": [
-          581,
-          395
+          792,
+          383
         ],
         "advanced": true,
         "state": {
@@ -767,32 +538,32 @@
           "attempts": 5,
           "hits": 5,
           "hitRate": 1,
-          "meanAimErrorPx": 3.2,
+          "meanAimErrorPx": 0.5,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.5653405821561077
+              "errorPx": 0.5099695631749962
             }
           ]
         }
@@ -801,8 +572,8 @@
         "done": false,
         "id": "lysosome",
         "anchor": [
-          789,
-          472
+          680,
+          471
         ],
         "advanced": true,
         "state": {
@@ -814,37 +585,37 @@
           "attempts": 6,
           "hits": 6,
           "hitRate": 1,
-          "meanAimErrorPx": 2.8,
+          "meanAimErrorPx": 0.5,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.5653405821561077
+              "errorPx": 0.5099695631749962
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.5401927147135271
+              "errorPx": 0.21988986588002357
             }
           ]
         }
@@ -853,8 +624,8 @@
         "done": false,
         "id": "vacuole",
         "anchor": [
-          700,
-          364
+          573,
+          365
         ],
         "advanced": true,
         "state": {
@@ -866,42 +637,42 @@
           "attempts": 7,
           "hits": 7,
           "hitRate": 1,
-          "meanAimErrorPx": 2.4,
+          "meanAimErrorPx": 0.4,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.5653405821561077
+              "errorPx": 0.5099695631749962
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.5401927147135271
+              "errorPx": 0.21988986588002357
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.35449104290040406
+              "errorPx": 0.23738941789431137
             }
           ]
         }
@@ -910,8 +681,8 @@
         "done": false,
         "id": "centriole",
         "anchor": [
-          592,
-          309
+          602,
+          308
         ],
         "advanced": true,
         "state": {
@@ -923,47 +694,47 @@
           "attempts": 8,
           "hits": 8,
           "hitRate": 1,
-          "meanAimErrorPx": 2.3,
+          "meanAimErrorPx": 0.4,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.5653405821561077
+              "errorPx": 0.5099695631749962
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.5401927147135271
+              "errorPx": 0.21988986588002357
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.35449104290040406
+              "errorPx": 0.23738941789431137
             },
             {
               "target": "centriole",
               "hit": true,
-              "errorPx": 0.9497755645901821
+              "errorPx": 0.531941141341934
             }
           ]
         }
@@ -972,8 +743,8 @@
         "done": false,
         "id": "peroxisome",
         "anchor": [
-          633,
-          287
+          718,
+          295
         ],
         "advanced": true,
         "state": {
@@ -985,52 +756,52 @@
           "attempts": 9,
           "hits": 9,
           "hitRate": 1,
-          "meanAimErrorPx": 2.1,
+          "meanAimErrorPx": 0.4,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.5653405821561077
+              "errorPx": 0.5099695631749962
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.5401927147135271
+              "errorPx": 0.21988986588002357
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.35449104290040406
+              "errorPx": 0.23738941789431137
             },
             {
               "target": "centriole",
               "hit": true,
-              "errorPx": 0.9497755645901821
+              "errorPx": 0.531941141341934
             },
             {
               "target": "peroxisome",
               "hit": true,
-              "errorPx": 0.5140455942765821
+              "errorPx": 0.48022112213774715
             }
           ]
         }
@@ -1039,8 +810,8 @@
         "done": false,
         "id": "nucleolus",
         "anchor": [
-          658,
-          385
+          645,
+          389
         ],
         "advanced": true,
         "state": {
@@ -1052,68 +823,61 @@
           "attempts": 10,
           "hits": 10,
           "hitRate": 1,
-          "meanAimErrorPx": 2,
+          "meanAimErrorPx": 0.5,
           "results": [
             {
               "target": "nucleus",
               "hit": true,
-              "errorPx": 14.757467400731084
+              "errorPx": 0.7210513434244638
             },
             {
               "target": "mitochondrion",
               "hit": true,
-              "errorPx": 0.44077925765621223
+              "errorPx": 0.6581069708897367
             },
             {
               "target": "golgi",
               "hit": true,
-              "errorPx": 0.16521468869339287
+              "errorPx": 0.4369217248014566
             },
             {
               "target": "rough-er",
               "hit": true,
-              "errorPx": 0.27022882787431834
+              "errorPx": 0.16036160553600098
             },
             {
               "target": "smooth-er",
               "hit": true,
-              "errorPx": 0.5653405821561077
+              "errorPx": 0.5099695631749962
             },
             {
               "target": "lysosome",
               "hit": true,
-              "errorPx": 0.5401927147135271
+              "errorPx": 0.21988986588002357
             },
             {
               "target": "vacuole",
               "hit": true,
-              "errorPx": 0.35449104290040406
+              "errorPx": 0.23738941789431137
             },
             {
               "target": "centriole",
               "hit": true,
-              "errorPx": 0.9497755645901821
+              "errorPx": 0.531941141341934
             },
             {
               "target": "peroxisome",
               "hit": true,
-              "errorPx": 0.5140455942765821
+              "errorPx": 0.48022112213774715
             },
             {
               "target": "nucleolus",
               "hit": true,
-              "errorPx": 1.002076268443095
+              "errorPx": 0.6193985266585091
             }
           ]
         }
       }
     ]
-  },
-  "procedural": {
-    "procedural": true,
-    "present": true,
-    "offsetPctHeight": 0,
-    "restoredRigged": true,
-    "restoredPresent": true
   }
 }

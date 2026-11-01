@@ -1,64 +1,52 @@
 import * as THREE from 'three';
 import type { HandFrame, HandSide, Settings } from '../types';
-import { clamp, damp } from '../core/math';
+import { clamp } from '../core/math';
 import { mapNormalized } from '../gestures/cursor';
-import { loadHands, type DrivenHand, type HandSource } from './handRig';
+import { SkeletonHand } from './skeletonHand';
 
 /** Distance from the camera along its view ray. The hand stays in front of the cell. */
 const HAND_DISTANCE = 4.35;
-const RAY = new THREE.Vector3();
+/** MediaPipe world landmarks are metric; this is the on-screen size of a reference hand. */
+const PX_PER_METRE = 1.05;
+const REFERENCE_HAND_SCALE = 0.094;
+const DEPTH_GAIN = 18;
+const NDC = new THREE.Vector3();
 const DIR = new THREE.Vector3();
 const FORWARD = new THREE.Vector3();
-const NDC = new THREE.Vector3();
 const PINCH = new THREE.Vector3();
 const LANDMARK = new THREE.Vector3();
+const WORLD_POINTS: THREE.Vector3[] = Array.from({ length: 21 }, () => new THREE.Vector3());
 
 /**
- * Places the two tracked hands in front of the cell.
+ * Places the two tracked hands in front of the cell as light skeletons.
  *
- * The container is the wrist root: its origin is landmark 0 and its quaternion is the palm
- * orientation. Nothing is anchored to the moving thumb/index midpoint. That distinction is what
- * keeps the virtual wrist glued to the tracked wrist when the palm turns.
+ * Every joint is placed on the camera ray through its mapped screen position, so the skeleton is
+ * an exact screen-space drawing of the tracked hand and landmark 8 lands on the pointer. World
+ * landmarks supply the *shape* (metric, stable under camera distance); the normalised landmarks
+ * supply only the pointer and the screen placement. That split avoids the old mesh's palm-basis
+ * retargeting while still letting fingers curl and the wrist rotate.
  */
 export class HandLayer {
   readonly group = new THREE.Group();
-  private readonly hands = new Map<HandSide, DrivenHand>();
-  private ready = false;
-  private rigged = false;
-  private source: HandSource = 'skeletal';
+  private readonly hands = new Map<HandSide, SkeletonHand>();
   private readonly map = { width: 0, height: 0, mirrorX: true, mirrorY: false };
 
-  async init(forceProcedural = false): Promise<void> {
-    try {
-      const loaded = await loadHands(forceProcedural);
-      this.hands.set('left', loaded.left);
-      this.hands.set('right', loaded.right);
-      this.rigged = loaded.rigged;
-      this.source = loaded.source;
-      for (const hand of this.hands.values()) {
-        hand.container.visible = false;
-        hand.container.position.set(0, 0, HAND_DISTANCE);
-        hand.container.traverse((obj) => {
-          if ((obj as THREE.Mesh).isMesh || (obj as THREE.Sprite).isSprite) obj.renderOrder = 2;
-        });
-        this.group.add(hand.container);
-      }
-      this.ready = true;
-    } catch (err) {
-      console.warn('[celly] hand layer failed to initialise:', err);
+  constructor() {
+    for (const side of ['left', 'right'] as const) {
+      const hand = new SkeletonHand(side);
+      hand.container.visible = false;
+      this.hands.set(side, hand);
+      this.group.add(hand.container);
     }
   }
 
-  get usingRiggedMeshes(): boolean {
-    return this.rigged;
-  }
-
-  get handSource(): HandSource {
-    return this.source;
-  }
-
-  update(frames: HandFrame[], settings: Settings, dt: number, camera: THREE.PerspectiveCamera): void {
-    if (!this.ready) return;
+  update(
+    frames: HandFrame[],
+    settings: Settings,
+    dt: number,
+    camera: THREE.PerspectiveCamera,
+    pixelRatio = 1
+  ): void {
     camera.updateMatrixWorld();
     const map = this.map;
     map.width = window.innerWidth;
@@ -79,41 +67,83 @@ export class HandLayer {
       }
 
       hand.container.visible = true;
+      hand.setResolution(map.width, map.height, pixelRatio);
 
-      // 1) Position: map the *wrist* (landmark 0) to the screen and unproject that ray at a
-      // fixed camera distance. The projected wrist is therefore exactly the tracked wrist.
-      const wrist = mapNormalized(frame.landmarks[0], map);
-      const target = worldOnRay(camera, wrist.x / map.width, wrist.y / map.height, HAND_DISTANCE, RAY);
-      // Position is not damped: the landmark filter has already removed camera noise, and a
-      // first-order lag here would make the wrist trail the tracked hand by several percent of
-      // screen height during fast movement. Orientation is the only thing that needs smoothing.
-      hand.container.position.copy(target);
+      // The apparent hand size follows the tracked hand's metric span, but bounded: a hand very
+      // close to the lens should not become a giant skeleton, and one at the back of the room
+      // should not vanish. Using the metric span (not the screen span) keeps the overlay the same
+      // size whichever way the camera is angled.
+      const handScale = frame.handScale > 1e-4 ? frame.handScale : REFERENCE_HAND_SCALE;
+      const pxPerMetre =
+        PX_PER_METRE * map.height * clamp(handScale / REFERENCE_HAND_SCALE, 0.7, 1.4);
+      const hasWorld =
+        frame.worldMetric !== false &&
+        frame.world.length === 21 &&
+        frame.handScale > 0.005 &&
+        worldIsFinite(frame.world);
+      const indexWorld = hasWorld ? frame.world[8] : null;
 
-      // 2) Scale: match the digital palm to the tracked palm. The wrist → middle-MCP span is
-      // stable under finger curl and shrinks with distance from the camera, so the mesh keeps
-      // the same apparent size as the landmark hand instead of sitting well inside it. The
-      // previous constant-factor scale made the pointer float past the mesh fingertips.
-      const span = frame.handSpan > 1e-5 ? frame.handSpan : 0.1;
-      // Points on a view ray are at a fixed Euclidean distance from the camera; their depth
-      // along the optical axis (what perspective divides by) is shorter towards the frame edge.
-      const depth = Math.max(0.2, HAND_DISTANCE * FORWARD.dot(DIR));
-      const pxPerUnit = map.height / (2 * tanHalfFov * depth);
-      const targetPalmPx = span * map.height;
-      const targetScale = clamp(
-        targetPalmPx / Math.max(1e-5, hand.palmLength * pxPerUnit),
-        0.5,
-        1.8
+      let thumbScreenX = frame.cursor.x;
+      let thumbScreenY = frame.cursor.y;
+      let indexScreenX = frame.cursor.x;
+      let indexScreenY = frame.cursor.y;
+      let thumbDistance = HAND_DISTANCE;
+      let indexDistance = HAND_DISTANCE;
+
+      for (let i = 0; i < 21; i++) {
+        let dx = 0;
+        let dy = 0;
+        let dz = 0;
+        let screenX: number;
+        let screenY: number;
+        if (hasWorld && indexWorld) {
+          // App publishes world landmarks in display orientation (x right, y up), already
+          // mirrored to match the pointer mapping, so the deltas need no extra flip.
+          const point = frame.world[i];
+          dx = point.x - indexWorld.x;
+          dy = point.y - indexWorld.y;
+          dz = point.z - indexWorld.z;
+          screenX = frame.cursor.x + dx * pxPerMetre;
+          screenY = frame.cursor.y - dy * pxPerMetre;
+        } else {
+          // No metric landmarks: use the normalized image positions directly. `mapNormalized`
+          // applies the same mirror and reach mapping as the cursor, so the shape stays glued to
+          // the pointer without a second scale factor.
+          const mapped = mapNormalized(frame.landmarks[i], map);
+          screenX = mapped.x;
+          screenY = mapped.y;
+        }
+
+        const distance = clamp(HAND_DISTANCE - dz * DEPTH_GAIN, 3.2, 5.4);
+        worldOnRay(camera, screenX / map.width, screenY / map.height, distance, WORLD_POINTS[i]);
+
+        if (i === 4) {
+          thumbScreenX = screenX;
+          thumbScreenY = screenY;
+          thumbDistance = distance;
+        } else if (i === 8) {
+          indexScreenX = screenX;
+          indexScreenY = screenY;
+          indexDistance = distance;
+        }
+      }
+
+      const pinchWorld = worldOnRay(
+        camera,
+        (thumbScreenX + indexScreenX) / 2 / map.width,
+        (thumbScreenY + indexScreenY) / 2 / map.height,
+        (thumbDistance + indexDistance) / 2,
+        PINCH
       );
-      const s = damp(hand.container.scale.x, targetScale, 10, dt);
-      hand.container.scale.setScalar(s);
+
+      // A pinch glow is a fixed number of CSS pixels across, independent of camera distance.
+      const opticalDepth = Math.max(0.2, HAND_DISTANCE * FORWARD.dot(DIR));
+      const worldPerPixel = (2 * tanHalfFov * opticalDepth) / map.height;
+      const glowScale = worldPerPixel * 46;
 
       hand.setFeedbackVisible(settings.showFeedback);
       hand.setPinchGlow(frame.pinching);
-
-      // Orientation and fingers are computed from the *unmirrored* world landmarks. Mirroring
-      // is a screen-position transform; reflecting the orientation data would make the rotation
-      // basis left-handed and introduce flips. Separate left/right meshes provide the anatomy.
-      hand.apply(frame.world, dt, frame.confidence);
+      hand.apply(WORLD_POINTS, pinchWorld ? { x: PINCH.x, y: PINCH.y, z: PINCH.z } : null, dt, frame.confidence, glowScale);
     }
   }
 
@@ -134,27 +164,20 @@ export class HandLayer {
   }
 
   debugHand(side: HandSide): Record<string, unknown> | null {
-    return this.hands.get(side)?.debugState?.() ?? null;
+    return this.hands.get(side)?.debugState() ?? null;
   }
 
   /**
-   * Test hook: the 3D hand's thumb/index contact midpoint projected into CSS pixels. The screen
-   * cursor rides the index fingertip instead, so this is only a secondary alignment metric.
+   * Test hook: the pinch glow projected into CSS pixels. The cursor rides the index fingertip;
+   * this is the secondary contact point used by the gesture's travel budget.
    */
   debugPinch(side: HandSide, camera: THREE.PerspectiveCamera): { x: number; y: number } | null {
     const pinch = this.hands.get(side)?.pinchWorld(PINCH);
     if (!pinch) return null;
-    const p = NDC.copy(pinch).project(camera);
-    return {
-      x: (p.x * 0.5 + 0.5) * window.innerWidth,
-      y: (0.5 - p.y * 0.5) * window.innerHeight
-    };
+    return project(camera, pinch);
   }
 
-  /**
-   * Test hook: a tracked landmark as the 3D mesh draws it, projected into CSS pixels. Index 8 is
-   * the index fingertip, which is where the on-screen pointer sits.
-   */
+  /** Test hook: a tracked skeleton joint projected into CSS pixels (8 = index fingertip). */
   debugLandmark(
     side: HandSide,
     camera: THREE.PerspectiveCamera,
@@ -162,11 +185,7 @@ export class HandLayer {
   ): { x: number; y: number } | null {
     const landmark = this.hands.get(side)?.landmarkWorld(LANDMARK, index);
     if (!landmark) return null;
-    const p = NDC.copy(landmark).project(camera);
-    return {
-      x: (p.x * 0.5 + 0.5) * window.innerWidth,
-      y: (0.5 - p.y * 0.5) * window.innerHeight
-    };
+    return project(camera, landmark);
   }
 
   dispose(): void {
@@ -175,8 +194,22 @@ export class HandLayer {
       hand.dispose();
     }
     this.hands.clear();
-    this.ready = false;
   }
+}
+
+function project(camera: THREE.PerspectiveCamera, point: THREE.Vector3): { x: number; y: number } {
+  const p = NDC.copy(point).project(camera);
+  return {
+    x: (p.x * 0.5 + 0.5) * window.innerWidth,
+    y: (0.5 - p.y * 0.5) * window.innerHeight
+  };
+}
+
+function worldIsFinite(points: Array<{ x: number; y: number; z: number }>): boolean {
+  for (const p of points) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return false;
+  }
+  return true;
 }
 
 /**

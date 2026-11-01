@@ -3,6 +3,76 @@
 All notable changes to Celly. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses `MAJOR.MINOR.PATCH` with a `v0.2` product label.
 
+## [0.2.2] — 2026-10-31
+
+A hand-overlay and onboarding pass. The 3D hand meshes are gone: the hands are now a light
+21-joint / 21-bone skeleton in the Cellab style, the first-run flow runs the real camera preview,
+and the surrounding chrome yields to the scene on small screens.
+
+### Added
+
+- **Skeleton hand renderer** (`src/scene/skeletonHand.ts`): 21 rounded joints and 21 bone segments,
+  including the four palm links (`0→17`, `5→9`, `9→13`, `13→17`). Left is mint `#7ee0c3`, right is
+  amber `#ffd166`; the index tip is white, the pinch tips warm white, and an additive glow marks the
+  pinch contact. A dark 4.5 px underlay and a rimmed joint shader keep it readable over the membrane
+  and bloom, and joints keep a constant CSS-pixel size.
+- **Live onboarding hands check** — the hands step embeds the mirrored webcam preview with the
+  skeleton and landmark counters, an inline **Enable camera** / retry button, a visible **Skip**, a
+  12 s camera timeout and inline permission/insecure-context errors. Escape and the backdrop close
+  the flow, and focus is trapped while it is open.
+- **Per-page narrow-viewport framing** — the lab caps its pullback at 1.7×, Test at 1.8× and
+  Knowledge at 2.35×, so the cell stays large on a 390×844 screen instead of shrinking to fit the
+  graph's wider layout.
+- **Distance-compensated knowledge labels** — labels target ~19 px and clamp to 1–2.4× with padded
+  collision boxes, so they stay legible when the camera pulls back.
+
+### Changed
+
+- **Hand placement** now uses display-oriented world landmarks: the app mirrors MediaPipe world once
+  at the frame boundary, `HandLayer` places every joint on the camera ray through its world delta,
+  anchors landmark 8 to the cursor, and scales from metric `handScale / 0.094` (clamped 0.7–1.4).
+  The old palm-basis retarget, skinning and bone display are unused, so the skeleton tip and pinch
+  contact now project exactly under their tracked points.
+- **`showFeedback`** is now the skeleton visibility toggle, labelled **Hand skeleton + landmarks**.
+- **Toasts** dock top-right under the topbar on desktop and above the collapsed sheet/structure rail
+  at ≤1080 px; camera/tracking toasts stay hidden while onboarding carries the same message inline.
+- **HUD** keeps only its header and hand count while no hands are in frame, and the Test page hides
+  the left rail entirely; the structure rail and overlays reserve the sheet band.
+- **`scripts/fetch-assets.mjs`** now removes stale `public/hands_*.glb` files instead of copying them.
+- **`scripts/verify-hands.mjs`** measures the skeleton (`skeletonIndexOffsetPx`, point/segment counts,
+  source) and settles the pre-pinch aim before each selection attempt.
+
+### Removed
+
+- `src/scene/handRig.ts`, `src/scene/lowPolyHand.ts`, `src/scene/handMath.ts` and their unit tests.
+- The `?hands=glb` path, the procedural-hand setting and the generated low-poly mesh.
+- The deployed `public/hands_*.glb` meshes (9 MB total) and the GLB copy step in asset provisioning.
+
+### Fixed
+
+- Onboarding could stall on "No hands yet" with the camera action elsewhere and no visible way
+  forward; the hands step now owns the preview, the enable/retry action and the status copy, so the
+  check and the control are in the same place.
+- The hands step no longer scrolls at 1440×900; the card grows to `min(760px, 92vh)`.
+- A pinch glow could land off-screen because the thumb and index screen coordinates were added to
+  already-absolute values.
+- The skeleton wrist was mirrored twice on its way to the renderer; mirroring now happens once, at
+  the frame boundary.
+- The cell was cropped or reduced to a thumbnail on portrait phones; the lab now pulls back only
+  as far as the cell needs.
+- Toasts could cover the structure rail or the control sheet on small screens.
+- Knowledge labels became unreadable specks when the camera pulled back.
+- The control-panel thumbnail showed its LIVE badge over an empty "Camera off" frame before the
+  camera started; the idle row now reads **Camera off** and the badge appears only when live.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint`, `npm test` (91 unit tests) and `npm run build` pass.
+- Playwright e2e: 10/10, including skeleton source/counts, index-tip placement and two-hand scale.
+- Deterministic skeleton suite: 0 page errors, 21 points / 21 segments in every sample, 0 px drawn
+  index-tip offset, ≤0.5 px wrist offset, selection 10/10 with 1.6 px mean aim error (the first
+  approach from 110 px away dominates the mean; the other nine attempts are ≤1.4 px).
+
 ## [Unreleased] — 2026-10-24
 
 An efficiency and touch pass: the startup hand is now generated low-poly geometry, rendering follows

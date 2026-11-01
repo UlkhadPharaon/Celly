@@ -17,8 +17,8 @@ dist/
 *.fbx
 *.log
 
-# Alternative local hand skins. The generated low-poly hand is the default and
-# needs no GLB; hands_rigged.glb is kept separately for the opt-in ?hands=glb path.
+# Alternative local hand skins, no longer shipped. The hands are a 21-joint
+# skeleton generated from MediaPipe landmarks at runtime, so no hand GLB is built or deployed.
 hands_holo.glb
 hands_ulkhad.glb
 public/hands_*.glb

@@ -18,7 +18,6 @@ export interface ControlState {
   quality: QualityMode;
   reducedMotion: boolean;
   highContrast: boolean;
-  proceduralHand: boolean;
 }
 
 export type ToggleKey =
@@ -29,15 +28,14 @@ export type ToggleKey =
   | 'swap'
   | 'dwell'
   | 'reducedMotion'
-  | 'highContrast'
-  | 'proceduralHand';
+  | 'highContrast';
 
 const COPY = {
   en: {
     controls: 'Controls',
     openControls: 'Open controls',
     closeControls: 'Close controls',
-    feedback: 'Visual feedback + landmarks',
+    feedback: 'Hand skeleton + landmarks',
     mirrorX: 'Mirror X axis',
     mirrorY: 'Mirror Y axis',
     swap: 'Hands swap',
@@ -57,7 +55,6 @@ const COPY = {
     accessibility: 'Accessibility',
     reducedMotion: 'Reduce motion',
     highContrast: 'High contrast',
-    proceduralHand: 'Procedural hand (diagnostic)',
     projectLinks: 'Project links',
     github: 'GitHub',
     article: 'Learn article',
@@ -67,7 +64,7 @@ const COPY = {
     controls: 'Réglages',
     openControls: 'Ouvrir les réglages',
     closeControls: 'Fermer les réglages',
-    feedback: 'Retour visuel + points',
+    feedback: 'Squelette des mains + points',
     mirrorX: 'Miroir axe X',
     mirrorY: 'Miroir axe Y',
     swap: 'Inverser les mains',
@@ -87,7 +84,6 @@ const COPY = {
     accessibility: 'Accessibilité',
     reducedMotion: 'Réduire les animations',
     highContrast: 'Contraste élevé',
-    proceduralHand: 'Main procédurale (diagnostic)',
     projectLinks: 'Liens du projet',
     github: 'GitHub',
     article: 'Lire l’article',
@@ -223,7 +219,6 @@ export class ControlPanel {
     more.append(moreList);
     this.addRow(moreList, 'reducedMotion', 'reducedMotion', ICONS.spark);
     this.addRow(moreList, 'highContrast', 'highContrast', ICONS.eye);
-    this.addRow(moreList, 'proceduralHand', 'proceduralHand', ICONS.hand);
     this.root.append(more);
     this.accessibilitySummary = summary;
 
@@ -293,6 +288,10 @@ export class ControlPanel {
     this.root.append(privacy);
 
     this.setState(state);
+    // Before the tracker reports its first status the row would otherwise show a bare
+    // "Enable camera" button with no context, and the preview's LIVE badge would be visible
+    // over an empty frame.
+    this.setCameraStatus('idle');
   }
 
   private readonly onSheetQueryChange = (event: MediaQueryListEvent): void => {
@@ -367,7 +366,6 @@ export class ControlPanel {
     this.setOn('dwell', state.dwell);
     this.setOn('reducedMotion', state.reducedMotion);
     this.setOn('highContrast', state.highContrast);
-    this.setOn('proceduralHand', state.proceduralHand);
     this.syncPreviewVisibility();
 
     for (const b of this.root.querySelectorAll<HTMLButtonElement>('[data-lang]')) {
@@ -397,8 +395,7 @@ export class ControlPanel {
       ['dwell', 'dwell'],
       ['showWebcam', 'webcam'],
       ['reducedMotion', 'reducedMotion'],
-      ['highContrast', 'highContrast'],
-      ['proceduralHand', 'proceduralHand']
+      ['highContrast', 'highContrast']
     ];
     for (const [key, labelKey] of map) {
       const label = this.labels.get(key);
@@ -449,11 +446,20 @@ export class ControlPanel {
 
   setCameraStatus(status: CameraStatus, detail?: string): void {
     const live = status === 'live';
-    this.statusNode.classList.toggle('is-error', status === 'denied' || status === 'unsupported' || status === 'in-use' || status === 'not-found');
+    this.statusNode.classList.toggle(
+      'is-error',
+      status === 'denied' ||
+        status === 'unsupported' ||
+        status === 'in-use' ||
+        status === 'not-found' ||
+        status === 'insecure-context' ||
+        status === 'timeout'
+    );
     this.statusNode.classList.toggle('is-ok', live);
-    this.retry.classList.toggle('is-hidden', live);
+    this.retry.classList.toggle('is-hidden', live || status === 'requesting');
     if (live) this.statusText.textContent = this.state.language === 'fr' ? 'Caméra active' : 'Camera live';
     else if (status === 'requesting') this.statusText.textContent = this.state.language === 'fr' ? 'Autorisation…' : 'Requesting…';
+    else if (status === 'idle') this.statusText.textContent = this.state.language === 'fr' ? 'Caméra éteinte' : 'Camera off';
     else this.statusText.textContent = detail ?? '';
     this.preview.setStatus(live, live ? '' : this.state.language === 'fr' ? 'Caméra éteinte' : 'Camera off');
   }

@@ -1,8 +1,8 @@
 # Hand pose replay fixtures
 
-Deterministic 21-point MediaPipe-style landmark snapshots for the hand-retargeting regression
-suite. They are generated from `src/core/handPoses.ts` — not recorded from a camera — and are
-therefore stable across machines.
+Deterministic 21-point MediaPipe-style landmark snapshots for the hand-skeleton regression suite.
+They are generated from `src/core/handPoses.ts` — not recorded from a camera — and are therefore
+stable across machines.
 
 Each file is:
 
@@ -23,7 +23,7 @@ publishes). `PoseData.world` is wrist-centred in metres with y up and z toward t
 
 Sequences: `wiggle`, `wrist-rotation-slow`, and `fast-movement` contain 13 frames each. All other
 files contain one frame. Replay one frame with `window.__celly.injectPoseData(frame)` in the
-browser harness, or convert `world` to the rig's local convention for offline solver tests.
+browser harness, or convert `world` into display orientation for offline placement checks.
 
 Regenerate:
 

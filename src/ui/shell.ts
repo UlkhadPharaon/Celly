@@ -190,8 +190,7 @@ export class Shell {
       language: settings.language,
       quality: settings.quality,
       reducedMotion: settings.reducedMotion,
-      highContrast: settings.highContrast,
-      proceduralHand: settings.proceduralHand
+      highContrast: settings.highContrast
     };
     this.controls = new ControlPanel(
       this.registry,

@@ -2,6 +2,11 @@
 
 Date: 2026-10-19 · Working folder: `D:\TKS\BUILD\Celly`
 
+> **Update 2026-10-31:** the hand-mesh plan below is historical. The shipped app no longer loads
+> `hands_*.glb`; hands are drawn as a 21-joint / 21-bone skeleton generated from MediaPipe landmarks
+> (see D-56 in [`DECISIONS.md`](DECISIONS.md)). The GLB files were removed from `public/` and are not
+> part of the build or deployment.
+
 Full recursive sweep of `D:\TKS\BUILD` (Celly, Cellab, LEARN) before any code was written.
 
 ## 1. What exists
@@ -69,9 +74,9 @@ Node v24.18.0 · npm 11.16.0 · Blender 5.2 / 4.3 · Playwright 1.64 with Chromi
 
 | Need | Source | Action |
 |---|---|---|
-| 3D hands | `hands_rigged.glb` | Load at runtime; override with a translucent sci-fi material |
-| Bone→landmark map | bone names `NN_` | Parse `parseInt(name.slice(0,2))` — no inference |
-| Retargeting | `Handtracking systems/.../app.js` | Reimplement in TypeScript, add slerp + world-space placement |
+| 3D hands | — | **Not shipped.** Draw a 21-joint skeleton from MediaPipe landmarks (D-56) |
+| Bone→landmark map | bone names `NN_` | Historical only; the skeleton uses landmark indices directly |
+| Retargeting | `Handtracking systems/.../app.js` | Historical only; no mesh retargeting remains |
 | Cell geometry | `src/cell/shapes.ts` | Port + extend (peroxisome, nuclear envelope, cytoskeleton) |
 | Organelle copy | `src/data/organelles.json` + Cellab `O{}` | Merge into new richer schema, EN + FR |
 | Maths helpers | `src/util/math.ts` | Port as-is |
@@ -84,7 +89,7 @@ Node v24.18.0 · npm 11.16.0 · Blender 5.2 / 4.3 · Playwright 1.64 with Chromi
 | Missing | Resolution |
 |---|---|
 | Cell 3D model | Procedural, §6.3 of the brief. 17 organelle types, every one a named, raycastable group |
-| Human hand mesh fallback | Procedural skeletal hand (glassy capsules + joints) if the GLB fails |
+| Human hand overlay | 21-joint / 21-bone skeleton generated from landmarks (no mesh, no textures) |
 | Knowledge network data | Author `knowledge.json`, 36 nodes / ~90 edges |
 | Question bank | Author `questions.json`, 48 MCQ + 36 flashcards + 3 × 10 questionnaires |
 | Fonts | `@fontsource/space-grotesk`, `@fontsource/inter` (OFL-1.1) |

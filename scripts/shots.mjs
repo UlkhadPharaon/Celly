@@ -136,6 +136,9 @@ await page.addStyleTag({
 });
 const viewport = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
 console.log(`viewport ${viewport.w}x${viewport.h} @${await page.evaluate(() => window.devicePixelRatio)}x`);
+// The docs tour already shows the live preview inside onboarding. Leaving the control-panel
+// thumbnail visible duplicates it (and the fake device's test pattern) behind every overlay.
+await page.evaluate(() => window.__celly.toggle('showWebcam', false));
 await page.waitForTimeout(1800);
 
 // 1) welcome
@@ -163,11 +166,17 @@ await shot('04-lab');
 
 // 5) the lab with an organelle selected through the real gesture path
 const nucleus = await anchor('nucleus');
-if (nucleus) await gesture('right', nucleus.x, nucleus.y, 0.96, 1700);
+if (nucleus) {
+  await gesture('right', nucleus.x, nucleus.y, 0.96, 1700);
+  // Selection commits on pinch release; keep the hand on the organelle while it opens.
+  await gesture('right', nucleus.x, nucleus.y, 0.08, 900);
+}
 await shot('05-lab-selected');
 
 // 6) unselect, then the knowledge graph
-await gesture('right', 250, 880, 0.96, 900);
+await gesture('right', 250, 880, 0.96, 500);
+// Unselect also commits on release; without releasing, the lab card would survive the page swap.
+await gesture('right', 250, 880, 0.08, 700);
 await clear();
 await page.click(tab('knowledge'));
 await settle();
@@ -176,7 +185,11 @@ await shot('06-knowledge');
 
 // 7) a focused knowledge node + its linked ideas
 const node = await anchor('mitochondrion');
-if (node) await gesture('right', node.x, node.y, 0.96, 1700);
+if (node) {
+  await gesture('right', node.x, node.y, 0.96, 1700);
+  // Focus commits on pinch release; keep the hand on the node so it does not unselect.
+  await gesture('right', node.x, node.y, 0.08, 900);
+}
 await shot('07-knowledge-focus');
 
 // 8) the quiz home
@@ -207,8 +220,8 @@ await shot('10-flashcard-revealed');
 await page.click(tab('interactive'));
 await settle();
 await page.waitForTimeout(600);
-await gesture('right', 1230, 470, 0.96, 260);
-await gesture('left', 420, 650, 0.96, 900);
+await gesture('right', 1190, 540, 0.96, 260);
+await gesture('left', 410, 680, 0.96, 900);
 await shot('11-two-hands-scale');
 
 await browser.close();
