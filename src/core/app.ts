@@ -1,4 +1,5 @@
 import type {
+  CameraStatus,
   GestureFrame,
   HandFrame,
   HandSide,
@@ -8,6 +9,7 @@ import type {
   RawFrame,
   Settings,
   TrackingQuality,
+  TrackingStatus,
   Vec2,
   Vec3
 } from '../types';
@@ -77,6 +79,7 @@ export class CellyApp {
   private readonly pinchStates = new Map<HandSide, PinchState>();
   private readonly lastFrames = new Map<HandSide, HandFrame>();
   private readonly lastSeen = new Map<HandSide, number>();
+  private readonly lostSent = new Set<HandSide>();
   private readonly scores = new Map<HandSide, number>();
   private readonly pages = new Map<PageId, Page>();
   private readonly aim = new AimTracker();
@@ -99,6 +102,8 @@ export class CellyApp {
   private lastHudAt = 0;
   private lastTime = 0;
   private lastTickMs = 0;
+  /** Capture time of the previous detection, used to pace the landmark filters. */
+  private lastDetectionMs = 0;
   private elapsed = 0;
   private renderFrames = 0;
   private renderClock = 0;
@@ -452,8 +457,24 @@ export class CellyApp {
 
   // ------------------------------------------------------------------- tracking
 
+  /**
+   * Smoother timestep for the landmark filters. Detections now arrive asynchronously from the
+   * tracking worker, so their spacing is the real pace of the signal, not the render clock.
+   * Clamped to the range the one-euro filters are designed for.
+   */
+  private detectionDt(raw: RawFrame | null): number {
+    if (!raw) return 1 / 30;
+    const previous = this.lastDetectionMs;
+    this.lastDetectionMs = raw.tMs;
+    if (previous <= 0) return 1 / 30;
+    return clamp((raw.tMs - previous) / 1000, 1 / 120, 0.2);
+  }
+
   private buildFrames(raw: RawFrame | null, dt: number): HandFrame[] {
-    const t = raw ? raw.tMs : this.lastTickMs;
+    // All gesture timing keeps the render clock. Detection frames carry a capture timestamp that
+    // is older than the current render frame, and mixing the two clocks would make dwell and
+    // hold windows jump backwards.
+    const t = this.lastTickMs;
     const detections = (raw?.hands ?? []).map((hand) => ({
       label: hand.handedness,
       wrist: hand.landmarks[0] ?? { x: 0.5, y: 0.5, z: 0 },
@@ -544,23 +565,32 @@ export class CellyApp {
         tMs: t
       };
       frames.push(frame);
+      // Commit the newest state as soon as it is detected. The same object is replayed on ticks
+      // where the camera has not produced a new frame, so a pinch cannot be ended by a stale tick.
       this.lastFrames.set(side, frame);
       this.lastSeen.set(side, t);
+      this.lostSent.delete(side);
       this.scores.set(side, hand.score);
     });
 
-    // 250 ms hand-loss tolerance: keep the last pose alive but end any gesture.
+    // 250 ms hand-loss tolerance: persist the last pose between detections, but never mutate it
+    // into a synthetic release. Only after the window expires do we emit one explicit lost frame.
     for (const side of ['left', 'right'] as const) {
       if (frames.some((f) => f.side === side)) continue;
       const last = this.lastFrames.get(side);
       const seen = this.lastSeen.get(side) ?? -Infinity;
       if (last && t - seen < HAND_LOSS_MS) {
+        frames.push({ ...last, pinchStart: false, pinchEnd: false });
+      } else if (last && !this.lostSent.has(side)) {
+        // A single present:false transition lets the gesture engine clear in-flight candidates
+        // without treating the loss as a deliberate release. It is not repeated every tick.
         frames.push({
           ...last,
+          present: false,
           pinching: false,
           pinchValue: 0,
           pinchStart: false,
-          pinchEnd: last.pinching,
+          pinchEnd: false,
           lost: true,
           confidence: 0,
           pinchCandidateAt: -1,
@@ -568,10 +598,12 @@ export class CellyApp {
           aim: { ...last.cursor },
           rawCursor: { ...last.rawCursor }
         });
-      } else {
+        this.lostSent.add(side);
         this.lastFrames.delete(side);
+        this.lastSeen.delete(side);
         this.scores.delete(side);
         this.pinchStates.set(side, initialPinch());
+        this.aimLocks.delete(side);
       }
     }
     return frames;
@@ -591,13 +623,15 @@ export class CellyApp {
       return;
     }
 
-    const raw = this.tracker.ready ? this.tracker.detect() : null;
-    // Build frames every tick, camera or not: with no tracker and no synthetic hands this is
+    // Inference runs in the tracking worker, so a detection is consumed here when it arrives
+    // rather than produced here. No new result simply means the worker is still busy.
+    const raw = this.tracker.poll();
+    // Build frames every tick, result or not: with no tracker and no synthetic hands this is
     // an empty list, but it is also what ages the 250 ms tolerance out and lets the gesture
     // engine retire cursors, hints and hover when the hands leave the frame.
-    this.frames = this.buildFrames(raw, 1 / 30);
+    this.frames = this.buildFrames(raw, this.detectionDt(raw));
     this.updateHover();
-    this.stepGestures(raw ? raw.tMs : this.lastTickMs);
+    this.stepGestures(this.lastTickMs);
     this.clearFinishedAimLocks();
 
     if (this.gestureFrame && !this.settings.dwellClick) this.shell.registry.setDwell(null, 0);
@@ -643,11 +677,10 @@ export class CellyApp {
     this.pickRadius = clamp(52 * (0.1 / Math.max(0.04, primary.handSpan)), 40, 62);
     const aim = primary.aim;
     this.uiHover = this.shell.registry.hitTest(aim.x, aim.y);
-    if (primary.pinching) {
-      // Freeze the armed scene target for the duration of the pinch. The pre-pinch aim lock is
-      // deliberately 100 ms old, so re-picking from it mid-gesture could silently move the target
-      // to a neighbour (or to blank) after the user already committed. The gesture engine captured
-      // this target on pinch start and will select it on release.
+    if (primary.pinching && !primary.pinchStart) {
+      // Freeze the armed scene target for the rest of the pinch. It was picked on the start frame
+      // and the gesture engine already committed it, so re-picking mid-gesture could silently
+      // move the target to a neighbour after the user committed.
       this.shell.registry.setHover(this.uiHover);
       return;
     }
@@ -825,6 +858,28 @@ export class CellyApp {
   /** Monotonic render-loop counter for screenshot specs that must wait for real frames. */
   get renderedFrames(): number {
     return this.framesRendered;
+  }
+
+  /**
+   * Camera + worker tracking health, for diagnostics and the browser-level tests that prove
+   * inference really runs off the main thread.
+   */
+  trackingState(): {
+    camera: CameraStatus;
+    tracking: TrackingStatus;
+    detail: string | null;
+    trackerFps: number;
+    inferenceMs: number;
+    ready: boolean;
+  } {
+    return {
+      camera: this.tracker.camera,
+      tracking: this.tracker.tracking,
+      detail: this.tracker.detail,
+      trackerFps: this.tracker.trackerFps,
+      inferenceMs: this.tracker.inferenceMs,
+      ready: this.tracker.ready
+    };
   }
 
   /** Start/stop the built-in Selection test on the interactive lab page (T key or HUD). */

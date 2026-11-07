@@ -1,6 +1,6 @@
-import { FilesetResolver, HandLandmarker, type HandLandmarkerResult } from '@mediapipe/tasks-vision';
-import type { CameraStatus, RawFrame, RawHand, TrackingStatus, Vec3 } from '../types';
+import type { CameraStatus, RawFrame, TrackingStatus } from '../types';
 import { deviceProfile } from '../core/device';
+import type { WorkerAssetSource, TrackingWorkerRequest, TrackingWorkerResponse } from './trackingProtocol';
 
 export interface TrackerCallbacks {
   onCamera?: (status: CameraStatus, detail?: string) => void;
@@ -12,27 +12,44 @@ export function resolveAssetPath(relative: string): string {
   return new URL(relative, base).href;
 }
 
-function toVec3(p: { x: number; y: number; z: number }): Vec3 {
-  return { x: p.x, y: p.y, z: p.z };
-}
+/** Pinned CDN fallback, used only when the local wasm folder cannot be loaded. */
+const CDN_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm';
+/**
+ * The model is always the local copy: it is the larger download and must be available offline
+ * even when the wasm runtime had to come from the CDN.
+ */
+const MODEL = resolveAssetPath('models/hand_landmarker.task');
+/** Hand-model init inside the worker: 20 MB of wasm + model, local disk, but allow for cold cache. */
+const WORKER_INIT_TIMEOUT_MS = 45_000;
 
 /**
- * Webcam + MediaPipe HandLandmarker (VIDEO mode, 2 hands, GPU with CPU fallback).
+ * Webcam + MediaPipe HandLandmarker, with inference off the main thread.
  *
- * The wasm runtime and the .task model are served locally so the app is offline-capable.
- * If the local fileset cannot initialise (corrupt checkout), we retry once against the
- * pinned CDN and report which path is live.
+ * Camera frames are converted to an `ImageBitmap` on the main thread and transferred to a
+ * dedicated worker that owns the landmarker. At most one frame is in flight at a time — exactly
+ * the single-flight + backpressure loop Cellab uses — so a slow inference never queues up and
+ * never blocks rendering, gestures or DOM updates. Newest results are handed to the render loop
+ * through `poll()`; a result that arrives while the render thread is busy is replaced by the next
+ * one, which is indistinguishable at render rate but keeps the loop free.
  */
 export class HandTracker {
   camera: CameraStatus = 'idle';
   tracking: TrackingStatus = 'idle';
   detail: string | null = null;
   trackerFps = 0;
+  /** Duration of the last worker inference. A health signal only: it never blocks the main thread. */
+  inferenceMs = 0;
 
   video: HTMLVideoElement | null = null;
   private stream: MediaStream | null = null;
-  private landmarker: HandLandmarker | null = null;
-  private lastTs = 0;
+  private worker: Worker | null = null;
+  private workerReady = false;
+  private pending: RawFrame | null = null;
+  /** A `createImageBitmap` capture is in flight; drop camera frames until it resolves. */
+  private capturing = false;
+  /** A bitmap has been transferred and the worker owes us a result for it. */
+  private inFlight = false;
+  private frameId = 0;
   private lastVideoTime = -1;
   private frames = 0;
   private fpsClock = 0;
@@ -40,11 +57,12 @@ export class HandTracker {
   private startingFlag = false;
   private attempt = 0;
   private requestTimer: number | null = null;
+  private initTimer: number | null = null;
 
   constructor(private readonly cb: TrackerCallbacks = {}) {}
 
   get ready(): boolean {
-    return !!this.landmarker && this.camera === 'live';
+    return this.workerReady && this.camera === 'live';
   }
 
   async start(): Promise<void> {
@@ -116,7 +134,7 @@ export class HandTracker {
       return;
     }
 
-    await this.initLandmarker(attempt);
+    await this.initWorker(attempt);
   }
 
   /**
@@ -144,111 +162,165 @@ export class HandTracker {
     this.requestTimer = null;
   }
 
-  private async initLandmarker(generation: number): Promise<void> {
-    this.setTracking('initializing');
-    const modelPath = resolveAssetPath('models/hand_landmarker.task');
-
-    type Attempt = { landmarker: HandLandmarker; delegate: 'gpu' | 'cpu' };
-
-    const createLandmarker = async (wasmBase: string): Promise<Attempt> => {
-      const vision = await FilesetResolver.forVisionTasks(wasmBase);
-      try {
-        const landmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: modelPath, delegate: 'GPU' },
-          runningMode: 'VIDEO',
-          numHands: 2,
-          minHandDetectionConfidence: 0.5,
-          minHandPresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5
-        });
-        return { landmarker, delegate: 'gpu' };
-      } catch {
-        const landmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: modelPath, delegate: 'CPU' },
-          runningMode: 'VIDEO',
-          numHands: 2,
-          minHandDetectionConfidence: 0.5,
-          minHandPresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5
-        });
-        return { landmarker, delegate: 'cpu' };
-      }
-    };
-
-    try {
-      const local = await createLandmarker(resolveAssetPath('mediapipe-wasm'));
-      if (generation !== this.attempt) {
-        local.landmarker.close();
-        return;
-      }
-      this.landmarker = local.landmarker;
-      this.detail = `local · ${local.delegate.toUpperCase()}`;
-      this.setTracking(local.delegate);
-    } catch (localErr) {
-      if (generation !== this.attempt) return;
-      try {
-        const cdn = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm';
-        const remote = await createLandmarker(cdn);
-        if (generation !== this.attempt) {
-          remote.landmarker.close();
-          return;
-        }
-        this.landmarker = remote.landmarker;
-        this.detail = `cdn · ${remote.delegate.toUpperCase()} (CDN fallback)`;
-        this.setTracking(remote.delegate);
-      } catch {
-        if (generation === this.attempt) this.setTracking('error', String(localErr));
-      }
-    }
+  private assetSources(): WorkerAssetSource[] {
+    return [
+      { wasmBase: resolveAssetPath('mediapipe-wasm'), modelPath: MODEL },
+      { wasmBase: CDN_WASM, modelPath: MODEL }
+    ];
   }
 
-  /** Run inference at most once per new video frame. */
-  detect(): RawFrame | null {
+  /**
+   * Spawn the tracking worker and wait for it to report its delegate.
+   *
+   * A worker that cannot start or whose model fails to load is a hard tracking error: there is no
+   * main-thread fallback, because synchronous inference is what made Celly stutter in the first
+   * place. The camera keeps streaming — the preview, the skeleton and the mouse path all still
+   * work — so the app stays usable while the message says the model is unavailable.
+   */
+  private initWorker(attempt: number): Promise<void> {
+    this.setTracking('initializing');
+    if (typeof Worker === 'undefined') {
+      return Promise.reject(new Error('This browser cannot run a background tracking worker.'));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      let worker: Worker;
+      try {
+        worker = new Worker(new URL('./trackingWorker.ts', import.meta.url), { type: 'module' });
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+      this.worker = worker;
+      this.workerReady = false;
+      this.inFlight = false;
+      this.capturing = false;
+      this.lastVideoTime = -1;
+      this.frameId = 0;
+
+      const settle = (): void => {
+        if (this.initTimer !== null) {
+          window.clearTimeout(this.initTimer);
+          this.initTimer = null;
+        }
+      };
+
+      this.initTimer = window.setTimeout(() => {
+        if (attempt === this.attempt) {
+          reject(new Error('The tracking worker did not report ready in time.'));
+        }
+      }, WORKER_INIT_TIMEOUT_MS);
+
+      worker.onmessage = (event: MessageEvent<TrackingWorkerResponse>): void => {
+        if (attempt !== this.attempt) return;
+        const message = event.data;
+        switch (message.type) {
+          case 'ready':
+            settle();
+            this.workerReady = true;
+            this.detail = describeDelegate(message.source, message.delegate);
+            this.setTracking(message.delegate);
+            resolve();
+            break;
+          case 'result':
+            // Latest result wins; an unconsumed one is dropped, exactly like a dropped camera
+            // frame in a single-flight pipeline.
+            this.inFlight = false;
+            this.inferenceMs = message.inferenceMs;
+            this.pending = message.frame;
+            this.frames += 1;
+            this.noteThroughput();
+            break;
+          case 'error':
+            if (!message.fatal && message.id !== undefined) {
+              // Per-frame failure (one corrupt frame, a pre-ready frame): drop it and keep going.
+              this.inFlight = false;
+              return;
+            }
+            settle();
+            reject(new Error(message.detail));
+            break;
+          default:
+            break;
+        }
+      };
+
+      worker.onerror = (event): void => {
+        if (attempt !== this.attempt) return;
+        settle();
+        reject(new Error(event.message || 'The tracking worker crashed.'));
+      };
+
+      const request: TrackingWorkerRequest = { type: 'init', attempts: this.assetSources() };
+      worker.postMessage(request);
+    })
+      .catch((err: unknown) => {
+        if (attempt !== this.attempt) return;
+        this.disposeWorker();
+        this.setTracking('error', describeWorkerError(err));
+      });
+  }
+
+  /**
+   * Hand out the newest completed detection, if any. Each result is delivered exactly once:
+   * calling again before the next result returns null, which keeps the 250 ms hand-loss tolerance
+   * in charge of the gap instead of replaying a stale pose as a new one.
+   */
+  poll(): RawFrame | null {
+    this.pump();
+    const frame = this.pending;
+    this.pending = null;
+    return frame;
+  }
+
+  /**
+   * Send exactly one camera frame to the worker, and only when it is idle. Backpressure is what
+   * keeps inference from ever queueing up behind itself.
+   */
+  private pump(): void {
+    const worker = this.worker;
     const video = this.video;
-    const lm = this.landmarker;
-    if (!video || !lm || video.readyState < 2) return null;
-    if (video.currentTime === this.lastVideoTime) return null;
+    if (!worker || !this.workerReady || !video) return;
+    if (video.readyState < 2) return;
+    if (this.capturing || this.inFlight) return;
+    if (video.currentTime === this.lastVideoTime) return;
     this.lastVideoTime = video.currentTime;
 
+    const id = ++this.frameId;
+    const capturedAt = performance.now();
+    this.capturing = true;
+    createImageBitmap(video)
+      .then((bitmap) => {
+        this.capturing = false;
+        if (!this.worker || !this.workerReady) {
+          bitmap.close();
+          return;
+        }
+        this.inFlight = true;
+        const request: TrackingWorkerRequest = { type: 'frame', id, bitmap, capturedAt };
+        this.worker.postMessage(request, [bitmap]);
+      })
+      .catch(() => {
+        this.capturing = false;
+      });
+  }
+
+  private noteThroughput(): void {
     const now = performance.now();
-    if (now - this.fpsClock > 1000) {
+    if (now - this.fpsClock >= 1000) {
       this.trackerFps = Math.round((this.frames * 1000) / Math.max(1, now - this.fpsClock));
       this.frames = 0;
       this.fpsClock = now;
     }
-    this.frames++;
-
-    // MediaPipe requires strictly increasing timestamps.
-    let ts = now;
-    if (ts <= this.lastTs) ts = this.lastTs + 0.001;
-    this.lastTs = ts;
-
-    let result: HandLandmarkerResult;
-    try {
-      result = lm.detectForVideo(video, ts);
-    } catch {
-      return null;
-    }
-
-    const hands: RawHand[] = [];
-    for (let i = 0; i < result.landmarks.length; i++) {
-      const cat = result.handednesses[i]?.[0];
-      hands.push({
-        handedness: (cat?.categoryName as RawHand['handedness']) ?? 'Unknown',
-        score: cat?.score ?? 0,
-        landmarks: result.landmarks[i].map(toVec3),
-        // MediaPipe world space is metric but image-aligned: x right, y down, z negative
-        // towards the camera. Convert once, here, to the renderer's y-up / +z-towards-viewer
-        // frame so the rig never has to know about the tracker's convention.
-        worldLandmarks: (result.worldLandmarks[i] ?? []).map((p) => ({ x: p.x, y: -p.y, z: -p.z }))
-      });
-    }
-    return { hands, tMs: now };
   }
 
   async stop(): Promise<void> {
     this.attempt += 1;
     this.clearRequestTimeout();
+    if (this.initTimer !== null) {
+      window.clearTimeout(this.initTimer);
+      this.initTimer = null;
+    }
     this.startingFlag = false;
     this.starting = null;
     this.stream?.getTracks().forEach((t) => t.stop());
@@ -257,10 +329,24 @@ export class HandTracker {
       this.video.srcObject = null;
       this.video = null;
     }
-    this.landmarker?.close();
-    this.landmarker = null;
+    this.disposeWorker();
     this.setCamera('idle');
     this.setTracking('idle');
+  }
+
+  private disposeWorker(): void {
+    const worker = this.worker;
+    this.worker = null;
+    this.workerReady = false;
+    this.pending = null;
+    this.inFlight = false;
+    this.capturing = false;
+    this.lastVideoTime = -1;
+    this.trackerFps = 0;
+    this.frames = 0;
+    // terminate() cancels a queued init immediately; a graceful dispose would leave the worker
+    // alive for its own shutdown message.
+    worker?.terminate();
   }
 
   private classifyCameraError(err: unknown): CameraStatus {
@@ -282,6 +368,16 @@ export class HandTracker {
     if (detail) this.detail = detail;
     this.cb.onTracking?.(status, detail);
   }
+}
+
+function describeDelegate(source: 'local' | 'cdn', delegate: 'gpu' | 'cpu'): string {
+  const where = source === 'cdn' ? 'cdn · worker' : 'local · worker';
+  return `${where} ${delegate.toUpperCase()}${source === 'cdn' ? ' (CDN fallback)' : ''}`;
+}
+
+function describeWorkerError(err: unknown): string {
+  const message = (err as Error)?.message ?? String(err);
+  return `Hand tracking is unavailable: ${message} Mouse control still works.`;
 }
 
 function describeCameraError(err: unknown): string {

@@ -86,6 +86,12 @@ export class CellModel {
   private readonly pickAnchors = new Map<OrganelleId, PickAnchor[]>();
   private readonly proxyGeometry = new THREE.SphereGeometry(1, 10, 8);
   private readonly proxyMaterial = new THREE.MeshBasicMaterial({ visible: false });
+  /** Reused by `pickCandidates()`; see the method's note on single-consumption. */
+  private readonly pickCandidateScratch: Array<{
+    id: OrganelleId;
+    center: THREE.Vector3;
+    radius: number;
+  }> = [];
   private disposed = false;
 
   constructor() {
@@ -868,21 +874,33 @@ export class CellModel {
     return null;
   }
 
-  /** World-space instance candidates for screen-proximity picking. */
+  /**
+   * World-space instance candidates for screen-proximity picking.
+   *
+   * The returned array is reused between calls: this runs for every pointer frame, and the hand
+   * path asks for all 69 anchors once per tick. Callers must consume it before the next call.
+   */
   pickCandidates(): Array<{ id: OrganelleId; center: THREE.Vector3; radius: number }> {
     this.root.updateWorldMatrix(true, true);
-    const out: Array<{ id: OrganelleId; center: THREE.Vector3; radius: number }> = [];
+    const out = this.pickCandidateScratch;
+    let n = 0;
     for (const [id, anchors] of this.pickAnchors) {
       const part = this.parts.get(id);
       if (!part) continue;
       for (const anchor of anchors) {
-        out.push({
-          id,
-          center: part.group.localToWorld(anchor.local.clone()),
-          radius: anchor.radius
-        });
+        let slot = out[n];
+        if (!slot) {
+          slot = { id, center: new THREE.Vector3(), radius: 0 };
+          out[n] = slot;
+        }
+        slot.id = id;
+        slot.radius = anchor.radius;
+        slot.center.copy(anchor.local);
+        part.group.localToWorld(slot.center);
+        n++;
       }
     }
+    out.length = n;
     return out;
   }
 

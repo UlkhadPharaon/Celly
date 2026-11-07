@@ -15,6 +15,11 @@ export class CursorLayer {
   private readonly nodes = new Map<HandSide, CursorNode>();
   private readonly hint: HTMLElement;
   private hintText = '';
+  /**
+   * The hint element's own size, re-measured only when its text or the viewport changes.
+   * Reading `offsetWidth`/`offsetHeight` forces a layout, and this runs every frame.
+   */
+  private hintSize = { w: 180, h: 30, text: '', viewport: '' };
 
   constructor() {
     this.root = document.createElement('div');
@@ -97,8 +102,17 @@ export class CursorLayer {
     let x = active.x + 26;
     let y = active.y + 22;
     if (avoid) {
-      const w = this.hint.offsetWidth || 180;
-      const h = this.hint.offsetHeight || 30;
+      const viewport = `${window.innerWidth}x${window.innerHeight}`;
+      if (this.hintSize.text !== text || this.hintSize.viewport !== viewport) {
+        this.hintSize = {
+          w: this.hint.offsetWidth || 180,
+          h: this.hint.offsetHeight || 30,
+          text,
+          viewport
+        };
+      }
+      const w = this.hintSize.w;
+      const h = this.hintSize.h;
       const hit =
         x < avoid.right + 8 && x + w > avoid.left - 8 && y < avoid.bottom + 8 && y + h > avoid.top - 8;
       if (hit) {

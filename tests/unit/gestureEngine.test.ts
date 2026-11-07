@@ -47,7 +47,7 @@ function ctx(over: Partial<GestureContext> & { hands: HandFrame[]; t: number }):
 const types = (frame: GestureFrame): string[] => frame.intents.map((i) => i.type);
 
 describe('GestureEngine — right hand', () => {
-  it('arms a scene element on pinch and selects it on release after the hold', () => {
+  it('selects a scene element immediately on pinch start', () => {
     const e = new GestureEngine();
     const aim = { x: 796, y: 486 };
     const first = e.step(
@@ -66,10 +66,11 @@ describe('GestureEngine — right hand', () => {
         ]
       })
     );
-    expect(first.intents).not.toContainEqual(expect.objectContaining({ type: 'select' }));
+    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
     expect(first.state).toBe('SELECTING');
     expect(first.cursors[0]).toMatchObject({ side: 'right', active: true, mode: 'pinch' });
     expect(first.cursors[0]).toMatchObject({ x: aim.x, y: aim.y });
+    expect(e.getPinchLog().at(-1)).toMatchObject({ result: 'select', reason: 'pinch-start' });
 
     const out = e.step(
       ctx({
@@ -85,39 +86,41 @@ describe('GestureEngine — right hand', () => {
         ]
       })
     );
-    expect(out.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
+    // Release must not fire a second selection.
+    expect(types(out)).not.toContain('select');
   });
 
-  it('rejects a scene selection released too quickly', () => {
+  it('does not select twice when the pinch is released', () => {
     const e = new GestureEngine();
-    e.step(
+    const first = e.step(
       ctx({
         t: 0,
         sceneHover: 'nucleus',
         hands: [hand({ side: 'right', pinching: true, pinchStart: true, pinchValue: 0.95 })]
       })
     );
+    expect(types(first)).toContain('select');
     const out = e.step(
       ctx({
         t: 60,
         hands: [hand({ side: 'right', pinching: false, pinchEnd: true })]
       })
     );
-    expect(out.intents).not.toContainEqual(expect.objectContaining({ type: 'select' }));
-    expect(e.getPinchLog().at(-1)).toMatchObject({ result: 'reject', reason: 'short-hold' });
+    expect(types(out)).not.toContain('select');
+    expect(types(out)).not.toContain('unselect');
   });
 
-  it('unselects on a delayed pinch in empty space', () => {
+  it('unselects immediately on a pinch in empty space', () => {
     const e = new GestureEngine();
     const first = e.step(
       ctx({ t: 0, hands: [hand({ side: 'right', pinching: true, pinchStart: true })] })
     );
-    expect(first.intents).not.toContainEqual({ type: 'unselect' });
+    expect(first.intents).toContainEqual({ type: 'unselect', aim: { x: 800, y: 500 } });
     expect(first.state).toBe('SELECTING');
     const out = e.step(
       ctx({ t: 160, hands: [hand({ side: 'right', pinching: false, pinchEnd: true })] })
     );
-    expect(out.intents).toContainEqual({ type: 'unselect', aim: { x: 800, y: 500 } });
+    expect(types(out)).not.toContain('unselect');
   });
 
   it('clicks a UI button on release within the travel and time budget', () => {
@@ -398,11 +401,11 @@ describe('GestureEngine — left hand and both hands', () => {
   });
 });
 
-describe('GestureEngine — release selection guards', () => {
-  it('reports the frozen pre-pinch aim even when the cursor drifts inside the budget', () => {
+describe('GestureEngine — immediate selection guards', () => {
+  it('reports the frozen pre-pinch aim on the select it commits', () => {
     const e = new GestureEngine();
     const aim = { x: 780, y: 490 };
-    e.step(
+    const first = e.step(
       ctx({
         t: 0,
         sceneHover: 'nucleus',
@@ -419,6 +422,7 @@ describe('GestureEngine — release selection guards', () => {
         ]
       })
     );
+    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
     const out = e.step(
       ctx({
         t: 180,
@@ -434,12 +438,13 @@ describe('GestureEngine — release selection guards', () => {
         ]
       })
     );
-    expect(out.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
+    expect(types(out)).not.toContain('select');
   });
 
-  it('rejects a release that travelled past the selection budget', () => {
+  it('keeps a committed selection when the release cursor drifts', () => {
     const e = new GestureEngine();
-    e.step(
+    const aim = { x: 796, y: 486 };
+    const first = e.step(
       ctx({
         t: 0,
         sceneHover: 'nucleus',
@@ -449,11 +454,14 @@ describe('GestureEngine — release selection guards', () => {
             pinching: true,
             pinchStart: true,
             pinchValue: 0.95,
-            cursor: { x: 800, y: 500 }
+            cursor: { x: 800, y: 500 },
+            aim,
+            aimLocked: true
           })
         ]
       })
     );
+    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
     const out = e.step(
       ctx({
         t: 180,
@@ -468,21 +476,18 @@ describe('GestureEngine — release selection guards', () => {
       })
     );
     expect(types(out)).not.toContain('select');
-    expect(e.getPinchLog().at(-1)).toMatchObject({
-      result: 'reject',
-      reason: 'moved',
-      target: 'nucleus'
-    });
+    expect(types(out)).not.toContain('unselect');
+    expect(e.getPinchLog().at(-1)).toMatchObject({ result: 'select', target: 'nucleus' });
   });
 
-  it('cancels an in-flight selection when the hand is lost, never turning loss into a click', () => {
+  it('never turns a lost hand into a click', () => {
     const e = new GestureEngine();
     e.step(
       ctx({
         t: 0,
-        sceneHover: 'nucleus',
+        uiHover: 'btn',
         hands: [
-          hand({ side: 'right', pinching: true, pinchStart: true, pinchValue: 0.95 })
+          hand({ side: 'right', pinching: true, pinchStart: true, cursor: { x: 100, y: 100 } })
         ]
       })
     );
@@ -492,6 +497,7 @@ describe('GestureEngine — release selection guards', () => {
         hands: [hand({ side: 'right', lost: true, pinching: false })]
       })
     );
+    expect(types(lost)).not.toContain('click');
     expect(types(lost)).not.toContain('select');
     expect(types(lost)).not.toContain('unselect');
     const release = e.step(
@@ -500,7 +506,7 @@ describe('GestureEngine — release selection guards', () => {
         hands: [hand({ side: 'right', pinching: false, pinchEnd: true })]
       })
     );
-    expect(types(release)).not.toContain('select');
+    expect(types(release)).not.toContain('click');
     expect(e.getPinchLog()).toHaveLength(0);
   });
 });

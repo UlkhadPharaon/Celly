@@ -55,6 +55,8 @@ export class InteractiveLabPage implements Page {
   private readonly cell = new CellModel();
   private readonly tweens = new Tweens();
   private readonly inertia = new THREE.Vector2();
+  /** Reused by `pick()` so the per-pointer-frame loop stays allocation-free. */
+  private readonly viewScratch = new THREE.Vector3();
 
   private selected: OrganelleId | null = null;
   private hovered: OrganelleId | null = null;
@@ -327,19 +329,24 @@ export class InteractiveLabPage implements Page {
   private anchorFor(id: OrganelleId): { x: number; y: number } | null {
     const camera = this.ctx.scene.camera;
     camera.updateMatrixWorld();
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    // Projected radius from view-space depth, as in `pick()`: one projection per anchor
+    // instead of two, and no allocation on the 17 Hz anchor refresh.
+    const tanHalfFov = Math.tan((camera.fov * 0.5 * Math.PI) / 180) / camera.zoom;
+    const halfViewport = this.ctx.scene.viewportHeight * 0.5;
+    const invViewMatrix = camera.matrixWorldInverse;
     const own: Array<{ x: number; y: number; radius: number }> = [];
     for (const candidate of this.cell.pickCandidates()) {
       if (candidate.id !== id) continue;
       const projected = this.ctx.scene.projectToScreen(candidate.center);
       if (!projected.visible) continue;
-      const edge = this.ctx.scene.projectToScreen(
-        candidate.center.clone().addScaledVector(right, candidate.radius)
+      const depth = Math.max(
+        0.05,
+        -this.viewScratch.copy(candidate.center).applyMatrix4(invViewMatrix).z
       );
       own.push({
         x: projected.x,
         y: projected.y,
-        radius: Math.hypot(edge.x - projected.x, edge.y - projected.y)
+        radius: (candidate.radius * halfViewport) / (depth * tanHalfFov)
       });
     }
     if (!own.length) {
@@ -594,13 +601,18 @@ export class InteractiveLabPage implements Page {
     const base = options?.radiusPx ?? 48;
     const camera = this.ctx.scene.camera;
     camera.updateMatrixWorld();
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    // Projected radius of a sphere from its view-space depth, instead of a second
+    // `projectToScreen` per anchor. Same value as projecting centre + radius, half the work,
+    // and no allocation in the per-pointer-frame loop.
+    const tanHalfFov = Math.tan((camera.fov * 0.5 * Math.PI) / 180) / camera.zoom;
+    const halfViewport = this.ctx.scene.viewportHeight * 0.5;
+    const invViewMatrix = camera.matrixWorldInverse;
     const candidates: Array<{ id: string; x: number; y: number; radiusPx: number }> = [];
     for (const part of this.cell.pickCandidates()) {
       const p = this.ctx.scene.projectToScreen(part.center);
       if (!p.visible) continue;
-      const edge = this.ctx.scene.projectToScreen(part.center.clone().addScaledVector(right, part.radius));
-      const projectedRadius = Math.hypot(edge.x - p.x, edge.y - p.y);
+      const depth = Math.max(0.05, -this.viewScratch.copy(part.center).applyMatrix4(invViewMatrix).z);
+      const projectedRadius = (part.radius * halfViewport) / (depth * tanHalfFov);
       candidates.push({
         id: part.id,
         x: p.x,

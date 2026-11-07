@@ -94,6 +94,13 @@ export class SceneManager {
   private readonly projectedScratch = new THREE.Vector3();
   private readonly ndcScratch = new THREE.Vector2();
 
+  /**
+   * Canvas layout, cached. `projectToScreen` and `ndcFromPixels` used to call
+   * `getBoundingClientRect()` per call — with 69 pick anchors asked twice per pointer frame,
+   * that is 138 forced layout reads every tick. The canvas only moves on resize.
+   */
+  private canvasRect = { left: 0, top: 0, width: 1, height: 1 };
+
   private readonly dustUniforms = {
     uTime: { value: 0 },
     uPixelRatio: { value: 1 },
@@ -151,6 +158,9 @@ export class SceneManager {
     this.composer.addPass(new OutputPass());
 
     this.applyQuality();
+    // The projection helpers read the cached canvas rect, so it has to exist before the first
+    // pick of the session.
+    this.refreshCanvasRect();
     window.addEventListener('resize', this.onResize, { passive: true });
     this.onResize();
   }
@@ -431,8 +441,45 @@ export class SceneManager {
 
   // ---------------------------------------------------------------------- picking
 
+  /** Force a re-read of the canvas layout. Called on resize, before the first projection. */
+  private refreshCanvasRect(): void {
+    const next = this.renderer.domElement.getBoundingClientRect();
+    this.canvasRect = {
+      left: next.left,
+      top: next.top,
+      width: Math.max(1, next.width),
+      height: Math.max(1, next.height)
+    };
+  }
+
+  /** Canvas height in CSS pixels, for screen-space radius math. Never read per frame. */
+  get viewportHeight(): number {
+    return this.canvasRect.height;
+  }
+
+  /** Canvas layout in CSS pixels. Refreshed on resize and on demand, never per frame. */
+  private rect(): { left: number; top: number; width: number; height: number } {
+    const el = this.renderer.domElement;
+    const next = el.getBoundingClientRect();
+    if (
+      next.left === this.canvasRect.left &&
+      next.top === this.canvasRect.top &&
+      next.width === this.canvasRect.width &&
+      next.height === this.canvasRect.height
+    ) {
+      return this.canvasRect;
+    }
+    this.canvasRect = {
+      left: next.left,
+      top: next.top,
+      width: Math.max(1, next.width),
+      height: Math.max(1, next.height)
+    };
+    return this.canvasRect;
+  }
+
   ndcFromPixels(x: number, y: number): Vec2 {
-    const rect = this.renderer.domElement.getBoundingClientRect();
+    const rect = this.rect();
     return {
       x: ((x - rect.left) / rect.width) * 2 - 1,
       y: -(((y - rect.top) / rect.height) * 2 - 1)
@@ -448,7 +495,7 @@ export class SceneManager {
 
   projectToScreen(world: THREE.Vector3): { x: number; y: number; visible: boolean } {
     const p = this.projectedScratch.copy(world).project(this.camera);
-    const rect = this.renderer.domElement.getBoundingClientRect();
+    const rect = this.canvasRect;
     return {
       x: rect.left + ((p.x + 1) / 2) * rect.width,
       y: rect.top + ((1 - p.y) / 2) * rect.height,
@@ -476,6 +523,7 @@ export class SceneManager {
   }
 
   private onResize = (): void => {
+    this.refreshCanvasRect();
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     const aspect = w / h;

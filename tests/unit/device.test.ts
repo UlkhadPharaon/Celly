@@ -21,7 +21,7 @@ describe('deviceProfileFor', () => {
 
     expect(profile.deviceClass).toBe('tablet');
     expect(profile.defaultQuality).toBe('low');
-    expect(profile.highDpr).toBe(1.75);
+    expect(profile.highDpr).toBe(1.5);
     expect(profile.shadows).toBe(false);
     expect(profile.bloom).toBe(true);
     expect(profile.dustCount).toBe(220);
@@ -32,7 +32,7 @@ describe('deviceProfileFor', () => {
 
     expect(profile.deviceClass).toBe('desktop');
     expect(profile.defaultQuality).toBe('high');
-    expect(profile.highDpr).toBe(2);
+    expect(profile.highDpr).toBe(1.5);
     expect(profile.shadows).toBe(true);
     expect(profile.bloom).toBe(true);
     expect(profile.dustCount).toBe(420);

@@ -127,15 +127,9 @@ describe('updatePinch hysteresis', () => {
     ...over
   });
 
-  it('requires the minimum hold before firing', () => {
-    let s = initialPinch();
-    let out = updatePinch(s, 0.9, opts(1000));
-    expect(out.start).toBe(false);
-    s = out.state;
-    out = updatePinch(s, 0.9, opts(1050));
-    expect(out.start).toBe(false);
-    s = out.state;
-    out = updatePinch(s, 0.9, opts(1070));
+  it('fires on the first frame above enter with the default zero hold', () => {
+    expect(DEFAULT_PINCH.minHoldMs).toBe(0);
+    const out = updatePinch(initialPinch(), 0.9, opts(1000));
     expect(out.start).toBe(true);
     expect(out.state.active).toBe(true);
   });
@@ -155,18 +149,17 @@ describe('updatePinch hysteresis', () => {
   });
 
   it('fires just above the enter threshold', () => {
-    let s = updatePinch(initialPinch(), DEFAULT_PINCH.enter + 0.01, opts(0)).state;
-    const out = updatePinch(s, DEFAULT_PINCH.enter + 0.01, opts(DEFAULT_PINCH.minHoldMs + 1));
-    s = out.state;
+    const out = updatePinch(initialPinch(), DEFAULT_PINCH.enter + 0.01, opts(0));
     expect(out.start).toBe(true);
-    expect(s.active).toBe(true);
+    expect(out.state.active).toBe(true);
   });
 
-  it('cancels a candidate that dips before the hold completes', () => {
-    let s = updatePinch(initialPinch(), 0.9, opts(0)).state;
-    s = updatePinch(s, 0.5, opts(30)).state;
+  it('can still debounce a candidate when a custom hold is configured', () => {
+    const cfg = { ...DEFAULT_PINCH, minHoldMs: 50 };
+    let s = updatePinch(initialPinch(), 0.9, opts(0), cfg).state;
+    s = updatePinch(s, 0.5, opts(30), cfg).state;
     expect(s.candidateSince).toBe(-1);
-    const out = updatePinch(s, 0.9, opts(60));
+    const out = updatePinch(s, 0.9, opts(60), cfg);
     expect(out.start).toBe(false);
   });
 

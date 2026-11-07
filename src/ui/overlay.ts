@@ -44,6 +44,32 @@ const TOPBAR = 86;
 const WIDTH = 384;
 
 /**
+ * Layout probes (rail, control panel) only change on resize or when a panel toggles, so they
+ * are re-measured on a coarse cadence instead of on every `place()` — a hand-anchored card runs
+ * `update()` roughly 17 times a second while it is open.
+ */
+const PROBE_TTL_MS = 400;
+
+/** Small read-only view of the elements the card has to dodge. */
+interface Probe {
+  left: number;
+  right: number;
+  width: number;
+  top: number;
+}
+
+/** Everything `place()` derives; compared before writing so no-op frames write nothing. */
+interface PlaceState {
+  width: number;
+  maxHeight: string;
+  overflowY: string;
+  left: number;
+  top: number;
+  transform: string;
+  side: string;
+}
+
+/**
  * Floating, hand-anchored info card used by both the lab and the knowledge graph.
  * Content is rebuilt on show; the shell keeps the element mounted so CSS transitions
  * can play in both directions.
@@ -56,6 +82,14 @@ export class Overlay {
   private open = false;
   private side: 'left' | 'right' = 'right';
 
+  private rail: Probe | null = null;
+  private controls: Probe | null = null;
+  private probedAt = -Infinity;
+  private cardHeight = 0;
+  private placed: PlaceState | null = null;
+  private boundsCache: DOMRect | null = null;
+  private boundsDirty = true;
+
   constructor(
     private readonly registry: ButtonRegistry,
     private readonly onClose: () => void
@@ -66,7 +100,18 @@ export class Overlay {
     this.inner = document.createElement('article');
     this.inner.className = 'info-overlay';
     this.root.append(this.inner);
+    window.addEventListener('resize', this.invalidateLayout, { passive: true });
   }
+
+  /** Resize, panel toggles and content swaps all invalidate the cached layout and bounds. */
+  private invalidateLayout = (): void => {
+    this.probedAt = -Infinity;
+    this.placed = null;
+    this.cardHeight = 0;
+    this.boundsCache = null;
+    this.boundsDirty = true;
+    if (this.open) this.place();
+  };
 
   get isOpen(): boolean {
     return this.open;
@@ -76,6 +121,11 @@ export class Overlay {
     this.teardown();
     this.open = true;
     this.anchor = anchor;
+    // The content is rebuilt, so the card's size and its cached box are both unknown again.
+    this.cardHeight = 0;
+    this.placed = null;
+    this.boundsCache = null;
+    this.boundsDirty = true;
     this.inner.style.setProperty('--accent', content.accent);
     this.inner.innerHTML = `
       <div class="overlay-glow"></div>
@@ -166,17 +216,56 @@ export class Overlay {
     this.root.classList.remove('is-open');
     this.teardown();
     this.anchor = null;
+    this.boundsCache = null;
+    this.boundsDirty = true;
   }
 
   update(anchor: Anchor | null): void {
     if (!this.open) return;
+    // Hand motion moves the card, but sub-pixel jitter must not force a re-layout.
+    const previous = this.anchor;
     this.anchor = anchor;
+    if (
+      anchor &&
+      previous &&
+      Math.abs(anchor.x - previous.x) < 0.5 &&
+      Math.abs(anchor.y - previous.y) < 0.5 &&
+      this.placed
+    ) {
+      return;
+    }
     this.place();
   }
 
   /** Screen box of the open card, so other floating UI can stay clear of it. */
   bounds(): DOMRect | null {
-    return this.open ? this.root.getBoundingClientRect() : null;
+    if (!this.open) return null;
+    // The box only changes when the card is repositioned, resized or rebuilt, all of which
+    // invalidate the cache — so this no longer costs a layout read per frame.
+    if (this.boundsDirty || !this.boundsCache) {
+      this.boundsCache = this.root.getBoundingClientRect();
+      this.boundsDirty = false;
+    }
+    return this.boundsCache;
+  }
+
+  /** Re-measure the rail and control panel the card has to dodge, at most every `PROBE_TTL_MS`. */
+  private probe(): void {
+    const now = performance.now();
+    if (now - this.probedAt < PROBE_TTL_MS) return;
+    this.probedAt = now;
+    const rail = document.querySelector('.left-rail')?.getBoundingClientRect();
+    this.rail = rail ? { left: rail.left, right: rail.right, width: rail.width, top: rail.top } : null;
+    const controls = document.querySelector('.controls')?.getBoundingClientRect();
+    this.controls = controls
+      ? { left: controls.left, right: controls.right, width: controls.width, top: controls.top }
+      : null;
+  }
+
+  /** Write a style property only when it actually changes, so idle frames do zero DOM writes. */
+  private write(el: HTMLElement, css: 'width' | 'left' | 'top' | 'transform' | 'max-height' | 'overflow-y', value: string): void {
+    if (el.style.getPropertyValue(css) === value) return;
+    el.style.setProperty(css, value);
   }
 
   private place(): void {
@@ -184,10 +273,11 @@ export class Overlay {
     const vh = window.innerHeight;
     const margin = vw <= 640 ? 12 : MARGIN;
     const width = Math.min(WIDTH, vw - margin * 2);
-    this.root.style.width = `${width}px`;
 
-    const rail = document.querySelector('.left-rail')?.getBoundingClientRect();
-    const controls = document.querySelector('.controls')?.getBoundingClientRect();
+    this.probe();
+
+    const rail = this.rail;
+    const controls = this.controls;
     // On phones and tablets the control panel is a full-width bottom sheet. Reserve the strip
     // above it rather than treating it as a right-hand column.
     const controlsIsSheet = !!controls && controls.width > vw * 0.45 && controls.top > vh * 0.32;
@@ -196,24 +286,36 @@ export class Overlay {
       : margin;
     const compact = controlsIsSheet || vw <= 1080;
     const maxHeight = Math.max(200, vh - TOPBAR - bottomReserve - margin);
-    this.inner.style.maxHeight = compact ? `${Math.round(maxHeight)}px` : '';
-    this.inner.style.overflowY = compact ? 'auto' : '';
+
+    // The card's own height is only re-measured when something that changes it has happened:
+    // a rebuild, a resize, or a max-height change. Hand motion alone never changes it.
+    const measured = Math.round(maxHeight);
+    if (this.cardHeight === 0 || this.placed?.maxHeight !== `${measured}px`) {
+      this.cardHeight = Math.min(this.inner.offsetHeight || 360, maxHeight);
+    }
 
     if (!this.anchor) {
-      this.root.style.transform = 'none';
+      const next: PlaceState = {
+        width,
+        maxHeight: compact ? `${measured}px` : '',
+        overflowY: compact ? 'auto' : '',
+        left: -1,
+        top: -1,
+        transform: compact ? 'none' : 'translateY(-50%)',
+        side: 'right'
+      };
       if (compact) {
-        this.root.style.left = `${margin}px`;
-        this.root.style.top = `${TOPBAR}px`;
-        this.root.dataset.side = 'right';
+        next.left = margin;
+        next.top = TOPBAR;
       } else {
-        this.root.style.left = `${Math.max(margin, vw - width - 44)}px`;
-        this.root.style.top = '50%';
-        this.root.style.transform = 'translateY(-50%)';
+        next.left = Math.max(margin, vw - width - 44);
+        next.top = -1;
       }
+      this.placeState(next);
       return;
     }
 
-    const h = Math.min(this.inner.offsetHeight || 360, maxHeight);
+    const h = Math.min(this.cardHeight || 360, maxHeight);
     // Keep the card on the far side of the anchor, but stay out of the fixed HUD rail and the
     // control panel. On a centred node both sides fit; on a left-hand node only the right side
     // clears the rail, and vice versa near the control panel.
@@ -239,10 +341,45 @@ export class Overlay {
     }
     let top = this.anchor.y - h * 0.35;
     top = Math.max(TOPBAR, Math.min(vh - bottomReserve - h, top));
-    this.root.style.left = `${Math.round(left)}px`;
-    this.root.style.top = `${Math.round(top)}px`;
-    this.root.style.transform = 'none';
-    this.root.dataset.side = this.side;
+    this.placeState({
+      width,
+      maxHeight: compact ? `${measured}px` : '',
+      overflowY: compact ? 'auto' : '',
+      left: Math.round(left),
+      top: Math.round(top),
+      transform: 'none',
+      side: this.side
+    });
+  }
+
+  /** Apply a computed placement, skipping any write that would not change the element. */
+  private placeState(next: PlaceState): void {
+    const previous = this.placed;
+    const moved =
+      !previous ||
+      previous.width !== next.width ||
+      previous.left !== next.left ||
+      previous.top !== next.top ||
+      previous.transform !== next.transform ||
+      previous.side !== next.side ||
+      previous.maxHeight !== next.maxHeight ||
+      previous.overflowY !== next.overflowY;
+
+    this.write(this.root, 'width', `${next.width}px`);
+    this.write(this.inner, 'max-height', next.maxHeight);
+    this.write(this.inner, 'overflow-y', next.overflowY);
+    this.write(this.root, 'transform', next.transform);
+    if (next.left >= 0) this.write(this.root, 'left', `${next.left}px`);
+    else this.write(this.root, 'left', '');
+    if (next.top >= 0) this.write(this.root, 'top', `${next.top}px`);
+    if (next.side !== this.root.dataset.side) this.root.dataset.side = next.side;
+    this.placed = next;
+
+    if (moved) {
+      // Anything that moved the card invalidates its cached box.
+      this.boundsCache = null;
+      this.boundsDirty = true;
+    }
   }
 
   private teardown(): void {

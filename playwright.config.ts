@@ -7,7 +7,12 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 90_000,
+  // These specs drive the real pipeline: they aim a synthetic hand at a projected organelle,
+  // which only resolves once a rendered frame has been produced. On a host with no hardware
+  // GL the scene renders in software at ~1.3 fps, so a single aiming cycle costs a second of
+  // wall clock. 90 s was too tight for that and made the organelle-selection test flaky; the
+  // budget below is what the slowest host actually needs.
+  timeout: 180_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,

@@ -53,8 +53,11 @@ export function deviceProfileFor(
           : 'desktop';
 
   const cap = Math.max(1, Math.min(3, Number.isFinite(dpr) ? dpr : 1));
-  const highDpr =
-    devClass === 'phone' ? Math.min(cap, 1.5) : devClass === 'tablet' ? Math.min(cap, 1.75) : Math.min(cap, 2);
+  // High quality is resolution-capped everywhere at 1.5 device pixels per CSS pixel. Doubling
+  // again to 2 costs 78% more shaded pixels for a difference nobody can see on a scene that is
+  // mostly translucent, and the render loop has to stay free while hand tracking runs on the
+  // same machine.
+  const highDpr = Math.min(cap, 1.5);
 
   return {
     deviceClass: devClass,
