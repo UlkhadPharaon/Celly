@@ -37,7 +37,8 @@
     "format": "prettier --write \"src/**/*.{ts,css}\" \"*.{md,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "audit:deps": "node scripts/audit-deps.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.5",

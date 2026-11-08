@@ -1,5 +1,5 @@
 import type { GestureState, Language, TrackingQuality } from '../types';
-import { el } from './dom';
+import { el, escapeHtml } from './dom';
 
 export interface HudState {
   hands: number;
@@ -85,7 +85,7 @@ export class Hud {
 
     this.root.innerHTML = `
       <div class="hud-head">
-        <span class="eyebrow" data-i18n="tracking">${this.copy.tracking}</span>
+        <span class="eyebrow" data-i18n="tracking">${escapeHtml(this.copy.tracking)}</span>
         <span class="quality" data-level="none">
           <i class="quality-dot"></i>
           <span class="quality-label">—</span>
@@ -97,21 +97,21 @@ export class Hud {
         <span class="hud-hands-label">—</span>
       </div>
       <div class="hud-pinch">
-        <span class="hud-key">${this.copy.pinch}</span>
+        <span class="hud-key">${escapeHtml(this.copy.pinch)}</span>
         <div class="pinch-line"><span class="mini-tag">L</span><div class="bar"><i></i></div><b>0.00</b></div>
         <div class="pinch-line"><span class="mini-tag">R</span><div class="bar"><i></i></div><b>0.00</b></div>
       </div>
       <div class="hud-grid">
-        <div class="hud-cell"><span>${this.copy.landmarks}</span><b class="landmarks">0 / 42</b></div>
-        <div class="hud-cell"><span>${this.copy.mirror}</span><b class="mirror">—</b></div>
+        <div class="hud-cell"><span>${escapeHtml(this.copy.landmarks)}</span><b class="landmarks">0 / 42</b></div>
+        <div class="hud-cell"><span>${escapeHtml(this.copy.mirror)}</span><b class="mirror">—</b></div>
         <div class="hud-cell"><span>Swap</span><b class="swap">—</b></div>
-        <div class="hud-cell"><span>${this.copy.gesture}</span><b class="gesture">—</b></div>
+        <div class="hud-cell"><span>${escapeHtml(this.copy.gesture)}</span><b class="gesture">—</b></div>
       </div>
       <details class="hud-debug">
-        <summary>${this.copy.debug}</summary>
+        <summary>${escapeHtml(this.copy.debug)}</summary>
         <div class="hud-debug-grid">
-          <span>${this.copy.tracker}</span><b class="fps-tracker">0 fps</b>
-          <span>${this.copy.render}</span><b class="fps-render">0 fps</b>
+          <span>${escapeHtml(this.copy.tracker)}</span><b class="fps-tracker">0 fps</b>
+          <span>${escapeHtml(this.copy.render)}</span><b class="fps-render">0 fps</b>
           <span>Jitter</span><b class="jitter">0.000</b>
           <span>Margin</span><b class="margin">0.00</b>
         </div>

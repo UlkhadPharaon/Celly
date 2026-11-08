@@ -7,6 +7,7 @@ import { Tweens, ease } from '../core/tween';
 import { clamp } from '../core/math';
 import { type Page, type PageContext, type PickOptions, pageHeader } from './page';
 import { nearestWithin } from '../gestures/aim';
+import { escapeHtml } from '../ui/dom';
 
 export const COPY = {
   en: {
@@ -719,12 +720,4 @@ export class InteractiveLabPage implements Page {
     this.ctx.overlay.hide();
     this.root.remove();
   }
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

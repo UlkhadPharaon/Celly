@@ -1,6 +1,6 @@
 import type { ButtonRegistry } from './buttons';
 import type { CameraStatus, HandFrame, Settings } from '../types';
-import { svgIcon, ICONS } from './dom';
+import { svgIcon, ICONS, escapeHtml } from './dom';
 import { createProjectLink, registerProjectLink } from './projectLinks';
 import { WebcamPreview } from './webcamPreview';
 
@@ -523,12 +523,4 @@ function isCameraError(status: CameraStatus): boolean {
     status === 'unsupported' ||
     status === 'timeout'
   );
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }

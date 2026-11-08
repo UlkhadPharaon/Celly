@@ -239,3 +239,17 @@ UI therefore says "preview off", not "camera off", which is truthful and still s
 Phase 3 gate: typecheck, lint, `npm test` 116/116 (13 files), build — all pass. Affected browser
 specs re-run after the change: `smoke` 6/6, `gestures` 4/4, `quizProgress` 2/2, plus the three
 new specs.
+
+### Phase 4 — documentation & code quality (`audit-p4-docs-quality`)
+
+| Task | Change | Verification |
+|---|---|---|
+| 4.1 | `DECISIONS.md`: D-12 marked superseded; new D-59 (worker, with the measured inputs behind it), D-60 (pinch-start selection semantics), D-61 (escaped template text), D-62 (dependency gate). GLB replacement already recorded under D-52/D-56; cross-referenced rather than duplicated | doc |
+| 4.2 | D-60 records *why* pinch-start replaced release-commit, plus the two consequences (halo pulse, frozen pre-pinch anchor) | `selectionFeedback.spec.ts` |
+| 4.3 | New `src/core/frameProcessor.ts` owns side resolution, filters, pinch hysteresis, 250 ms loss tolerance, aim locks, hover and the gesture engine. `app.ts` drops ~250 lines; the three duplicated aim-lock blocks (detection, `injectHand`, `injectPoseData`) collapse into one `trackAim()` | `frameProcessor.test.ts` 15/15, suite 133/133, `smoke` 6/6, `gestures` 4/4, `selectionDpr` 3/3, `selectionFeedback` 1/1 |
+| 4.4 | One shared `escapeHtml` in `ui/dom.ts` replaces four local copies; every catalog/copy value interpolated into a template is escaped; authored single-value text is assigned with `textContent` (`pageHeader`) | `escapeHtml.test.ts` |
+| 4.5 | `scripts/audit-deps.mjs` + `npm run audit:deps`: blocks on critical/high, prints anything below the bar, `CELLY_AUDIT_LEVEL` overrides the gate level for testing | passes at the default level; exit 1 when forced to `moderate` |
+
+The frame pipeline is intentionally DOM-free on import (the viewport is passed in per call), which
+is why it is unit-testable in Node — `CellyApp` itself cannot be imported there because
+`handTracker.ts` touches `document.baseURI` at module scope.

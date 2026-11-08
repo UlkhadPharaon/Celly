@@ -4,7 +4,7 @@ import { makeRng } from '../../core/math';
 import { type Page, type PageContext } from '../page';
 import { LeitnerStore } from './leitner';
 import { ProgressStore, gradeRatio, scoreLabel } from './progress';
-import { ICONS, svgIcon } from '../../ui/dom';
+import { ICONS, svgIcon, escapeHtml } from '../../ui/dom';
 
 type View = 'home' | 'mcq' | 'flash' | 'results' | 'flash-results';
 
@@ -404,7 +404,7 @@ export class TestingPage implements Page {
           ${svgIcon(ICONS.arrowLeft).outerHTML}
         </button>
         <div class="test-top-title">
-          <span class="eyebrow">${state.title}</span>
+          <span class="eyebrow">${escapeHtml(state.title)}</span>
           <div class="test-progress"><i style="width:${((state.index + (answered ? 1 : 0)) / state.questions.length) * 100}%"></i></div>
         </div>
         <span class="test-count quiz-position" data-quiz-position aria-live="polite">
@@ -414,10 +414,10 @@ export class TestingPage implements Page {
 
       <div class="question">
         <div class="question-meta">
-          <span class="chip-soft">${q.category}</span>
+          <span class="chip-soft">${escapeHtml(q.category)}</span>
           <span class="chip-soft">${copy.difficulty[q.difficulty]}</span>
         </div>
-        <h2>${loc(q.question, this.language)}</h2>
+        <h2>${escapeHtml(loc(q.question, this.language))}</h2>
         <div class="options">
           ${prepared.order
             .map((original, display) => {
@@ -435,7 +435,7 @@ export class TestingPage implements Page {
                   answered ? 'disabled' : ''
                 }>
                   <span class="option-key">${LETTERS[display] ?? '?'}</span>
-                  <span class="option-text">${text}</span>
+                  <span class="option-text">${escapeHtml(text)}</span>
                   <span class="option-mark">${isAnswer ? svgIcon(ICONS.check).outerHTML : ''}</span>
                 </button>`;
             })
@@ -448,7 +448,7 @@ export class TestingPage implements Page {
                    <span class="answer-badge">${correct ? svgIcon(ICONS.check).outerHTML : svgIcon(ICONS.close).outerHTML}</span>
                    <b>${correct ? copy.correct : copy.incorrect}</b>
                  </div>
-                 <p class="answer-explain"><span>${copy.why}</span> ${loc(q.explanation, this.language)}</p>
+                 <p class="answer-explain"><span>${copy.why}</span> ${escapeHtml(loc(q.explanation, this.language))}</p>
                </div>
                <div class="question-foot">
                  <button class="btn primary" type="button" data-celly="next">
@@ -518,7 +518,7 @@ export class TestingPage implements Page {
         <button class="icon-btn" type="button" data-celly="home" aria-label="${copy.allTests}">
           ${svgIcon(ICONS.arrowLeft).outerHTML}
         </button>
-        <div class="test-top-title"><span class="eyebrow">${state.title}</span></div>
+        <div class="test-top-title"><span class="eyebrow">${escapeHtml(state.title)}</span></div>
         <span class="test-count">${copy.score}</span>
       </div>
 
@@ -551,13 +551,13 @@ export class TestingPage implements Page {
                 <details class="review-row ${ok ? 'is-ok' : 'is-bad'}">
                   <summary>
                     <span class="review-mark">${ok ? svgIcon(ICONS.check).outerHTML : svgIcon(ICONS.close).outerHTML}</span>
-                    <span class="review-q">${loc(q.question, this.language)}</span>
+                    <span class="review-q">${escapeHtml(loc(q.question, this.language))}</span>
                     <span class="review-idx">${String(i + 1).padStart(2, '0')}</span>
                   </summary>
                   <div class="review-body">
-                    <p><span>${copy.yourAnswer}</span>${yourText}</p>
-                    ${ok ? '' : `<p><span>${copy.rightAnswer}</span>${rightText}</p>`}
-                    <p class="review-explain"><span>${copy.why}</span>${loc(q.explanation, this.language)}</p>
+                    <p><span>${copy.yourAnswer}</span>${escapeHtml(yourText)}</p>
+                    ${ok ? '' : `<p><span>${copy.rightAnswer}</span>${escapeHtml(rightText)}</p>`}
+                    <p class="review-explain"><span>${copy.why}</span>${escapeHtml(loc(q.explanation, this.language))}</p>
                   </div>
                 </details>`;
             })
@@ -623,13 +623,13 @@ export class TestingPage implements Page {
         <span class="flash-inner">
           <span class="flash-face flash-front">
             <span class="eyebrow">${copy.question}</span>
-            <b>${loc(card.front, this.language)}</b>
+            <b>${escapeHtml(loc(card.front, this.language))}</b>
             <span class="flash-tap">${svgIcon(ICONS.hand).outerHTML}${copy.flipHint}</span>
           </span>
           <span class="flash-face flash-back">
             <span class="eyebrow">${copy.rightAnswer}</span>
-            <span class="flash-prompt">${loc(card.front, this.language)}</span>
-            <span class="flash-answer">${loc(card.back, this.language)}</span>
+            <span class="flash-prompt">${escapeHtml(loc(card.front, this.language))}</span>
+            <span class="flash-answer">${escapeHtml(loc(card.back, this.language))}</span>
           </span>
         </span>
       </button>

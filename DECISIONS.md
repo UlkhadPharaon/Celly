@@ -62,10 +62,11 @@ without making text unreadable.
 
 ## Tracking & gestures
 
-**D-12 — Tracking on the main thread, not a worker.** MediaPipe `tasks-vision` in `VIDEO` mode
-runs synchronously in ~4–8 ms on the target GPU; a worker adds a frame of transfer latency and
-`ImageBitmap` copy complexity for no gain at 720p. The loop uses `requestVideoFrameCallback` when
-available and never queues more than one inference. A worker remains a documented v0.3 option.
+**D-12 — Tracking on the main thread, not a worker.** *(Superseded by D-59; kept for the record.)*
+MediaPipe `tasks-vision` in `VIDEO` mode runs synchronously in ~4–8 ms on the target GPU; a worker
+adds a frame of transfer latency and `ImageBitmap` copy complexity for no gain at 720p. The loop
+uses `requestVideoFrameCallback` when available and never queues more than one inference. A worker
+remains a documented v0.3 option.
 
 **D-13 — Pinch value direction.** Brief: `value = 1 − clamp(dist(4,8)/handScale)`. Therefore
 **1 = fully pinched**. The original implementation used `handScale = dist(0,9)` in world landmarks
@@ -407,3 +408,53 @@ the cell or the graph; knowledge labels are distance-compensated to a ~19 px tar
 1–2.4×) with padded collision boxes, so a portrait viewport does not turn the graph into unreadable
 specks. These are presentation changes only: gesture thresholds, selection timing and content are
 unchanged.
+
+## Frame pipeline, hand tracking and documentation pass (2026-11-08)
+
+**D-59 — Hand inference runs in a module worker, superseding D-12.** D-12's premise (~4–8 ms per
+inference) does not hold on the hardware this app actually ships on: an integrated laptop GPU takes
+50–90 ms per frame, which as a synchronous call inside `requestAnimationFrame` stalls the render
+loop and turns aiming into a slideshow. The measured decision inputs were: 56.2 ms inference p50 /
+92.8 ms p95 on the target host, 74 long tasks (>50 ms) in a 6 s window, ~20 fps with the camera on
+against 100 fps render-only, and 14–15 Hz tracker throughput. A worker removes inference from the
+frame budget entirely, and the app's own E2E evidence is structural rather than a single number:
+because only the worker imports `@mediapipe/tasks-vision`, the production main bundle contains no
+`HandLandmarker` / `detectForVideo` reference at all, so the bug cannot come back by accident.
+
+The transfer cost D-12 worried about was made acceptable by three later changes: a *skeleton* hand
+(**D-56**) removed the CPU retarget solver that would have had to re-run per frame outside the
+worker; `handTracker.ts` pumps one `ImageBitmap` at a time with single-flight backpressure, so
+frames are consumed, never queued; and gesture timing is pinned to the render clock
+(`lastTickMs`, `detectionDt()`), so detection-frame spacing never rewinds hold and dwell windows.
+A main-thread fallback was deliberately *not* built: it would reintroduce the exact stall, and a
+worker init failure now surfaces as a clear tracking error while the mouse path keeps working.
+The worker is a module worker with an `importScripts` shim, because MediaPipe's wasm glue calls
+`importScripts`, which always throws in a module worker.
+
+**D-60 — Scene selection commits on pinch start, not on release.** The brief wants "grab" to feel
+instant; the old rule needed a completed pinch (enter + a hold + a release inside one rect) before
+any target was locked, so the user aimed, pinched and *waited* for feedback that never came. Now a
+pinch start selects the scene target under the pre-pinch aim anchor immediately, and UI clicks still
+require a full pinch-and-release in the same rect (**D-20**). Two consequences are part of the
+decision, not afterthoughts. First, the old hold-time visual cue is lost, so the lab plays a short
+halo/scale pulse on the committed organelle (`pinchStart` on the select intent, ~150 ms) to confirm
+the lock. Second, the pre-pinch anchor is frozen for the whole pinch: it was sampled on the start
+frame, so re-picking mid-gesture could silently move the target to a neighbour after the user had
+already committed. Hand loss is unaffected — one explicit `lost` frame after 250 ms, never a
+synthetic release, so a hand leaving the frame cannot end a pinch.
+
+**D-61 — Text in HTML templates is escaped at the boundary.** Most of the UI is rebuilt in one
+pass with `innerHTML` for speed (no per-element layout, no hydration), so escaping has to happen
+where values enter the template rather than being replaced wholesale by `textContent`. `ui/dom.ts`
+exports the single `escapeHtml` used by every template; authored copy that can be assigned as text
+is (`pageHeader`, hints, knowledge key). This is the same guarantee `textContent` gives without
+giving up the single-pass rebuilds that keep the render loop fast.
+
+**D-62 — Dependency advisories are gated, not ignored.** `npm run audit:deps`
+(`scripts/audit-deps.mjs`) runs `npm audit --audit-level=critical` and fails on any critical or high
+advisory; anything below the bar is printed and recorded. At the time of writing the tree carries
+only 7 moderate advisories, all `minimatch` (GHSA-g3hv-75wg-m249, globparts amplification DoS)
+pinned transitively by `typescript-eslint` — dev-only, never shipped to a browser. They are
+reported, not force-upgraded: the fix is an upstream release, and churning the lock file for it
+would move the toolchain for no runtime benefit. The gate runs in verification and can be wired as
+a pre-commit hook (`git config core.hooksPath .githooks`).

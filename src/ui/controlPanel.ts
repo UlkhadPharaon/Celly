@@ -1,6 +1,6 @@
 import type { CameraStatus, Language, QualityMode } from '../types';
 import type { ButtonRegistry } from './buttons';
-import { svgIcon, ICONS } from './dom';
+import { svgIcon, ICONS, escapeHtml } from './dom';
 import { WebcamPreview } from './webcamPreview';
 import { PINCH_SENSITIVITY } from '../gestures/pinch';
 import { createProjectLink, registerProjectLink, updateProjectLink } from './projectLinks';
@@ -349,7 +349,7 @@ export class ControlPanel {
 
     const privacy = document.createElement('div');
     privacy.className = 'controls-privacy';
-    privacy.innerHTML = `<i></i><span>${this.copy.privacy}</span>`;
+    privacy.innerHTML = `<i></i><span>${escapeHtml(this.copy.privacy)}</span>`;
     this.root.append(privacy);
 
     this.setState(state);

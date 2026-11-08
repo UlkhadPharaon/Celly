@@ -19,6 +19,24 @@ export function svgIcon(path: string, viewBox = '0 0 24 24'): SVGSVGElement {
   return svg;
 }
 
+/**
+ * Escape a plain-text value before it is interpolated into an HTML template (audit task 4.4).
+ *
+ * Template composition is still needed where an element must be built with its attributes in one
+ * pass (cards, rows, list items), but the *text* inside those templates is copy or catalog data.
+ * Escaping it at the boundary means a stray angle bracket or ampersand in a label renders as
+ * text instead of becoming markup — the same guarantee `textContent` gives, without giving up the
+ * single-pass rebuilds that keep the render loop free of per-element layout.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export const ICONS = {
   lab: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(35 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(-35 12 12)"/>',
   network: '<circle cx="12" cy="4.5" r="2"/><circle cx="4.8" cy="17" r="2"/><circle cx="19.2" cy="17" r="2"/><path d="M10.4 6.1 6.4 15.2M13.6 6.1l4 9.1M6.8 17h10.4"/>',

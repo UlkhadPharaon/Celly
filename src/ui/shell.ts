@@ -6,7 +6,7 @@ import { Hud, type HudState } from './hud';
 import { Onboarding } from './onboarding';
 import { Overlay } from './overlay';
 import { Tabs } from './tabs';
-import { ICONS, svgIcon } from './dom';
+import { ICONS, svgIcon, escapeHtml } from './dom';
 import { createProjectLink, registerProjectLink, updateProjectLink } from './projectLinks';
 
 export interface ShellHandlers {
@@ -317,7 +317,7 @@ export class Shell {
 
     const head = document.createElement('div');
     head.className = 'legend-head';
-    head.innerHTML = `<span class="eyebrow">${copy.gestures}</span>`;
+    head.innerHTML = `<span class="eyebrow">${escapeHtml(copy.gestures)}</span>`;
 
     const body = document.createElement('div');
     body.className = 'legend-body';
@@ -327,7 +327,7 @@ export class Shell {
       item.dataset.tone = row.tone;
       const icon = svgIcon(row.icon);
       const text = document.createElement('div');
-      text.innerHTML = `<span>${row.label}</span><b>${row.action}</b>`;
+      text.innerHTML = `<span>${escapeHtml(row.label)}</span><b>${escapeHtml(row.action)}</b>`;
       item.append(icon, text);
       body.append(item);
     }
