@@ -1,5 +1,5 @@
 import type { CameraStatus, RawFrame, TrackingStatus } from '../types';
-import { deviceProfile } from '../core/device';
+import { deviceProfile, type DeviceProfile } from '../core/device';
 import type { WorkerAssetSource, TrackingWorkerRequest, TrackingWorkerResponse } from './trackingProtocol';
 
 export interface TrackerCallbacks {
@@ -41,6 +41,8 @@ export class HandTracker {
   inferenceMs = 0;
 
   video: HTMLVideoElement | null = null;
+  /** How many times the stream was re-opened with new constraints (device-profile changes). */
+  cameraReopens = 0;
   private stream: MediaStream | null = null;
   private worker: Worker | null = null;
   private workerReady = false;
@@ -99,15 +101,7 @@ export class HandTracker {
     this.armRequestTimeout(attempt);
     try {
       const camera = deviceProfile();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: camera.cameraWidth },
-          height: { ideal: camera.cameraHeight },
-          frameRate: { ideal: camera.cameraFps, max: camera.cameraFps },
-          facingMode: 'user'
-        },
-        audio: false
-      });
+      const stream = await this.openStream(camera);
       if (attempt !== this.attempt) {
         // The prompt was abandoned while the browser still held the permission request. Stop the
         // late stream instead of leaving the camera light on behind a "retry" UI.
@@ -131,8 +125,7 @@ export class HandTracker {
       }
       await video.play().catch(() => undefined);
       this.video = video;
-      this.setCamera('live');
-    } catch (err) {
+      this.setCamera('live');    } catch (err) {
       if (attempt !== this.attempt) return;
       this.clearRequestTimeout();
       this.setCamera(this.classifyCameraError(err), describeCameraError(err));
@@ -140,6 +133,84 @@ export class HandTracker {
     }
 
     await this.initWorker(attempt);
+  }
+
+  /**
+   * Camera constraints follow the device class (audit task 5.1). The stream opened at boot was
+   * sized for the class measured then; rotating a tablet or moving the window to an external
+   * display changes that class, and the stale request keeps the old resolution and frame rate.
+   *
+   * Returns true when a fresh stream was actually opened. The tracking worker is untouched — it
+   * consumes whatever the video element plays next, and the preview holds the same element — so
+   * only the media source is swapped.
+   */
+  async applyCameraProfile(profile: DeviceProfile): Promise<boolean> {
+    const video = this.video;
+    const stream = this.stream;
+    if (this.camera !== 'live' || !stream || !video) return false;
+
+    // Nothing to do when the browser already resolved the stream to the constraints the new class
+    // asks for (several devices clamp a small request up to their default size).
+    const settings = stream.getVideoTracks()[0]?.getSettings() ?? {};
+    const same =
+      Math.abs((settings.width ?? 0) - profile.cameraWidth) < 1 &&
+      Math.abs((settings.height ?? 0) - profile.cameraHeight) < 1 &&
+      Math.abs((settings.frameRate ?? 0) - profile.cameraFps) < 0.5;
+    if (same) return false;
+
+    try {
+      const next = await this.openStream(profile);
+      // Adopt only after the new stream resolves: a failed reopen (camera unplugged, constraints
+      // rejected) must leave the working tracker alive.
+      stream.getTracks().forEach((track) => track.stop());
+      this.stream = next;
+      video.srcObject = next;
+      await new Promise<void>((resolve, reject) => {
+        if (video.readyState >= 2) {
+          resolve();
+          return;
+        }
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error('video element failed to load the camera stream'));
+      });
+      await video.play().catch(() => undefined);
+      // Force one fresh frame: the re-opened stream may start at the same currentTime.
+      this.lastVideoTime = -1;
+      this.cameraReopens += 1;
+      this.setCamera('live');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Resolved stream settings and reopen count, for the device-profile E2E. */
+  deviceState(): {
+    streamWidth: number;
+    streamHeight: number;
+    frameRate: number;
+    reopens: number;
+  } {
+    const track = this.stream?.getVideoTracks()[0];
+    const settings = track?.getSettings() ?? {};
+    return {
+      streamWidth: settings.width ?? 0,
+      streamHeight: settings.height ?? 0,
+      frameRate: settings.frameRate ?? 0,
+      reopens: this.cameraReopens
+    };
+  }
+
+  private openStream(profile: DeviceProfile): Promise<MediaStream> {
+    return navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: profile.cameraWidth },
+        height: { ideal: profile.cameraHeight },
+        frameRate: { ideal: profile.cameraFps, max: profile.cameraFps },
+        facingMode: 'user'
+      },
+      audio: false
+    });
   }
 
   /**

@@ -97,6 +97,16 @@ export function resetDeviceProfile(): void {
   cached = null;
 }
 
+/**
+ * Re-detect the device class and refresh the cache (audit task 5.1). A tablet rotating, or a
+ * window dragged onto an external display, changes the class the camera constraints are derived
+ * from; a stale cache would keep asking the camera for the old resolution and frame rate.
+ */
+export function refreshDeviceProfile(): DeviceProfile {
+  resetDeviceProfile();
+  return deviceProfile();
+}
+
 export function preferredQuality(): QualityMode {
   return deviceProfile().defaultQuality;
 }
