@@ -226,6 +226,20 @@ export class TestingPage implements Page {
     this.render();
   }
 
+  /**
+   * Clear every saved quiz score and flashcard box (audit task 3.3). Called from the control
+   * panel after its confirmation step; returns to the test home so the stats visibly reset.
+   */
+  resetProgress(): void {
+    this.leitner.reset();
+    this.progress.reset();
+    this.mcq = null;
+    this.flash = null;
+    this.lastMissed = [];
+    this.view = 'home';
+    this.render();
+  }
+
   // --------------------------------------------------------------------- render
 
   private render(): void {

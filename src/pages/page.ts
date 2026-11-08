@@ -36,6 +36,7 @@ export interface Page {
   setHovered(id: string | null): void;
   setLanguage(language: Language): void;
   setAutoRotate?(value: boolean): void;
+  setReducedMotion?(value: boolean): void;
   closeOverlay(): void;
   dispose(): void;
 }

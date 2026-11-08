@@ -19,6 +19,7 @@ export interface ShellHandlers {
   onRetryCamera: () => void;
   onAutoRotate: () => void;
   onEnableCamera: () => void;
+  onResetProgress: () => void;
   onOnboardingComplete: (cameraRequested: boolean) => void;
   onOverlayClose: () => void;
 }
@@ -50,7 +51,9 @@ export const UI_COPY = {
     projectLinks: 'Project links',
     github: 'GitHub',
     article: 'Learn article',
-    newTab: 'opens in a new tab'
+    newTab: 'opens in a new tab',
+    previewOff: 'Webcam preview off',
+    previewOffAria: 'Webcam preview is hidden. Turn it back on.'
   },
   fr: {
     autoRotate: 'Rotation auto',
@@ -61,7 +64,9 @@ export const UI_COPY = {
     projectLinks: 'Liens du projet',
     github: 'GitHub',
     article: 'Lire l’article',
-    newTab: 's’ouvre dans un nouvel onglet'
+    newTab: 's’ouvre dans un nouvel onglet',
+    previewOff: 'Aperçu caméra masqué',
+    previewOffAria: 'L’aperçu caméra est masqué. Le réactiver.'
   }
 };
 
@@ -78,11 +83,14 @@ export class Shell {
 
   private readonly autoButton: HTMLButtonElement;
   private readonly autoLabel: HTMLElement;
+  private readonly cameraChip: HTMLButtonElement;
+  private readonly cameraLabel: HTMLElement;
   private readonly legendRoot: HTMLElement;
   private readonly toastHost: HTMLElement;
   private readonly onResize = (): void => this.syncLegend();
   private language: Language;
   private autoRotate = true;
+  private showWebcam = true;
 
   constructor(settings: Settings, private readonly handlers: ShellHandlers) {
     this.language = settings.language;
@@ -123,6 +131,22 @@ export class Shell {
     const actions = document.createElement('div');
     actions.className = 'top-actions';
     const copy = UI_COPY[this.language];
+
+    // Persistent preview-off indicator (audit UX-006 / task 3.2). The control only hides the
+    // webcam thumbnail — hand tracking keeps running — so the chip says "preview", not "camera",
+    // and doubles as the one-tap way back on. Hidden until the preview is actually off.
+    this.cameraChip = document.createElement('button');
+    this.cameraChip.className = 'camera-chip';
+    this.cameraChip.type = 'button';
+    this.cameraChip.hidden = true;
+    this.cameraChip.append(svgIcon(ICONS.eyeOff));
+    this.cameraLabel = document.createElement('span');
+    this.cameraChip.append(this.cameraLabel);
+    this.cameraChip.addEventListener('click', () => handlers.onToggle('showWebcam', true));
+    this.registry.register('top:preview', this.cameraChip, () =>
+      handlers.onToggle('showWebcam', true)
+    );
+    actions.append(this.cameraChip);
 
     this.autoButton = document.createElement('button');
     this.autoButton.className = 'auto-rotate';
@@ -200,7 +224,8 @@ export class Shell {
       handlers.onQuality,
       handlers.onPinchSensitivity,
       handlers.onHelp,
-      handlers.onRetryCamera
+      handlers.onRetryCamera,
+      handlers.onResetProgress
     );
     this.root.append(this.controls.root);
 
@@ -227,6 +252,7 @@ export class Shell {
     this.root.append(this.onboarding.root);
 
     this.syncAutoRotate();
+    this.syncPreviewChip();
   }
 
   setPage(page: PageId): void {
@@ -250,6 +276,14 @@ export class Shell {
     this.autoButton.setAttribute('aria-label', this.autoRotate ? copy.stop : copy.autoRotate);
   }
 
+  private syncPreviewChip(): void {
+    const copy = UI_COPY[this.language];
+    this.cameraChip.hidden = this.showWebcam;
+    this.cameraLabel.textContent = copy.previewOff;
+    this.cameraChip.setAttribute('aria-label', copy.previewOffAria);
+    this.registry.refresh('top:preview');
+  }
+
   setLanguage(language: Language): void {
     this.language = language;
     this.root.dataset.language = language;
@@ -258,6 +292,7 @@ export class Shell {
     this.tabs.setLanguage(language);
     this.onboarding.setLanguage(language);
     this.syncAutoRotate();
+    this.syncPreviewChip();
     this.syncProjectLinks();
     this.renderLegend();
   }
@@ -317,6 +352,8 @@ export class Shell {
   setControlState(state: ControlState): void {
     this.controls.setState(state);
     this.setAutoRotate(state.autoRotate);
+    this.showWebcam = state.showWebcam;
+    this.syncPreviewChip();
   }
 
   updateHud(state: HudState): void {

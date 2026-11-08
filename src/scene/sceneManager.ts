@@ -87,6 +87,7 @@ export class SceneManager {
   private page: PageId = 'interactive';
   private transitioning = false;
   private framingScale = 1;
+  private reducedMotion = false;
 
   // Reused vectors keep the render loop allocation-free.
   private readonly viewDirection = new THREE.Vector3();
@@ -335,14 +336,11 @@ export class SceneManager {
     if (this.page === page && !this.transitioning) return;
     this.page = page;
     const framing = this.framingFor(page);
-    this.transitioning = animate;
+    this.transitioning = animate && !this.reducedMotion;
     const fromPos = this.camera.position.clone();
     const fromTarget = this.target.clone();
-    if (!animate) {
-      this.camera.position.copy(framing.position);
-      this.target.copy(framing.target);
-      this.camera.lookAt(this.target);
-      this.transitioning = false;
+    if (!this.transitioning) {
+      this.snapCamera(framing);
     } else {
       this.tweens.add(
         780,
@@ -358,6 +356,40 @@ export class SceneManager {
     }
     this.camera.fov = framing.fov;
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Reduce-motion enforcement for the 3D stage (audit task 3.1). Camera and page tweens resolve
+   * instantly, the procedural dust field stops drifting, and the render loop keeps a fixed look
+   * target instead of easing toward it. Auto-rotation and ambient pulses are gated by the pages
+   * and the app's frozen motion clock.
+   */
+  setReducedMotion(value: boolean): void {
+    if (this.reducedMotion === value) return;
+    this.reducedMotion = value;
+    this.tweens.reducedMotion = value;
+    if (!value) return;
+    this.tweens.finishAll();
+    this.transitioning = false;
+    this.snapCamera(this.framingFor(this.page));
+  }
+
+  /** Test hook: true while a camera transition tween is in flight. */
+  get isTransitioning(): boolean {
+    return this.transitioning;
+  }
+
+  /** Test hook: the dust shader clock that drives the drifting particle field. */
+  get dustClock(): number {
+    return this.dustUniforms.uTime.value;
+  }
+
+  private snapCamera(framing: Framing): void {
+    this.camera.position.copy(framing.position);
+    this.target.copy(framing.target);
+    this.camera.fov = framing.fov;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(this.target);
   }
 
   get currentPage(): PageId {
@@ -542,13 +574,18 @@ export class SceneManager {
   render(dt: number): void {
     this.tweens.update(dt * 1000);
 
-    this.dustUniforms.uTime.value += dt;
-    if (this.dust) this.dust.rotation.y += dt * 0.006;
+    // Reduce motion freezes the drifting dust instead of merely slowing it (audit task 3.1).
+    if (!this.reducedMotion) {
+      this.dustUniforms.uTime.value += dt;
+      if (this.dust) this.dust.rotation.y += dt * 0.006;
+    }
 
-    // Smooth the look-at target so camera tweens never snap.
+    // Smooth the look-at target so camera tweens never snap. With reduce motion the target is
+    // applied directly: a per-frame ease would still read as a small drift.
     this.camera.getWorldDirection(this.viewDirection);
     this.lookTarget.copy(this.camera.position).addScaledVector(this.viewDirection, 6);
-    this.lookTarget.lerp(this.target, 0.18);
+    if (this.reducedMotion) this.lookTarget.copy(this.target);
+    else this.lookTarget.lerp(this.target, 0.18);
     this.camera.lookAt(this.lookTarget);
 
     this.renderer.info.reset();

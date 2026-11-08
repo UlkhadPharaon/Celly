@@ -91,7 +91,8 @@ export class CellyApp {
   private lastTickMs = 0;
   /** Capture time of the previous detection, used to pace the landmark filters. */
   private lastDetectionMs = 0;
-  private elapsed = 0;
+  /** Ambient clock for the pages. Frozen while reduce motion is on (audit task 3.1). */
+  private motionElapsed = 0;
   private renderFrames = 0;
   private renderClock = 0;
   private framesRendered = 0;
@@ -115,6 +116,7 @@ export class CellyApp {
       onRetryCamera: () => void this.startCamera(),
       onAutoRotate: () => this.toggleAutoRotate(),
       onEnableCamera: () => void this.startCamera(),
+      onResetProgress: () => this.resetProgress(),
       onOnboardingComplete: () => {
         saveJSON(ONBOARD_KEY, true);
       },
@@ -268,12 +270,25 @@ export class CellyApp {
     this.applySettings();
     this.saveSettings();
     if (key === 'showFeedback' || key === 'swap') this.shell.toast(this.t('saved'), 'success');
+    if (key === 'showWebcam') {
+      this.shell.toast(value ? this.t('previewOn') : this.t('previewOff'), value ? 'success' : 'warn');
+    }
   }
 
   private toggleAutoRotate(): void {
     this.settings.autoRotate = !this.settings.autoRotate;
     this.applySettings();
     this.saveSettings();
+  }
+
+  /**
+   * Clear Leitner boxes and quiz best scores (audit task 3.3). The confirmation dialog lives in
+   * the control panel; this method is the single mutation point.
+   */
+  private resetProgress(): void {
+    const page = this.pages.get('test') as TestingPage | undefined;
+    page?.resetProgress();
+    this.shell.toast(this.t('progressReset'), 'success');
   }
 
   private setLanguage(language: Language): void {
@@ -326,6 +341,10 @@ export class CellyApp {
     root.lang = this.settings.language;
     root.dataset.reducedMotion = String(this.settings.reducedMotion);
     root.dataset.highContrast = String(this.settings.highContrast);
+    this.scene.setReducedMotion(this.settings.reducedMotion);
+    for (const page of this.pages.values()) {
+      page.setReducedMotion?.(this.settings.reducedMotion);
+    }
     this.current?.setAutoRotate?.(this.settings.autoRotate);
   }
 
@@ -345,6 +364,7 @@ export class CellyApp {
     this.scene.labGroup.visible = page === 'interactive';
     this.scene.knowledgeGroup.visible = page === 'knowledge';
     this.scene.testGroup.visible = page === 'test';
+    next.setReducedMotion?.(this.settings.reducedMotion);
     next.setAutoRotate?.(this.settings.autoRotate);
     next.enter();
     this.uiHover = null;
@@ -807,7 +827,7 @@ export class CellyApp {
     const dt = Math.min(0.05, Math.max(0.0001, (now - this.lastTime) / 1000));
     this.lastTime = now;
     this.lastTickMs = now;
-    this.elapsed += dt;
+    if (!this.reducedMotion) this.motionElapsed += dt;
 
     this.renderFrames += 1;
     this.framesRendered += 1;
@@ -826,13 +846,13 @@ export class CellyApp {
       this.scene.camera,
       this.scene.renderer.getPixelRatio()
     );
-    this.current?.update(dt, this.elapsed);
+    this.current?.update(dt, this.motionElapsed);
     this.shell.controls.preview.draw(this.frames, this.settings);
     this.shell.onboarding.drawPreview(this.frames, this.settings);
     this.updateCursors();
     this.updateHud(now);
     this.updateDebugOverlay();
-    this.scene.render(this.reducedMotion ? dt * 0.35 : dt);
+    this.scene.render(dt);
   };
 
   start(): void {
@@ -1128,6 +1148,22 @@ export class CellyApp {
   /** Draw-call and resolution snapshot used by the performance audit. */
   get renderStats(): SceneManager['renderStats'] {
     return this.scene.renderStats;
+  }
+
+  /** Reduce-motion snapshot for the accessibility E2E (rig rotation, dust clock, camera tween). */
+  motionState(): {
+    reducedMotion: boolean;
+    rigRotationY: number;
+    dustClock: number;
+    transitioning: boolean;
+  } {
+    const lab = this.pages.get('interactive') as InteractiveLabPage | undefined;
+    return {
+      reducedMotion: this.reducedMotion,
+      rigRotationY: lab?.rigRotationY ?? 0,
+      dustClock: this.scene.dustClock,
+      transitioning: this.scene.isTransitioning
+    };
   }
 
   /** Test hook: where the pipeline thinks the cursor is versus where the 3D hand sits. */

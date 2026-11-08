@@ -61,6 +61,7 @@ export class KnowledgePage implements Page {
   private swipeIndex = 0;
   private language: Language;
   private autoRotate = true;
+  private reducedMotion = false;
 
   private readonly eyebrow: HTMLElement;
   private readonly title: HTMLElement;
@@ -114,7 +115,13 @@ export class KnowledgePage implements Page {
 
   setAutoRotate(value: boolean): void {
     this.autoRotate = value;
-    this.knowledge.autoRotate = value;
+    this.knowledge.autoRotate = value && !this.reducedMotion;
+  }
+
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value;
+    this.knowledge.setReducedMotion(value);
+    this.knowledge.autoRotate = this.autoRotate && !value;
   }
 
   setLanguage(language: Language): void {
@@ -163,7 +170,7 @@ export class KnowledgePage implements Page {
     if (!this.focused) return;
     this.focused = null;
     this.knowledge.unfocus();
-    this.knowledge.autoRotate = this.autoRotate;
+    this.knowledge.autoRotate = this.autoRotate && !this.reducedMotion;
     this.ctx.overlay.hide();
   }
 

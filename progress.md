@@ -189,3 +189,53 @@ Every test in the batch was ~40 % slower than the B-phase run. `playwright.confi
   per-class profile. They were not on the critical path once inference moved off the render
   thread, and changing them would have altered the art direction without measurable benefit on
   a software-rendered host.
+
+## Engineering-audit improvement plan (2026-11-08)
+
+Executing the 13-document audit package in `to_read/` phase by phase. Each phase gets its own
+branch, its own gate (`typecheck`, `lint`, `test`, `build`) and a commit only after the gate and
+the affected browser specs pass. Findings are checked against the code before they are acted on;
+discrepancies are recorded below rather than silently "fixed".
+
+### Phase 1 — stability (`audit-p1-stability`, commit `99c698d`)
+
+| Task | Change | Verification |
+|---|---|---|
+| Error boundary | `src/ui/errorBoundary.ts`: full teardown + reboot path for a construction/runtime crash, with Retry | `errorBoundary.spec.ts` |
+| Settings schema | `settings.ts`: `SETTINGS_VERSION`, pure `sanitizeSettings(input, base?)`; stale/unknown blobs are discarded | `settings.test.ts` |
+| Camera retry | `app.startCamera()` keys off `tracker.isStarting()`; tracker `isStarting()` added | `cameraRetry.spec.ts` |
+| npm audit | 7 moderate dev-only `minimatch` advisories pinned upstream by `typescript-eslint`; 0 critical/high; documented, not forced | `npm audit` |
+| FR completeness | `uiCopy.test.ts` walks every copy table; gesture hints moved to `gestures/hints.ts` with FR parity | unit pass |
+
+Discrepancy: the audit claimed the FR data strings were incomplete, but `data.test.ts` already
+asserted their completeness. The real gap was gesture-state hints (EN-only); fixed there.
+The quiz already had a bare `1 / N` counter, but the audit asks for a labeled header — Phase 2
+implements "Question X of N".
+
+### Phase 2 — interaction polish (`audit-p2-polish`, commit `e03066c`)
+
+| Task | Change | Verification |
+|---|---|---|
+| Selection DPR spec | `selectionDpr.spec.ts`: full 10-target run at DPR 1, 5-target subsets at 1.5/2 | pass |
+| Pinch-start feedback | `pinchStart?: boolean` on select intent; halo/scale pulse in the lab | `selectionFeedback.spec.ts` |
+| Label layout | pure `scene/labelLayout.ts` (abbreviation, hidden budget), unit-tested | `labelLayout.test.ts` |
+| Quality cleanup | composer disposed and rebuilt at a fresh DPR instead of resized in place | `qualityCleanup.spec.ts` |
+| Help shortcuts | `H` / `?` opens onboarding directly at the gestures step | `helpShortcuts.spec.ts` |
+| Quiz progress | explicit "Question X of N" header in MCQ and full exam | `quizProgress.spec.ts` |
+
+### Phase 3 — accessibility (`audit-p3-accessibility`)
+
+| Task | Change | Verification |
+|---|---|---|
+| 3.1 Reduce motion | `Tweens.reducedMotion` + `finishAll()`; `SceneManager.setReducedMotion()` (snap camera, freeze dust and look-at easing); page `setReducedMotion` gates auto-rotation, bob and inertia; `motionElapsed` freezes ambient pulses in the app | `reducedMotion.spec.ts`, `tween.test.ts` |
+| 3.2 Preview-off state | persistent top-bar `.camera-chip` ("Webcam preview off" / "Aperçu caméra masqué") + toast explaining tracking stays on; chip re-enables the preview | `cameraPreviewOff.spec.ts` |
+| 3.3 Reset progress | control-panel two-step inline confirmation (`role="alertdialog"`); resets `LeitnerStore` + `ProgressStore` and returns to the test home | `progressReset.spec.ts` |
+
+Discrepancy: audit UX-006 says "Camera disabled state not clearly communicated", implying the
+camera stops. In the code `showWebcam` only hides the preview; hand tracking keeps running. The
+UI therefore says "preview off", not "camera off", which is truthful and still satisfies the
+"persistent indicator until re-enabled" recommendation.
+
+Phase 3 gate: typecheck, lint, `npm test` 116/116 (13 files), build — all pass. Affected browser
+specs re-run after the change: `smoke` 6/6, `gestures` 4/4, `quizProgress` 2/2, plus the three
+new specs.

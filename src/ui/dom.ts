@@ -37,6 +37,7 @@ export const ICONS = {
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>',
   flip: '<path d="M12 3v18"/><path d="M8 7 3.5 12 8 17M16 7l4.5 5-4.5 5"/>',
   swap: '<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',
+  reset: '<path d="M4 4v6h6"/><path d="M5.1 10a7.5 7.5 0 1 1 1.8 7.2"/>',
   grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
   cards: '<rect x="3.5" y="7" width="12" height="13" rx="2"/><path d="M8 3.5h9.5A2.5 2.5 0 0 1 20 6v10"/>',
   quiz: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.2 2.4c-.7.3-1 .9-1 1.7"/><path d="M11.9 16.8h.1"/>',
