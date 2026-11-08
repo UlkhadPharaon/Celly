@@ -99,6 +99,9 @@ test.describe('shell', () => {
 
     const options = page.locator('.option');
     await expect(options).toHaveCount(4);
+    // The answer must not be telegraphed: no option carries a mark until one is chosen.
+    await expect(page.locator('.option-mark svg')).toHaveCount(0);
+    await expect(page.locator('.option.is-correct, .option.is-wrong')).toHaveCount(0);
     await options.first().click();
     await expect(page.locator('.answer-panel')).toBeVisible();
     await expect(page.locator('[data-celly="next"]')).toBeVisible();

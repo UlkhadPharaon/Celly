@@ -436,7 +436,15 @@ export class TestingPage implements Page {
                 }>
                   <span class="option-key">${LETTERS[display] ?? '?'}</span>
                   <span class="option-text">${escapeHtml(text)}</span>
-                  <span class="option-mark">${isAnswer ? svgIcon(ICONS.check).outerHTML : ''}</span>
+                  <span class="option-mark">${
+                    !answered
+                      ? ''
+                      : isAnswer
+                        ? svgIcon(ICONS.check).outerHTML
+                        : isChosen
+                          ? svgIcon(ICONS.close).outerHTML
+                          : ''
+                  }</span>
                 </button>`;
             })
             .join('')}
