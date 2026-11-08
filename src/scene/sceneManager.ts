@@ -79,7 +79,7 @@ export class SceneManager {
   readonly profile: DeviceProfile;
 
   private composer: EffectComposer;
-  private bloom: UnrealBloomPass;
+  private bloom!: UnrealBloomPass;
   private keyLight!: THREE.DirectionalLight;
   private dust: THREE.Points | null = null;
   private environment: THREE.Texture | null = null;
@@ -151,11 +151,7 @@ export class SceneManager {
     this.setupFloor();
     this.setupDust();
 
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.34, 0.5, 0.86);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    this.composer = this.buildComposer();
 
     this.applyQuality();
     // The projection helpers read the cached canvas rect, so it has to exist before the first
@@ -397,19 +393,57 @@ export class SceneManager {
 
   // --------------------------------------------------------------------- quality
 
+  /**
+   * Build the post-processing chain for the current renderer. A fresh composer owns fresh
+   * render targets, sized by the caller via `setPixelRatio` + `setSize`.
+   */
+  private buildComposer(): EffectComposer {
+    const composer = new EffectComposer(this.renderer);
+    composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.34,
+      0.5,
+      0.86
+    );
+    composer.addPass(this.bloom);
+    composer.addPass(new OutputPass());
+    return composer;
+  }
+
+  /**
+   * Swap quality modes by rebuilding the composer (audit W-06). `EffectComposer.dispose()` only
+   * releases its read/write targets, so the passes are disposed explicitly: UnrealBloom and
+   * Output each own render targets, materials and full-screen geometry. Toggling back and forth
+   * must not accumulate them.
+   */
+  private rebuildComposer(): void {
+    for (const pass of this.composer.passes) pass.dispose();
+    this.composer.dispose();
+    this.composer = this.buildComposer();
+  }
+
   setQuality(quality: QualityMode): void {
     if (quality === this.quality) return;
     this.quality = quality;
+    this.rebuildComposer();
     this.applyQuality();
     this.onResize();
   }
 
   private applyQuality(): void {
     const high = this.quality === 'high';
+    const shadows = high && this.profile.shadows;
     const dpr = high ? this.profile.highDpr : this.profile.lowDpr;
     this.renderer.setPixelRatio(dpr);
-    this.renderer.shadowMap.enabled = high && this.profile.shadows;
-    this.keyLight.castShadow = high && this.profile.shadows;
+    this.renderer.shadowMap.enabled = shadows;
+    this.keyLight.castShadow = shadows;
+    if (!shadows) {
+      // Free the shadow render target instead of leaving it allocated while the light is idle.
+      this.keyLight.shadow.dispose();
+      this.keyLight.shadow.map = null;
+      this.keyLight.shadow.mapPass = null;
+    }
     this.bloom.enabled = high && this.profile.bloom;
     this.composer.setPixelRatio(dpr);
     this.dustUniforms.uPixelRatio.value = dpr;

@@ -4,7 +4,7 @@ import { svgIcon, ICONS } from './dom';
 import { createProjectLink, registerProjectLink } from './projectLinks';
 import { WebcamPreview } from './webcamPreview';
 
-const COPY = {
+export const COPY = {
   en: {
     kicker: 'Celly · v0.2',
     title: 'A cell you can hold.',
@@ -40,6 +40,16 @@ const COPY = {
     g3s: 'Left pinch and move',
     g4: 'Scale',
     g4s: 'Pinch with both hands',
+    shortcuts: 'Keyboard shortcuts',
+    shortcutHint: 'Active whenever a text field is not focused.',
+    shortcutPages: 'Lab · Knowledge · Test',
+    shortcutRotate: 'Auto-rotate the cell',
+    shortcutMirror: 'Mirror the view',
+    shortcutLanguage: 'Switch language',
+    shortcutDebug: 'Debug overlay',
+    shortcutTest: 'Selection test',
+    shortcutHelp: 'Open this help',
+    shortcutClose: 'Close the overlay',
     enter: 'Enter the lab',
     skip: 'Skip tour',
     back: 'Back',
@@ -86,6 +96,16 @@ const COPY = {
     g3s: 'Pincement gauche et déplacement',
     g4: 'Mettre à l’échelle',
     g4s: 'Pincement des deux mains',
+    shortcuts: 'Raccourcis clavier',
+    shortcutHint: 'Actifs tant qu’aucun champ de saisie n’a le focus.',
+    shortcutPages: 'Labo · Savoirs · Test',
+    shortcutRotate: 'Rotation automatique de la cellule',
+    shortcutMirror: 'Miroir de la vue',
+    shortcutLanguage: 'Changer de langue',
+    shortcutDebug: 'Superposition de débogage',
+    shortcutTest: 'Test de sélection',
+    shortcutHelp: 'Ouvrir cette aide',
+    shortcutClose: 'Fermer la fenêtre',
     enter: 'Entrer au laboratoire',
     skip: 'Passer la visite',
     back: 'Retour',
@@ -142,14 +162,18 @@ export class Onboarding {
     return this.root.classList.contains('is-open');
   }
 
-  open(): void {
+  open(step = 0): void {
     this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    this.step = 0;
+    this.step = Math.min(2, Math.max(0, step));
     this.hands = 0;
     this.root.classList.add('is-open');
     this.render();
     requestAnimationFrame(() => {
-      this.card.querySelector<HTMLElement>('[data-celly="enable"]')?.focus();
+      this.card
+        .querySelector<HTMLElement>(
+          '[data-celly="enable"], [data-celly="enter"], [data-celly="next"]'
+        )
+        ?.focus();
     });
   }
 
@@ -362,6 +386,18 @@ export class Onboarding {
       [ICONS.rotate, copy.g3, copy.g3s],
       [ICONS.scale, copy.g4, copy.g4s]
     ];
+    // Keybindings live in the help modal (audit task 2.5) because the top-bar and H/? keys were
+    // the only way to discover them. The list mirrors the switch in app.ts exactly.
+    const shortcuts: Array<[string[], string]> = [
+      [['1', '2', '3'], copy.shortcutPages],
+      [['R'], copy.shortcutRotate],
+      [['M'], copy.shortcutMirror],
+      [['L'], copy.shortcutLanguage],
+      [['D'], copy.shortcutDebug],
+      [['T'], copy.shortcutTest],
+      [['H', '?'], copy.shortcutHelp],
+      [['Esc'], copy.shortcutClose]
+    ];
     return `
       <div class="onboarding-body wide">
         <span class="eyebrow">${copy.step3kicker}</span>
@@ -380,6 +416,20 @@ export class Onboarding {
             )
             .join('')}
         </div>
+        <section class="shortcut-sheet" data-shortcuts aria-label="${copy.shortcuts}">
+          <div class="shortcut-head">
+            <span class="eyebrow">${copy.shortcuts}</span>
+            <span class="shortcut-hint">${copy.shortcutHint}</span>
+          </div>
+          <dl class="shortcut-list">
+            ${shortcuts
+              .map(
+                ([keys, label]) =>
+                  `<div><dt>${keys.map((key) => `<kbd>${key}</kbd>`).join('')}</dt><dd>${label}</dd></div>`
+              )
+              .join('')}
+          </dl>
+        </section>
         <div class="onboarding-actions">
           <button class="btn ghost" type="button" data-celly="back"><span>${copy.back}</span></button>
           <button class="btn primary" type="button" data-celly="enter">

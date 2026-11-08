@@ -55,6 +55,9 @@ export const PICKABLE_IDS = [
 
 const PICKABLE = new Set<OrganelleId>(PICKABLE_IDS);
 
+/** Length of the pinch-start acknowledgement pulse, in seconds (SPEC-04: ~150 ms). */
+const SELECTION_FLASH_SECONDS = 0.15;
+
 interface PickAnchor {
   /** Centre in the part group's local space, so it follows bob/selection transforms. */
   local: THREE.Vector3;
@@ -77,6 +80,13 @@ export class CellModel {
 
   private readonly halo: THREE.Mesh;
   private haloMaterial: THREE.ShaderMaterial;
+  /**
+   * Pinch-start confirmation pulse (audit UX-005): selection now commits the instant the pinch
+   * closes, so the old "hold to select" cue is gone. A short halo flash on the committed target
+   * acknowledges the pinch before the isolate tween and overlay finish.
+   */
+  private flashId: OrganelleId | null = null;
+  private flashLeft = 0;
   private opacityTargets = new Map<OrganelleId, OpacityTarget[]>();
   private emissiveTargets = new Map<OrganelleId, EmissiveTarget[]>();
   private emphasis = new Map<OrganelleId, number>();
@@ -926,6 +936,23 @@ export class CellModel {
     this.setIsolation(id);
   }
 
+  /**
+   * Flash the halo on `id` for a beat to confirm an instant selection commit. Safe to call for
+   * the organelle that is about to become selected: the flash and the persistent selection halo
+   * share the same mesh, so the transition is a single continuous glow.
+   */
+  flashSelection(id: OrganelleId): void {
+    if (!this.parts.has(id)) return;
+    this.flashId = id;
+    this.flashLeft = SELECTION_FLASH_SECONDS;
+  }
+
+  /** Diagnostics for the e2e feedback test: null when no pulse is playing. */
+  flashState(): { id: OrganelleId; remainingMs: number } | null {
+    if (!this.flashId || this.flashLeft <= 0) return null;
+    return { id: this.flashId, remainingMs: Math.round(this.flashLeft * 1000) };
+  }
+
   setHovered(id: OrganelleId | null): void {
     this.hovered = id;
   }
@@ -1001,15 +1028,23 @@ export class CellModel {
       }
     }
 
-    const haloId = this.selected ?? this.testTarget;
+    // The pinch-start pulse wins over the regular halo for its 150 ms: the selection commit and
+    // the acknowledgement land in the same tick, so the flash is what the user sees first.
+    const flashActive = this.flashId !== null && this.flashLeft > 0;
+    const flashProgress = flashActive ? 1 - this.flashLeft / SELECTION_FLASH_SECONDS : 1;
+    if (this.flashLeft > 0) this.flashLeft = Math.max(0, this.flashLeft - dt);
+    const haloId = flashActive ? this.flashId : (this.selected ?? this.testTarget);
     this.halo.visible = !!haloId;
     if (haloId) {
       const part = this.parts.get(haloId);
       if (part) {
         this.halo.position.copy(part.group.position).add(part.center.clone().sub(part.basePosition));
-        this.halo.scale.setScalar(part.radius * (1.35 + Math.sin(elapsed * 2.2) * 0.03));
+        const wobble = 1.35 + Math.sin(elapsed * 2.2) * 0.03;
+        const flourish = 1.75 - 0.4 * flashProgress;
+        this.halo.scale.setScalar(part.radius * (flashActive ? flourish : wobble));
         this.haloMaterial.uniforms.uColor.value.set(ORGANELLE_BY_ID.get(haloId)?.color ?? '#ffb347');
       }
+      this.haloMaterial.uniforms.uIntensity.value = flashActive ? 0.9 + 1.8 * (1 - flashProgress) : 0.9;
       this.haloMaterial.uniforms.uTime.value = elapsed;
     }
 

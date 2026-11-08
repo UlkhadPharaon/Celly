@@ -65,6 +65,11 @@ export class HandTracker {
     return this.workerReady && this.camera === 'live';
   }
 
+  /** True while a start attempt is still resolving (permission prompt, worker init, timeouts). */
+  isStarting(): boolean {
+    return this.startingFlag;
+  }
+
   async start(): Promise<void> {
     if (this.startingFlag) return this.starting ?? Promise.resolve();
     this.startingFlag = true;

@@ -66,7 +66,7 @@ describe('GestureEngine — right hand', () => {
         ]
       })
     );
-    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
+    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim, pinchStart: true });
     expect(first.state).toBe('SELECTING');
     expect(first.cursors[0]).toMatchObject({ side: 'right', active: true, mode: 'pinch' });
     expect(first.cursors[0]).toMatchObject({ x: aim.x, y: aim.y });
@@ -422,7 +422,7 @@ describe('GestureEngine — immediate selection guards', () => {
         ]
       })
     );
-    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
+    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim, pinchStart: true });
     const out = e.step(
       ctx({
         t: 180,
@@ -461,7 +461,7 @@ describe('GestureEngine — immediate selection guards', () => {
         ]
       })
     );
-    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim });
+    expect(first.intents).toContainEqual({ type: 'select', id: 'nucleus', aim, pinchStart: true });
     const out = e.step(
       ctx({
         t: 180,

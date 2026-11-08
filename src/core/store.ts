@@ -23,7 +23,7 @@ export class Store<T extends object> {
   }
 }
 
-/** Versioned localStorage helpers — a schema bump discards stale shapes. */
+/** Plain JSON (de)serialization with soft failure: broken storage degrades to the fallback. */
 export function loadJSON<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);

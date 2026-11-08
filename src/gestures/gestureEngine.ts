@@ -1,5 +1,6 @@
-import type { GestureContext, GestureFrame, GestureState, HandFrame, HandSide, Intent, Vec2 } from '../types';
+﻿import type { GestureContext, GestureFrame, GestureState, HandFrame, HandSide, Intent, Vec2 } from '../types';
 import { dist2 } from '../core/math';
+import { GESTURE_HINTS } from './hints';
 
 export interface GestureEngineConfig {
   twoHandCooldownMs: number;
@@ -43,16 +44,6 @@ export interface PinchEvent {
   travelPx: number;
   aim: Vec2;
 }
-
-const HINTS: Record<GestureState, string> = {
-  IDLE: '',
-  HOVER_UI: 'Pinch to click',
-  SELECTING: 'Release',
-  ROTATING: 'Rotate',
-  SCALING: 'Scale',
-  SWIPING: 'Swipe',
-  COOLDOWN: ''
-};
 
 /**
  * Turns tracked hands into semantic intents. Knows nothing about pages or Three.js
@@ -158,7 +149,7 @@ export class GestureEngine {
             };
             this.swipe = null;
           } else if (ctx.sceneHover) {
-            intents.push({ type: 'select', id: ctx.sceneHover, aim });
+            intents.push({ type: 'select', id: ctx.sceneHover, aim, pinchStart: true });
             this.logPinch({
               t: ctx.t,
               side: primary.side,
@@ -307,7 +298,7 @@ export class GestureEngine {
       else this.state = 'IDLE';
     }
 
-    intents.push({ type: 'state', state: this.state, hint: HINTS[this.state] });
+    intents.push({ type: 'state', state: this.state, hint: GESTURE_HINTS[this.state] });
 
     const dwellProgress =
       ctx.dwellEnabled && ctx.uiHover && !primary?.pinching
@@ -330,7 +321,7 @@ export class GestureEngine {
       });
     }
 
-    return { state: this.state, hint: HINTS[this.state], dwellProgress, intents, cursors };
+    return { state: this.state, hint: GESTURE_HINTS[this.state], dwellProgress, intents, cursors };
   }
 
   private logPinch(event: PinchEvent): void {

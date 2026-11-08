@@ -4,7 +4,7 @@ import { KnowledgeScene } from '../scene/knowledgeScene';
 import { clamp } from '../core/math';
 import { type Page, type PageContext, pageHeader } from './page';
 
-const COPY = {
+export const COPY = {
   en: {
     eyebrow: 'Knowledge network',
     title: 'Everything connects',
@@ -228,6 +228,11 @@ export class KnowledgePage implements Page {
   /** Public projection helper (screenshots + gesture replay). */
   screenPosition(id: string): { x: number; y: number } | null {
     return this.anchorFor(id);
+  }
+
+  /** Last laid-out label boxes in CSS pixels (label-collision e2e). */
+  labelDebug(): ReturnType<KnowledgeScene['labelDebug']> {
+    return this.knowledge.labelDebug();
   }
 
   // -------------------------------------------------------------------- intents
