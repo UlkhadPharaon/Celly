@@ -13,7 +13,9 @@ export const APP_STRINGS = {
     qualityFast: 'Fast mode',
     previewOff: 'Webcam preview hidden — hand tracking stays on.',
     previewOn: 'Webcam preview on',
-    progressReset: 'Learning progress reset'
+    progressReset: 'Learning progress reset',
+    insecureContext:
+      'Camera unavailable: hand tracking needs https:// or localhost. Reload over a secure connection.'
   },
   fr: {
     cameraUnavailable: 'Caméra indisponible.',
@@ -24,6 +26,8 @@ export const APP_STRINGS = {
     qualityFast: 'Mode rapide',
     previewOff: 'Aperçu caméra masqué — le suivi des mains reste actif.',
     previewOn: 'Aperçu caméra activé',
-    progressReset: 'Progression réinitialisée'
+    progressReset: 'Progression réinitialisée',
+    insecureContext:
+      'Caméra indisponible : le suivi des mains exige https:// ou localhost. Rechargez via une connexion sécurisée.'
   }
 };

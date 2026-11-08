@@ -1,6 +1,20 @@
 import type { Vec3 } from '../types';
 
 /**
+ * Clamp a sample interval to the range the filters were tuned for (audit task 5.2).
+ *
+ * Detections arrive asynchronously from the tracking worker, so their spacing is the real pace of
+ * the signal — and on a busy machine it can be anything. A non-finite or near-zero `dt` used to
+ * blow up the derivative estimate, which drove the adaptive cutoff to infinity and disabled
+ * smoothing (and a NaN `dt` poisoned the state permanently). Clamping keeps the filter honest for
+ * any arrival pattern, including a long stall between two results.
+ */
+export function sanitizeDt(dt: number): number {
+  if (!Number.isFinite(dt)) return 1 / 30;
+  return Math.min(0.2, Math.max(1 / 120, dt));
+}
+
+/**
  * One-Euro filter (Casiez et al., CHI 2012) for a single scalar channel.
  * Low latency at speed, strong jitter removal at rest.
  */
@@ -28,7 +42,7 @@ export class OneEuroFilter {
 
   filter(value: number, dt: number): number {
     if (!Number.isFinite(value)) return this.prevFiltered;
-    const d = Math.max(1e-4, Math.min(0.2, dt));
+    const d = sanitizeDt(dt);
     if (this.prevRaw === null) {
       this.prevRaw = value;
       this.prevFiltered = value;

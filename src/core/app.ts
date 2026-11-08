@@ -36,6 +36,7 @@ import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
 import { FrameProcessor } from './frameProcessor';
+import { deviceProfile, refreshDeviceProfile } from './device';
 import { InteractiveLabPage } from '../pages/interactiveLab';
 import { KnowledgePage } from '../pages/knowledge';
 import { TestingPage } from '../pages/testing/testingPage';
@@ -60,6 +61,9 @@ export class CellyApp {
   private current: Page | null = null;
   private cameraAttemptCount = 0;
   private debugVisible = false;
+  /** Device class the camera constraints were resolved for; compared on every resize. */
+  private deviceClass: string;
+  private deviceCheckTimer = 0;
 
   private quality: TrackingQuality = { level: 'none', value: 0, jitter: 0, margin: 0 };
   private previousJitter: Vec3[] | null = null;
@@ -102,6 +106,7 @@ export class CellyApp {
     mount.append(this.shell.root);
     document.body.append(this.debug.root);
     this.fp = new FrameProcessor(this.settings, () => this.current, this.shell.registry);
+    this.deviceClass = deviceProfile().deviceClass;
     this.shell.hud.onAction = (action) => {
       if (action === 'overlay') this.toggleDebugOverlay();
       else this.toggleSelectionTest();
@@ -119,6 +124,9 @@ export class CellyApp {
           this.shell.controls.preview.attach(this.tracker.video);
           this.shell.onboarding.attachVideo(this.tracker.video);
         } else if (isCameraError(status)) {
+          // Insecure context is reported once, in the interface language, by the startup check in
+          // `start()`. Repeating the tracker's English detail would duplicate it.
+          if (status === 'insecure-context') return;
           // The onboarding carries the same message inline in its camera step; a toast behind
           // the modal would only duplicate it and cover the card.
           if (!this.shell.onboarding.isOpen) {
@@ -352,7 +360,41 @@ export class CellyApp {
 
   // ------------------------------------------------------------------------ input
 
+  /**
+   * Re-resolve the camera constraints when the device class changes (audit task 5.1). Rotating a
+   * tablet or moving the window to an external display changes the class, and with it the
+   * resolution and frame rate the camera was opened with; the tracking worker and the preview
+   * element are untouched, so only the media source is swapped.
+   */
+  private bindDeviceProfile(): void {
+    const onChange = (): void => {
+      if (this.disposed) return;
+      void this.refreshDeviceProfile();
+    };
+    window.addEventListener('resize', onChange);
+    window.addEventListener('orientationchange', onChange);
+    for (const query of ['(pointer: coarse)', '(any-pointer: coarse)', '(hover: none)']) {
+      window.matchMedia?.(query)?.addEventListener?.('change', onChange);
+    }
+    // A display swap (external monitor) can change the class without any of the events above.
+    this.deviceCheckTimer = window.setInterval(onChange, 4000);
+  }
+
+  /** Test hook / shared by the profile listener: re-detect class and reopen the stream if needed. */
+  async refreshDeviceProfile(): Promise<{ deviceClass: string; reopened: boolean }> {
+    const before = this.deviceClass;
+    const profile = refreshDeviceProfile();
+    if (profile.deviceClass === before) {
+      return { deviceClass: profile.deviceClass, reopened: false };
+    }
+    this.deviceClass = profile.deviceClass;
+    const reopened = await this.tracker.applyCameraProfile(profile);
+    return { deviceClass: profile.deviceClass, reopened };
+  }
+
   private bindInput(): void {
+    this.bindDeviceProfile();
+
     const canvas = this.scene.renderer.domElement;
     canvas.addEventListener('pointermove', (event: PointerEvent) => {
       if (this.fp.frames.length) return;
@@ -616,6 +658,13 @@ export class CellyApp {
   start(): void {
     this.lastTime = performance.now();
     this.raf = requestAnimationFrame(this.loop);
+    // Insecure-context warning (audit task 5.3): served over plain http, `getUserMedia` is
+    // unavailable, so the camera can never start. Say so at startup instead of letting the user
+    // find out by pressing "Enable camera". The onboarding card still carries its own inline
+    // message, so the toast is suppressed behind it.
+    if (!window.isSecureContext && !this.shell.onboarding.isOpen) {
+      this.shell.toast(this.t('insecureContext'), 'warn');
+    }
   }
 
   // ------------------------------------------------------------------ test hooks
@@ -898,6 +947,20 @@ export class CellyApp {
     return this.scene.renderStats;
   }
 
+  /** Device-class and stream summary, for the device-profile E2E. */
+  deviceState(): {
+    deviceClass: string;
+    cameraStreamWidth: number;
+    cameraReopens: number;
+  } {
+    const state = this.tracker.deviceState();
+    return {
+      deviceClass: this.deviceClass,
+      cameraStreamWidth: state.streamWidth,
+      cameraReopens: state.reopens
+    };
+  }
+
   /** Reduce-motion snapshot for the accessibility E2E (rig rotation, dust clock, camera tween). */
   motionState(): {
     reducedMotion: boolean;
@@ -979,6 +1042,7 @@ export class CellyApp {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.deviceCheckTimer) window.clearInterval(this.deviceCheckTimer);
     cancelAnimationFrame(this.raf);
     void this.tracker.stop();
     this.hands.dispose();

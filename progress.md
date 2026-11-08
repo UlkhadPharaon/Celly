@@ -253,3 +253,15 @@ new specs.
 The frame pipeline is intentionally DOM-free on import (the viewport is passed in per call), which
 is why it is unit-testable in Node — `CellyApp` itself cannot be imported there because
 `handTracker.ts` touches `document.baseURI` at module scope.
+
+### Phase 5 — performance hardening (`audit-p5-perf`)
+
+| Task | Change | Verification |
+|---|---|---|
+| 5.1 | `refreshDeviceProfile()` re-detects the class; `HandTracker.applyCameraProfile()` swaps the media source with fresh constraints while the worker and preview element stay put; the app listens on resize/orientation/pointer-media changes plus a 4 s poll for display swaps | `cameraProfile.spec.ts` (1280×720 → 640×480 after a class change, tracker still live) |
+| 5.2 | `sanitizeDt()` clamps sample spacing to the tuned range and survives non-finite input (a NaN `dt` used to poison the filter state and a sub-millisecond gap disabled smoothing) | `landmarkFilter.test.ts` 5/5 |
+| 5.3 | Startup insecure-context toast in the interface language, suppressed behind the onboarding; the tracker's English duplicate for the same status is no longer re-emitted | `insecureContext.spec.ts` 3/3 |
+
+Phase 5 gate: typecheck, lint, `npm test` 138/138 (16 files), build and `npm run audit:deps` all pass.
+Affected browser specs re-run: `smoke` 6/6, `cameraRetry` 1/1, `errorBoundary` 2/2, plus the two new
+specs.
