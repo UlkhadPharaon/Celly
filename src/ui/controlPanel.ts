@@ -1,6 +1,6 @@
 import type { CameraStatus, Language, QualityMode } from '../types';
 import type { ButtonRegistry } from './buttons';
-import { svgIcon, ICONS } from './dom';
+import { svgIcon, ICONS, escapeHtml } from './dom';
 import { WebcamPreview } from './webcamPreview';
 import { PINCH_SENSITIVITY } from '../gestures/pinch';
 import { createProjectLink, registerProjectLink, updateProjectLink } from './projectLinks';
@@ -55,6 +55,10 @@ export const COPY = {
     accessibility: 'Accessibility',
     reducedMotion: 'Reduce motion',
     highContrast: 'High contrast',
+    resetProgress: 'Reset learning progress',
+    resetPrompt: 'Reset all quiz scores and flashcard boxes? This cannot be undone.',
+    resetCancel: 'Cancel',
+    resetConfirm: 'Reset',
     projectLinks: 'Project links',
     github: 'GitHub',
     article: 'Learn article',
@@ -84,6 +88,10 @@ export const COPY = {
     accessibility: 'Accessibilité',
     reducedMotion: 'Réduire les animations',
     highContrast: 'Contraste élevé',
+    resetProgress: 'Réinitialiser la progression',
+    resetPrompt: 'Réinitialiser tous les scores et les boîtes de révision ? Cette action est irréversible.',
+    resetCancel: 'Annuler',
+    resetConfirm: 'Réinitialiser',
     projectLinks: 'Liens du projet',
     github: 'GitHub',
     article: 'Lire l’article',
@@ -103,6 +111,12 @@ export class ControlPanel {
   private readonly statusText: HTMLElement;
   private readonly retry: HTMLButtonElement;
   private readonly accessibilitySummary: HTMLElement;
+  private readonly resetButton: HTMLButtonElement;
+  private readonly resetLabel: HTMLElement;
+  private readonly resetConfirm: HTMLElement;
+  private readonly resetPrompt: HTMLElement;
+  private readonly resetCancel: HTMLButtonElement;
+  private readonly resetAccept: HTMLButtonElement;
   private readonly sheetToggle: HTMLButtonElement;
   private readonly sheetQuery: MediaQueryList;
   private sheetOpen = true;
@@ -115,7 +129,8 @@ export class ControlPanel {
     private readonly onQuality: (q: QualityMode) => void,
     private readonly onPinchSensitivity: (value: number) => void,
     private readonly onHelp: () => void,
-    private readonly onRetry: () => void
+    private readonly onRetry: () => void,
+    private readonly onResetProgress: () => void
   ) {
     this.copy = COPY[state.language];
     this.sheetQuery = window.matchMedia('(max-width: 1080px)');
@@ -222,6 +237,56 @@ export class ControlPanel {
     this.root.append(more);
     this.accessibilitySummary = summary;
 
+    // ------------------------------------------------------- reset learning progress
+    // Two-step confirmation (audit task 3.3): the action is destructive and persisted, so the
+    // first press only reveals the prompt; nothing is cleared until the explicit Reset press.
+    const reset = document.createElement('div');
+    reset.className = 'control-reset';
+
+    this.resetButton = document.createElement('button');
+    this.resetButton.className = 'ghost-btn small danger control-reset-open';
+    this.resetButton.type = 'button';
+    this.resetButton.dataset.celly = 'reset-progress';
+    this.resetButton.setAttribute('aria-expanded', 'false');
+    this.resetButton.append(svgIcon(ICONS.reset));
+    this.resetLabel = document.createElement('span');
+    this.resetButton.append(this.resetLabel);
+    this.resetButton.addEventListener('click', () => this.setResetConfirmOpen(true));
+    this.registry.register('control:reset', this.resetButton, () => this.setResetConfirmOpen(true));
+
+    this.resetConfirm = document.createElement('div');
+    this.resetConfirm.className = 'control-confirm';
+    this.resetConfirm.setAttribute('role', 'alertdialog');
+    this.resetConfirm.setAttribute('aria-modal', 'false');
+    this.resetPrompt = document.createElement('p');
+
+    const resetActions = document.createElement('div');
+    resetActions.className = 'control-confirm-actions';
+    this.resetCancel = document.createElement('button');
+    this.resetCancel.className = 'btn ghost small control-reset-cancel';
+    this.resetCancel.type = 'button';
+    this.resetCancel.dataset.celly = 'reset-cancel';
+    this.resetCancel.addEventListener('click', () => this.setResetConfirmOpen(false));
+    this.registry.register('control:reset:cancel', this.resetCancel, () =>
+      this.setResetConfirmOpen(false)
+    );
+    this.resetAccept = document.createElement('button');
+    this.resetAccept.className = 'btn ghost danger small control-reset-accept';
+    this.resetAccept.type = 'button';
+    this.resetAccept.dataset.celly = 'reset-confirm';
+    this.resetAccept.addEventListener('click', () => this.confirmReset());
+    this.registry.register('control:reset:confirm', this.resetAccept, () => this.confirmReset());
+    resetActions.append(this.resetCancel, this.resetAccept);
+
+    this.resetConfirm.append(this.resetPrompt, resetActions);
+    this.resetConfirm.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      this.setResetConfirmOpen(false);
+    });
+    reset.append(this.resetButton, this.resetConfirm);
+    this.root.append(reset);
+
     this.statusNode = document.createElement('div');
     this.statusNode.className = 'camera-status';
     this.statusText = document.createElement('span');
@@ -284,7 +349,7 @@ export class ControlPanel {
 
     const privacy = document.createElement('div');
     privacy.className = 'controls-privacy';
-    privacy.innerHTML = `<i></i><span>${this.copy.privacy}</span>`;
+    privacy.innerHTML = `<i></i><span>${escapeHtml(this.copy.privacy)}</span>`;
     this.root.append(privacy);
 
     this.setState(state);
@@ -292,6 +357,10 @@ export class ControlPanel {
     // "Enable camera" button with no context, and the preview's LIVE badge would be visible
     // over an empty frame.
     this.setCameraStatus('idle');
+    // Copy assigned during construction (reset prompt, project links, …) needs the same pass
+    // that a later language switch gets; the dictionaries are object-identical, so setState
+    // cannot infer that initialization is still pending.
+    this.setLanguage(state.language);
   }
 
   private readonly onSheetQueryChange = (event: MediaQueryListEvent): void => {
@@ -334,6 +403,7 @@ export class ControlPanel {
     const btn = document.createElement('button');
     btn.className = 'switch';
     btn.type = 'button';
+    btn.dataset.toggle = key;
     btn.setAttribute('role', 'switch');
     btn.setAttribute('aria-label', label.textContent ?? '');
     const knob = document.createElement('span');
@@ -421,6 +491,12 @@ export class ControlPanel {
     if (privacy) privacy.textContent = this.copy.privacy;
     this.accessibilitySummary.textContent = this.copy.accessibility;
 
+    this.resetLabel.textContent = this.copy.resetProgress;
+    this.resetPrompt.textContent = this.copy.resetPrompt;
+    this.resetCancel.textContent = this.copy.resetCancel;
+    this.resetAccept.textContent = this.copy.resetConfirm;
+    this.resetConfirm.setAttribute('aria-label', this.copy.resetPrompt);
+
     this.root.querySelector('.project-links')?.setAttribute('aria-label', this.copy.projectLinks);
     for (const link of this.root.querySelectorAll<HTMLAnchorElement>('.project-links [data-project-link]')) {
       const kind = link.dataset.projectLink;
@@ -442,6 +518,28 @@ export class ControlPanel {
         button.setAttribute('aria-label', `${this.copy.pinch}: ${button.textContent}`);
       }
     }
+  }
+
+  /** Open/close the inline confirmation prompt without touching saved progress. */
+  private setResetConfirmOpen(open: boolean): void {
+    const wasOpen = this.resetConfirm.classList.contains('is-open');
+    this.resetConfirm.classList.toggle('is-open', open);
+    this.resetButton.setAttribute('aria-expanded', String(open));
+    if (open) {
+      this.registry.refreshAll();
+      requestAnimationFrame(() => {
+        this.registry.refreshAll();
+        this.resetCancel.focus();
+      });
+    } else {
+      this.registry.refreshAll();
+      if (wasOpen) this.resetButton.focus();
+    }
+  }
+
+  private confirmReset(): void {
+    this.onResetProgress();
+    this.setResetConfirmOpen(false);
   }
 
   setCameraStatus(status: CameraStatus, detail?: string): void {

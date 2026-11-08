@@ -10,7 +10,10 @@ export const APP_STRINGS = {
     saved: 'Saved',
     pinchSaved: 'Pinch sensitivity saved',
     qualityHigh: 'High quality',
-    qualityFast: 'Fast mode'
+    qualityFast: 'Fast mode',
+    previewOff: 'Webcam preview hidden — hand tracking stays on.',
+    previewOn: 'Webcam preview on',
+    progressReset: 'Learning progress reset'
   },
   fr: {
     cameraUnavailable: 'Caméra indisponible.',
@@ -18,6 +21,9 @@ export const APP_STRINGS = {
     saved: 'Enregistré',
     pinchSaved: 'Sensibilité du pincement enregistrée',
     qualityHigh: 'Qualité élevée',
-    qualityFast: 'Mode rapide'
+    qualityFast: 'Mode rapide',
+    previewOff: 'Aperçu caméra masqué — le suivi des mains reste actif.',
+    previewOn: 'Aperçu caméra activé',
+    progressReset: 'Progression réinitialisée'
   }
 };

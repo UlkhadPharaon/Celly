@@ -1,5 +1,5 @@
 import type { ButtonRegistry } from './buttons';
-import { svgIcon, ICONS } from './dom';
+import { svgIcon, ICONS, escapeHtml } from './dom';
 
 export interface OverlayChip {
   id: string;
@@ -391,15 +391,6 @@ export class Overlay {
     this.teardown();
     this.root.remove();
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function cssEscape(value: string): string {

@@ -1,6 +1,6 @@
 import type { HandFrame } from '../types';
 import type { PinchEvent } from '../gestures/gestureEngine';
-import { el } from './dom';
+import { el, escapeHtml } from './dom';
 
 export interface DebugSnapshot {
   page: string | null;
@@ -127,12 +127,4 @@ function circle(x: number, y: number, r: number, color: string, label: string, r
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

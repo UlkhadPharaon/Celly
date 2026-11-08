@@ -36,6 +36,7 @@ export interface Page {
   setHovered(id: string | null): void;
   setLanguage(language: Language): void;
   setAutoRotate?(value: boolean): void;
+  setReducedMotion?(value: boolean): void;
   closeOverlay(): void;
   dispose(): void;
 }
@@ -49,10 +50,14 @@ export interface PageHeaderCopy {
 export function pageHeader(copy: PageHeaderCopy): HTMLElement {
   const header = document.createElement('header');
   header.className = 'page-intro';
-  header.innerHTML = `
-    <span class="eyebrow">${copy.eyebrow}</span>
-    <h1>${copy.title}</h1>
-    <p>${copy.lead}</p>
-  `;
+  // Copy is authored, but it is still text: assigned as text, never parsed as markup.
+  const eyebrow = document.createElement('span');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = copy.eyebrow;
+  const title = document.createElement('h1');
+  title.textContent = copy.title;
+  const lead = document.createElement('p');
+  lead.textContent = copy.lead;
+  header.append(eyebrow, title, lead);
   return header;
 }

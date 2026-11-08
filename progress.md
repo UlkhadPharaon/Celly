@@ -189,3 +189,67 @@ Every test in the batch was ~40 % slower than the B-phase run. `playwright.confi
   per-class profile. They were not on the critical path once inference moved off the render
   thread, and changing them would have altered the art direction without measurable benefit on
   a software-rendered host.
+
+## Engineering-audit improvement plan (2026-11-08)
+
+Executing the 13-document audit package in `to_read/` phase by phase. Each phase gets its own
+branch, its own gate (`typecheck`, `lint`, `test`, `build`) and a commit only after the gate and
+the affected browser specs pass. Findings are checked against the code before they are acted on;
+discrepancies are recorded below rather than silently "fixed".
+
+### Phase 1 — stability (`audit-p1-stability`, commit `99c698d`)
+
+| Task | Change | Verification |
+|---|---|---|
+| Error boundary | `src/ui/errorBoundary.ts`: full teardown + reboot path for a construction/runtime crash, with Retry | `errorBoundary.spec.ts` |
+| Settings schema | `settings.ts`: `SETTINGS_VERSION`, pure `sanitizeSettings(input, base?)`; stale/unknown blobs are discarded | `settings.test.ts` |
+| Camera retry | `app.startCamera()` keys off `tracker.isStarting()`; tracker `isStarting()` added | `cameraRetry.spec.ts` |
+| npm audit | 7 moderate dev-only `minimatch` advisories pinned upstream by `typescript-eslint`; 0 critical/high; documented, not forced | `npm audit` |
+| FR completeness | `uiCopy.test.ts` walks every copy table; gesture hints moved to `gestures/hints.ts` with FR parity | unit pass |
+
+Discrepancy: the audit claimed the FR data strings were incomplete, but `data.test.ts` already
+asserted their completeness. The real gap was gesture-state hints (EN-only); fixed there.
+The quiz already had a bare `1 / N` counter, but the audit asks for a labeled header — Phase 2
+implements "Question X of N".
+
+### Phase 2 — interaction polish (`audit-p2-polish`, commit `e03066c`)
+
+| Task | Change | Verification |
+|---|---|---|
+| Selection DPR spec | `selectionDpr.spec.ts`: full 10-target run at DPR 1, 5-target subsets at 1.5/2 | pass |
+| Pinch-start feedback | `pinchStart?: boolean` on select intent; halo/scale pulse in the lab | `selectionFeedback.spec.ts` |
+| Label layout | pure `scene/labelLayout.ts` (abbreviation, hidden budget), unit-tested | `labelLayout.test.ts` |
+| Quality cleanup | composer disposed and rebuilt at a fresh DPR instead of resized in place | `qualityCleanup.spec.ts` |
+| Help shortcuts | `H` / `?` opens onboarding directly at the gestures step | `helpShortcuts.spec.ts` |
+| Quiz progress | explicit "Question X of N" header in MCQ and full exam | `quizProgress.spec.ts` |
+
+### Phase 3 — accessibility (`audit-p3-accessibility`)
+
+| Task | Change | Verification |
+|---|---|---|
+| 3.1 Reduce motion | `Tweens.reducedMotion` + `finishAll()`; `SceneManager.setReducedMotion()` (snap camera, freeze dust and look-at easing); page `setReducedMotion` gates auto-rotation, bob and inertia; `motionElapsed` freezes ambient pulses in the app | `reducedMotion.spec.ts`, `tween.test.ts` |
+| 3.2 Preview-off state | persistent top-bar `.camera-chip` ("Webcam preview off" / "Aperçu caméra masqué") + toast explaining tracking stays on; chip re-enables the preview | `cameraPreviewOff.spec.ts` |
+| 3.3 Reset progress | control-panel two-step inline confirmation (`role="alertdialog"`); resets `LeitnerStore` + `ProgressStore` and returns to the test home | `progressReset.spec.ts` |
+
+Discrepancy: audit UX-006 says "Camera disabled state not clearly communicated", implying the
+camera stops. In the code `showWebcam` only hides the preview; hand tracking keeps running. The
+UI therefore says "preview off", not "camera off", which is truthful and still satisfies the
+"persistent indicator until re-enabled" recommendation.
+
+Phase 3 gate: typecheck, lint, `npm test` 116/116 (13 files), build — all pass. Affected browser
+specs re-run after the change: `smoke` 6/6, `gestures` 4/4, `quizProgress` 2/2, plus the three
+new specs.
+
+### Phase 4 — documentation & code quality (`audit-p4-docs-quality`)
+
+| Task | Change | Verification |
+|---|---|---|
+| 4.1 | `DECISIONS.md`: D-12 marked superseded; new D-59 (worker, with the measured inputs behind it), D-60 (pinch-start selection semantics), D-61 (escaped template text), D-62 (dependency gate). GLB replacement already recorded under D-52/D-56; cross-referenced rather than duplicated | doc |
+| 4.2 | D-60 records *why* pinch-start replaced release-commit, plus the two consequences (halo pulse, frozen pre-pinch anchor) | `selectionFeedback.spec.ts` |
+| 4.3 | New `src/core/frameProcessor.ts` owns side resolution, filters, pinch hysteresis, 250 ms loss tolerance, aim locks, hover and the gesture engine. `app.ts` drops ~250 lines; the three duplicated aim-lock blocks (detection, `injectHand`, `injectPoseData`) collapse into one `trackAim()` | `frameProcessor.test.ts` 15/15, suite 133/133, `smoke` 6/6, `gestures` 4/4, `selectionDpr` 3/3, `selectionFeedback` 1/1 |
+| 4.4 | One shared `escapeHtml` in `ui/dom.ts` replaces four local copies; every catalog/copy value interpolated into a template is escaped; authored single-value text is assigned with `textContent` (`pageHeader`) | `escapeHtml.test.ts` |
+| 4.5 | `scripts/audit-deps.mjs` + `npm run audit:deps`: blocks on critical/high, prints anything below the bar, `CELLY_AUDIT_LEVEL` overrides the gate level for testing | passes at the default level; exit 1 when forced to `moderate` |
+
+The frame pipeline is intentionally DOM-free on import (the viewport is passed in per call), which
+is why it is unit-testable in Node — `CellyApp` itself cannot be imported there because
+`handTracker.ts` touches `document.baseURI` at module scope.

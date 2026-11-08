@@ -29,8 +29,21 @@ export class Tweens {
     [];
   private dirty = false;
 
+  /**
+   * Reduce motion (audit task 3.1): when true, no tween runs over time. New tweens apply their
+   * final frame synchronously, and `finishAll()` resolves anything already in flight when the
+   * preference flips mid-animation. Camera moves and page transitions therefore snap instead of
+   * gliding, while all the code that schedules them stays unchanged.
+   */
+  reducedMotion = false;
+
   /** Schedule a tween. `update` receives the eased 0..1 progress. */
   add(durationMs: number, update: (t: number) => void, easing: Ease = ease.outCubic, onComplete?: () => void): TweenHandle {
+    if (this.reducedMotion) {
+      update(easing(1));
+      onComplete?.();
+      return { cancel: () => undefined, done: true };
+    }
     const item = {
       elapsed: 0,
       duration: Math.max(1, durationMs),
@@ -67,6 +80,21 @@ export class Tweens {
       const raw = Math.min(1, item.elapsed / item.duration);
       item.update(item.ease(raw));
       if (raw >= 1) item.done();
+    }
+    if (this.dirty) {
+      this.items = this.items.filter((i) => i.elapsed >= 0);
+      this.dirty = false;
+    }
+  }
+
+  /** Jump every in-flight tween to its final frame. Used when reduce-motion turns on. */
+  finishAll(): void {
+    if (!this.items.length) return;
+    for (const item of [...this.items]) {
+      if (item.elapsed < 0) continue;
+      item.elapsed = item.duration;
+      item.update(item.ease(1));
+      item.done();
     }
     if (this.dirty) {
       this.items = this.items.filter((i) => i.elapsed >= 0);

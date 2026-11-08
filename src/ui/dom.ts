@@ -19,6 +19,24 @@ export function svgIcon(path: string, viewBox = '0 0 24 24'): SVGSVGElement {
   return svg;
 }
 
+/**
+ * Escape a plain-text value before it is interpolated into an HTML template (audit task 4.4).
+ *
+ * Template composition is still needed where an element must be built with its attributes in one
+ * pass (cards, rows, list items), but the *text* inside those templates is copy or catalog data.
+ * Escaping it at the boundary means a stray angle bracket or ampersand in a label renders as
+ * text instead of becoming markup — the same guarantee `textContent` gives, without giving up the
+ * single-pass rebuilds that keep the render loop free of per-element layout.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export const ICONS = {
   lab: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(35 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(-35 12 12)"/>',
   network: '<circle cx="12" cy="4.5" r="2"/><circle cx="4.8" cy="17" r="2"/><circle cx="19.2" cy="17" r="2"/><path d="M10.4 6.1 6.4 15.2M13.6 6.1l4 9.1M6.8 17h10.4"/>',
@@ -37,6 +55,7 @@ export const ICONS = {
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>',
   flip: '<path d="M12 3v18"/><path d="M8 7 3.5 12 8 17M16 7l4.5 5-4.5 5"/>',
   swap: '<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',
+  reset: '<path d="M4 4v6h6"/><path d="M5.1 10a7.5 7.5 0 1 1 1.8 7.2"/>',
   grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
   cards: '<rect x="3.5" y="7" width="12" height="13" rx="2"/><path d="M8 3.5h9.5A2.5 2.5 0 0 1 20 6v10"/>',
   quiz: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.2 2.4c-.7.3-1 .9-1 1.7"/><path d="M11.9 16.8h.1"/>',

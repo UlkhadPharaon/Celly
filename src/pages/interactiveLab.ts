@@ -7,6 +7,7 @@ import { Tweens, ease } from '../core/tween';
 import { clamp } from '../core/math';
 import { type Page, type PageContext, type PickOptions, pageHeader } from './page';
 import { nearestWithin } from '../gestures/aim';
+import { escapeHtml } from '../ui/dom';
 
 export const COPY = {
   en: {
@@ -198,7 +199,22 @@ export class InteractiveLabPage implements Page {
     this.autoRotate = value;
   }
 
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value;
+    this.tweens.reducedMotion = value;
+    if (value) {
+      this.tweens.finishAll();
+      this.inertia.set(0, 0);
+    }
+  }
+
+  /** Test hook: the rig's current Y rotation, used by the reduce-motion E2E. */
+  get rigRotationY(): number {
+    return this.rig.rotation.y;
+  }
+
   private autoRotate = true;
+  private reducedMotion = false;
 
   setLanguage(language: Language): void {
     this.language = language;
@@ -669,17 +685,23 @@ export class InteractiveLabPage implements Page {
     }
 
     const now = performance.now();
-    if (this.autoRotate && !this.selected && now > this.pausedUntil && !this.rotateHeld) {
+    if (
+      !this.reducedMotion &&
+      this.autoRotate &&
+      !this.selected &&
+      now > this.pausedUntil &&
+      !this.rotateHeld
+    ) {
       this.rig.rotation.y += dt * 0.12;
     }
-    if (!this.rotateHeld) {
+    if (!this.rotateHeld && !this.reducedMotion) {
       this.rig.rotation.y += this.inertia.y * dt;
       this.rig.rotation.x = clamp(this.rig.rotation.x + this.inertia.x * dt, -0.9, 0.9);
       this.inertia.multiplyScalar(Math.exp(-3.2 * dt));
     }
     this.rotateHeld = false;
 
-    this.rig.position.y = Math.sin(elapsed * 0.42) * 0.025;
+    this.rig.position.y = this.reducedMotion ? 0 : Math.sin(elapsed * 0.42) * 0.025;
 
     if (this.selected) {
       this.anchorClock += dt;
@@ -698,12 +720,4 @@ export class InteractiveLabPage implements Page {
     this.ctx.overlay.hide();
     this.root.remove();
   }
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

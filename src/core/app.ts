@@ -1,6 +1,5 @@
 import type {
   CameraStatus,
-  GestureFrame,
   HandFrame,
   HandSide,
   Intent,
@@ -16,22 +15,16 @@ import type {
 import type { OrganelleId } from '../scene/types';
 import { SceneManager } from '../scene/sceneManager';
 import { HandTracker } from '../tracking/handTracker';
-import { HandSideResolver } from '../tracking/handSide';
-import { LandmarkFilterBank, motionEnergy } from '../tracking/landmarkFilter';
+import { motionEnergy } from '../tracking/landmarkFilter';
 import { frameMargin, scoreQuality } from '../tracking/quality';
-import { DEFAULT_PINCH, PINCH_SENSITIVITY, initialPinch, isFist, pinchValue, updatePinch, type PinchState } from '../gestures/pinch';
+import { DEFAULT_PINCH, PINCH_SENSITIVITY } from '../gestures/pinch';
 import {
-  handRoll,
   mapNormalized,
-  palmPoint,
   pinchContact,
-  pointCursor,
   toNDC,
   unreach
 } from '../gestures/cursor';
-import { GestureEngine } from '../gestures/gestureEngine';
 import { GESTURE_HINTS_FR } from '../gestures/hints';
-import { AimTracker } from '../gestures/aim';
 import { HandLayer } from '../scene/handLayer';
 import { DebugOverlay } from '../ui/debugOverlay';
 import { Shell } from '../ui/shell';
@@ -42,6 +35,7 @@ import { APP_STRINGS } from './strings';
 import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
+import { FrameProcessor } from './frameProcessor';
 import { InteractiveLabPage } from '../pages/interactiveLab';
 import { KnowledgePage } from '../pages/knowledge';
 import { TestingPage } from '../pages/testing/testingPage';
@@ -50,7 +44,6 @@ import { KNOWLEDGE_NODES } from '../data/catalog';
 
 const SETTINGS_KEY = 'celly:v02:settings';
 const ONBOARD_KEY = 'celly:v02:onboarded';
-const HAND_LOSS_MS = 250;
 const HUD_INTERVAL_MS = 90;
 
 export class CellyApp {
@@ -59,29 +52,13 @@ export class CellyApp {
   private readonly scene: SceneManager;
   private readonly tracker: HandTracker;
   private readonly hands = new HandLayer();
-  private readonly engine = new GestureEngine();
-  private readonly sideResolver = new HandSideResolver();
-  private readonly normFilters = new LandmarkFilterBank();
-  private readonly worldFilters = new LandmarkFilterBank();
-  private readonly pinchStates = new Map<HandSide, PinchState>();
-  private readonly lastFrames = new Map<HandSide, HandFrame>();
-  private readonly lastSeen = new Map<HandSide, number>();
-  private readonly lostSent = new Set<HandSide>();
-  private readonly scores = new Map<HandSide, number>();
+  /** Per-frame hand pipeline: filters, pinch hysteresis, aim locks, hover and gestures. */
+  private readonly fp: FrameProcessor;
   private readonly pages = new Map<PageId, Page>();
-  private readonly aim = new AimTracker();
-  private readonly aimLocks = new Map<HandSide, { point: Vec2; source: string; at: number }>();
   private readonly debug = new DebugOverlay();
 
-  private frames: HandFrame[] = [];
-  private gestureFrame: GestureFrame | null = null;
   private current: Page | null = null;
-  private uiHover: string | null = null;
-  private sceneHover: string | null = null;
-  private hoverLabel = '';
   private cameraAttemptCount = 0;
-  private sticky: { id: string; at: number; x: number; y: number } | null = null;
-  private pickRadius = 52;
   private debugVisible = false;
 
   private quality: TrackingQuality = { level: 'none', value: 0, jitter: 0, margin: 0 };
@@ -91,7 +68,8 @@ export class CellyApp {
   private lastTickMs = 0;
   /** Capture time of the previous detection, used to pace the landmark filters. */
   private lastDetectionMs = 0;
-  private elapsed = 0;
+  /** Ambient clock for the pages. Frozen while reduce motion is on (audit task 3.1). */
+  private motionElapsed = 0;
   private renderFrames = 0;
   private renderClock = 0;
   private framesRendered = 0;
@@ -115,6 +93,7 @@ export class CellyApp {
       onRetryCamera: () => void this.startCamera(),
       onAutoRotate: () => this.toggleAutoRotate(),
       onEnableCamera: () => void this.startCamera(),
+      onResetProgress: () => this.resetProgress(),
       onOnboardingComplete: () => {
         saveJSON(ONBOARD_KEY, true);
       },
@@ -122,6 +101,7 @@ export class CellyApp {
     });
     mount.append(this.shell.root);
     document.body.append(this.debug.root);
+    this.fp = new FrameProcessor(this.settings, () => this.current, this.shell.registry);
     this.shell.hud.onAction = (action) => {
       if (action === 'overlay') this.toggleDebugOverlay();
       else this.toggleSelectionTest();
@@ -250,7 +230,7 @@ export class CellyApp {
         break;
       case 'swap':
         this.settings.handsSwap = value;
-        this.sideResolver.reset();
+        this.fp.resetHandSides();
         this.hands.resetCalibration();
         break;
       case 'dwell':
@@ -268,12 +248,25 @@ export class CellyApp {
     this.applySettings();
     this.saveSettings();
     if (key === 'showFeedback' || key === 'swap') this.shell.toast(this.t('saved'), 'success');
+    if (key === 'showWebcam') {
+      this.shell.toast(value ? this.t('previewOn') : this.t('previewOff'), value ? 'success' : 'warn');
+    }
   }
 
   private toggleAutoRotate(): void {
     this.settings.autoRotate = !this.settings.autoRotate;
     this.applySettings();
     this.saveSettings();
+  }
+
+  /**
+   * Clear Leitner boxes and quiz best scores (audit task 3.3). The confirmation dialog lives in
+   * the control panel; this method is the single mutation point.
+   */
+  private resetProgress(): void {
+    const page = this.pages.get('test') as TestingPage | undefined;
+    page?.resetProgress();
+    this.shell.toast(this.t('progressReset'), 'success');
   }
 
   private setLanguage(language: Language): void {
@@ -326,6 +319,10 @@ export class CellyApp {
     root.lang = this.settings.language;
     root.dataset.reducedMotion = String(this.settings.reducedMotion);
     root.dataset.highContrast = String(this.settings.highContrast);
+    this.scene.setReducedMotion(this.settings.reducedMotion);
+    for (const page of this.pages.values()) {
+      page.setReducedMotion?.(this.settings.reducedMotion);
+    }
     this.current?.setAutoRotate?.(this.settings.autoRotate);
   }
 
@@ -345,11 +342,10 @@ export class CellyApp {
     this.scene.labGroup.visible = page === 'interactive';
     this.scene.knowledgeGroup.visible = page === 'knowledge';
     this.scene.testGroup.visible = page === 'test';
+    next.setReducedMotion?.(this.settings.reducedMotion);
     next.setAutoRotate?.(this.settings.autoRotate);
     next.enter();
-    this.uiHover = null;
-    this.sceneHover = null;
-    this.engine.reset();
+    this.fp.resetInteraction();
     this.shell.controls.preview.setVisible(this.settings.showWebcam);
     this.shell.refreshButtons();
   }
@@ -359,16 +355,16 @@ export class CellyApp {
   private bindInput(): void {
     const canvas = this.scene.renderer.domElement;
     canvas.addEventListener('pointermove', (event: PointerEvent) => {
-      if (this.frames.length) return;
+      if (this.fp.frames.length) return;
       this.mouseHover(event.clientX, event.clientY);
     });
     canvas.addEventListener('pointerleave', () => {
-      if (this.frames.length) return;
+      if (this.fp.frames.length) return;
       this.shell.registry.setHover(null);
       this.current?.setHovered(null);
     });
     canvas.addEventListener('click', (event: MouseEvent) => {
-      if (this.frames.length) return;
+      if (this.fp.frames.length) return;
       const ui = this.shell.registry.hitTest(event.clientX, event.clientY);
       if (ui) {
         this.shell.registry.trigger(ui);
@@ -461,153 +457,14 @@ export class CellyApp {
     return clamp((raw.tMs - previous) / 1000, 1 / 120, 0.2);
   }
 
-  private buildFrames(raw: RawFrame | null, dt: number): HandFrame[] {
-    // All gesture timing keeps the render clock. Detection frames carry a capture timestamp that
-    // is older than the current render frame, and mixing the two clocks would make dwell and
-    // hold windows jump backwards.
-    const t = this.lastTickMs;
-    const detections = (raw?.hands ?? []).map((hand) => ({
-      label: hand.handedness,
-      wrist: hand.landmarks[0] ?? { x: 0.5, y: 0.5, z: 0 },
-      score: hand.score
-    }));
-    const sides = this.sideResolver.resolve(detections, { handsSwap: this.settings.handsSwap }, t);
-    const map = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      mirrorX: this.settings.mirrorX,
-      mirrorY: this.settings.mirrorY
-    };
-
-    const frames: HandFrame[] = [];
-    (raw?.hands ?? []).forEach((hand, i) => {
-      if (hand.landmarks.length !== 21) return;
-      const side = sides[i] ?? 'right';
-      const norm = this.normFilters.filter(`n:${side}`, hand.landmarks, dt);
-      const hasWorld = hand.worldLandmarks.length === 21;
-      const world = hasWorld
-        ? this.worldFilters
-            .filter(`w:${side}`, hand.worldLandmarks, dt)
-            // MediaPipe world is image-aligned. The skeleton is drawn in display space, so apply
-            // the same mirror the pointer mapping applies, once, at the frame boundary.
-            .map((p) => ({
-              x: this.settings.mirrorX ? -p.x : p.x,
-              y: this.settings.mirrorY ? -p.y : p.y,
-              z: p.z
-            }))
-        : norm.map((p) => ({ ...p }));
-
-      const valid = handVisible(norm) && hand.score > 0.35;
-      const fist = isFist(norm);
-      const value = pinchValue(norm, hasWorld ? world : [], this.settings.pinchSensitivity);
-      const previous = this.pinchStates.get(side) ?? initialPinch();
-      const update = updatePinch(previous, value, { fist, valid, tMs: t }, DEFAULT_PINCH);
-      this.pinchStates.set(side, update.state);
-
-      // The pointer rides the index fingertip, so the dot always sits on the finger the user
-      // aims with (and on the thumb/index contact while pinching).
-      const { cursor, ndc } = pointCursor(norm, map);
-      const rawCursor = pointCursor(hand.landmarks, map).cursor;
-      const wristScreen = mapNormalized(norm[0], map);
-      const mcpScreen = mapNormalized(norm[9], map);
-      const handSpan =
-        Math.hypot(mcpScreen.x - wristScreen.x, mcpScreen.y - wristScreen.y) /
-        Math.max(1, map.height);
-
-      // The selection anchor is sampled before the fingertips converge. It is frozen while the
-      // pinch is in flight so the cursor does not slide off the organelle between start/release.
-      this.aim.push(side, t, cursor);
-      const candidateAt = update.state.candidateSince;
-      let lock = this.aimLocks.get(side);
-      if (update.start) {
-        const anchor = this.aim.aimFor(side, candidateAt >= 0 ? candidateAt : t);
-        lock = { point: anchor.point, source: anchor.source, at: t };
-        this.aimLocks.set(side, lock);
-      } else if (update.state.active && !lock) {
-        lock = { point: { ...cursor }, source: 'live', at: t };
-        this.aimLocks.set(side, lock);
-      }
-      const aimLocked = !!lock && (update.start || update.state.active || update.end);
-      const aimPoint = aimLocked && lock ? lock.point : cursor;
-
-      const frame: HandFrame = {
-        side,
-        present: true,
-        pinching: update.state.active,
-        pinchValue: value,
-        pinchStart: update.start,
-        pinchEnd: update.end,
-        cursor,
-        pinchPoint: pinchContact(norm, map),
-        rawCursor,
-        aim: { x: aimPoint.x, y: aimPoint.y },
-        aimLocked,
-        cursorNdc: ndc,
-        palm: palmPoint(norm, map),
-        landmarks: norm,
-        world,
-        worldMetric: hasWorld,
-        handScale: Math.max(0.03, dist3(world[0], world[9])),
-        handSpan,
-        confidence: hand.score,
-        pinchCandidateAt: candidateAt,
-        wrist: norm[0],
-        roll: handRoll(norm),
-        tMs: t
-      };
-      frames.push(frame);
-      // Commit the newest state as soon as it is detected. The same object is replayed on ticks
-      // where the camera has not produced a new frame, so a pinch cannot be ended by a stale tick.
-      this.lastFrames.set(side, frame);
-      this.lastSeen.set(side, t);
-      this.lostSent.delete(side);
-      this.scores.set(side, hand.score);
-    });
-
-    // 250 ms hand-loss tolerance: persist the last pose between detections, but never mutate it
-    // into a synthetic release. Only after the window expires do we emit one explicit lost frame.
-    for (const side of ['left', 'right'] as const) {
-      if (frames.some((f) => f.side === side)) continue;
-      const last = this.lastFrames.get(side);
-      const seen = this.lastSeen.get(side) ?? -Infinity;
-      if (last && t - seen < HAND_LOSS_MS) {
-        frames.push({ ...last, pinchStart: false, pinchEnd: false });
-      } else if (last && !this.lostSent.has(side)) {
-        // A single present:false transition lets the gesture engine clear in-flight candidates
-        // without treating the loss as a deliberate release. It is not repeated every tick.
-        frames.push({
-          ...last,
-          present: false,
-          pinching: false,
-          pinchValue: 0,
-          pinchStart: false,
-          pinchEnd: false,
-          lost: true,
-          confidence: 0,
-          pinchCandidateAt: -1,
-          aimLocked: false,
-          aim: { ...last.cursor },
-          rawCursor: { ...last.rawCursor }
-        });
-        this.lostSent.add(side);
-        this.lastFrames.delete(side);
-        this.lastSeen.delete(side);
-        this.scores.delete(side);
-        this.pinchStates.set(side, initialPinch());
-        this.aimLocks.delete(side);
-      }
-    }
-    return frames;
-  }
-
   private tick(): void {
     if (this.replay.size) {
-      this.frames = [...this.replay.values()];
-      this.updateHover();
-      this.stepGestures(performance.now());
-      this.clearFinishedAimLocks();
+      this.fp.setFrames([...this.replay.values()]);
+      this.fp.updateHover();
+      this.dispatch(this.fp.stepGestures(performance.now()));
+      this.fp.clearFinishedAimLocks();
       // One-shot edges, exactly like a real detection frame.
-      for (const frame of this.frames) {
+      for (const frame of this.fp.frames) {
         frame.pinchStart = false;
         frame.pinchEnd = false;
       }
@@ -620,97 +477,18 @@ export class CellyApp {
     // Build frames every tick, result or not: with no tracker and no synthetic hands this is
     // an empty list, but it is also what ages the 250 ms tolerance out and lets the gesture
     // engine retire cursors, hints and hover when the hands leave the frame.
-    this.frames = this.buildFrames(raw, this.detectionDt(raw));
-    this.updateHover();
-    this.stepGestures(this.lastTickMs);
-    this.clearFinishedAimLocks();
-
-    if (this.gestureFrame && !this.settings.dwellClick) this.shell.registry.setDwell(null, 0);
-    else if (this.gestureFrame?.dwellProgress) {
-      this.shell.registry.setDwell(this.uiHover, this.gestureFrame.dwellProgress);
-    }
-  }
-
-  private stepGestures(t: number): void {
-    this.gestureFrame = this.engine.step({
-      t,
-      hands: this.frames,
-      uiHover: this.uiHover,
-      sceneHover: this.sceneHover,
-      swipeEnabled: this.current?.id !== 'interactive',
-      rotateEnabled: true,
-      scaleEnabled: true,
-      dwellEnabled: this.settings.dwellClick
+    this.fp.buildFrames(raw, this.detectionDt(raw), this.lastTickMs, {
+      width: window.innerWidth,
+      height: window.innerHeight
     });
-    this.dispatch(this.gestureFrame.intents);
-  }
+    this.fp.updateHover();
+    this.dispatch(this.fp.stepGestures(this.lastTickMs));
+    this.fp.clearFinishedAimLocks();
 
-  private clearFinishedAimLocks(): void {
-    for (const frame of this.frames) {
-      if (frame.pinchEnd || frame.lost || (!frame.pinching && !frame.pinchStart)) {
-        this.aimLocks.delete(frame.side);
-      }
+    if (this.fp.gestureFrame && !this.settings.dwellClick) this.shell.registry.setDwell(null, 0);
+    else if (this.fp.gestureFrame?.dwellProgress) {
+      this.shell.registry.setDwell(this.fp.uiHover, this.fp.gestureFrame.dwellProgress);
     }
-  }
-
-  private updateHover(): void {
-    const primary = primaryHand(this.frames);
-    if (!primary) {
-      this.uiHover = null;
-      this.sceneHover = null;
-      this.hoverLabel = '';
-      this.sticky = null;
-      this.current?.setHovered(null);
-      this.shell.registry.setHover(null);
-      return;
-    }
-
-    this.pickRadius = clamp(52 * (0.1 / Math.max(0.04, primary.handSpan)), 40, 62);
-    const aim = primary.aim;
-    this.uiHover = this.shell.registry.hitTest(aim.x, aim.y);
-    if (primary.pinching && !primary.pinchStart) {
-      // Freeze the armed scene target for the rest of the pinch. It was picked on the start frame
-      // and the gesture engine already committed it, so re-picking mid-gesture could silently
-      // move the target to a neighbour after the user committed.
-      this.shell.registry.setHover(this.uiHover);
-      return;
-    }
-    if (this.uiHover) {
-      this.sticky = null;
-      this.sceneHover = null;
-    } else {
-      const now = performance.now();
-      const picked = this.current?.pick(aim.x, aim.y, { radiusPx: this.pickRadius }) ?? null;
-      if (picked) {
-        // Hysteresis: once a target is armed, a few pixels of landmark jitter must not switch to
-        // an overlapping neighbour. Deliberate movement (>20 px) still re-aims immediately.
-        const hold =
-          this.sticky &&
-          this.sticky.id !== picked &&
-          now - this.sticky.at <= 220 &&
-          Math.hypot(aim.x - this.sticky.x, aim.y - this.sticky.y) <= 20;
-        if (hold) {
-          this.sceneHover = this.sticky!.id;
-        } else {
-          this.sceneHover = picked;
-          this.sticky = { id: picked, at: now, x: aim.x, y: aim.y };
-        }
-      } else if (
-        this.sticky &&
-        now - this.sticky.at <= 220 &&
-        Math.hypot(aim.x - this.sticky.x, aim.y - this.sticky.y) <= 96
-      ) {
-        // Sticky armed hover: a few pixels of landmark jitter immediately after aiming must not
-        // turn a target into blank space.
-        this.sceneHover = this.sticky.id;
-      } else {
-        this.sceneHover = null;
-        this.sticky = null;
-      }
-    }
-    this.hoverLabel = this.sceneHover ? prettify(this.sceneHover) : '';
-    this.shell.registry.setHover(this.uiHover);
-    this.current?.setHovered(this.sceneHover);
   }
 
   private dispatch(intents: Intent[]): void {
@@ -735,27 +513,27 @@ export class CellyApp {
   private updateHud(now: number): void {
     if (now - this.lastHudAt < HUD_INTERVAL_MS) return;
     this.lastHudAt = now;
-    const primary = primaryHand(this.frames);
+    const primary = primaryHand(this.fp.frames);
     const jitter = primary ? motionEnergy(this.previousJitter, primary.landmarks) : 0;
     if (primary) this.previousJitter = primary.landmarks.map((p) => ({ ...p }));
     this.quality = scoreQuality({
-      hands: this.frames.filter((f) => f.present).length,
-      scores: [...this.scores.values()],
+      hands: this.fp.frames.filter((f) => f.present).length,
+      scores: this.fp.handScores,
       jitter,
       trackerFps: this.tracker.trackerFps,
-      margin: frameMargin(this.frames.map((f) => f.landmarks))
+      margin: frameMargin(this.fp.frames.map((f) => f.landmarks))
     });
 
-    const left = this.frames.find((f) => f.side === 'left');
-    const right = this.frames.find((f) => f.side === 'right');
+    const left = this.fp.frames.find((f) => f.side === 'left');
+    const right = this.fp.frames.find((f) => f.side === 'right');
     this.shell.updateHud({
-      hands: this.frames.filter((f) => f.present).length,
-      sides: this.frames.map((f) => f.side),
+      hands: this.fp.frames.filter((f) => f.present).length,
+      sides: this.fp.frames.map((f) => f.side),
       pinchLeft: left?.pinchValue ?? 0,
       pinchRight: right?.pinchValue ?? 0,
       pinchingLeft: !!left?.pinching,
       pinchingRight: !!right?.pinching,
-      landmarks: this.frames.filter((f) => f.present).length * 21,
+      landmarks: this.fp.frames.filter((f) => f.present).length * 21,
       quality: this.quality,
       tracking: this.tracker.ready,
       trackerFps: this.tracker.trackerFps,
@@ -763,37 +541,37 @@ export class CellyApp {
       mirrorX: this.settings.mirrorX,
       mirrorY: this.settings.mirrorY,
       swap: this.settings.handsSwap,
-      gesture: this.gestureFrame?.state ?? 'IDLE',
+      gesture: this.fp.gestureFrame?.state ?? 'IDLE',
       hint: this.gestureHint()
     });
   }
 
   /** Gesture hint for display, translated when the interface is French. */
   private gestureHint(): string {
-    const frame = this.gestureFrame;
+    const frame = this.fp.gestureFrame;
     if (!frame) return '';
     return this.settings.language === 'fr' ? GESTURE_HINTS_FR[frame.state] || frame.hint : frame.hint;
   }
 
   private updateCursors(): void {
     const cursors =
-      this.gestureFrame?.cursors ??
-      this.frames
+      this.fp.gestureFrame?.cursors ??
+      this.fp.frames
         .filter((f) => f.present)
         .map((f) => ({
           side: f.side,
           x: f.cursor.x,
           y: f.cursor.y,
           visible: true,
-          active: f.side === primaryHand(this.frames)?.side,
+          active: f.side === primaryHand(this.fp.frames)?.side,
           pinchValue: f.pinchValue,
           mode: (f.pinching ? 'pinch' : 'pointer') as 'pinch' | 'pointer' | 'passive'
         }));
     this.shell.cursors.update(
       cursors,
       this.gestureHint(),
-      this.uiHover ? (this.gestureFrame?.dwellProgress ?? 0) : 0,
-      this.hoverLabel,
+      this.fp.uiHover ? (this.fp.gestureFrame?.dwellProgress ?? 0) : 0,
+      this.fp.hoverLabel,
       this.shell.overlay.bounds()
     );
   }
@@ -807,7 +585,7 @@ export class CellyApp {
     const dt = Math.min(0.05, Math.max(0.0001, (now - this.lastTime) / 1000));
     this.lastTime = now;
     this.lastTickMs = now;
-    this.elapsed += dt;
+    if (!this.reducedMotion) this.motionElapsed += dt;
 
     this.renderFrames += 1;
     this.framesRendered += 1;
@@ -820,19 +598,19 @@ export class CellyApp {
 
     this.tick();
     this.hands.update(
-      this.frames,
+      this.fp.frames,
       this.settings,
       dt,
       this.scene.camera,
       this.scene.renderer.getPixelRatio()
     );
-    this.current?.update(dt, this.elapsed);
-    this.shell.controls.preview.draw(this.frames, this.settings);
-    this.shell.onboarding.drawPreview(this.frames, this.settings);
+    this.current?.update(dt, this.motionElapsed);
+    this.shell.controls.preview.draw(this.fp.frames, this.settings);
+    this.shell.onboarding.drawPreview(this.fp.frames, this.settings);
     this.updateCursors();
     this.updateHud(now);
     this.updateDebugOverlay();
-    this.scene.render(this.reducedMotion ? dt * 0.35 : dt);
+    this.scene.render(dt);
   };
 
   start(): void {
@@ -911,15 +689,15 @@ export class CellyApp {
 
   private updateDebugOverlay(): void {
     if (!this.debugVisible) return;
-    const primary = primaryHand(this.frames);
+    const primary = primaryHand(this.fp.frames);
     this.debug.update({
       page: this.current?.id ?? null,
-      frames: this.frames,
+      frames: this.fp.frames,
       primary,
-      pickRadius: this.pickRadius,
-      armed: this.sceneHover,
-      uiHover: this.uiHover,
-      pinchLog: this.engine.getPinchLog(),
+      pickRadius: this.fp.pickRadius,
+      armed: this.fp.sceneHover,
+      uiHover: this.fp.uiHover,
+      pinchLog: this.fp.pinchLog,
       rig: primary ? this.hands.debugHand(primary.side) : null
     });
   }
@@ -933,7 +711,7 @@ export class CellyApp {
     if (!present) {
       this.replay.delete(side);
       this.replayPinch.delete(side);
-      this.aimLocks.delete(side);
+      this.fp.clearAimLock(side);
       return;
     }
     const w = window.innerWidth;
@@ -957,19 +735,14 @@ export class CellyApp {
     this.replayPinch.set(side, pinching);
     const t = performance.now();
     const cursor: Vec2 = { x, y };
-    this.aim.push(side, t, cursor);
-
-    let lock = this.aimLocks.get(side);
-    if (start) {
-      const anchor = this.aim.aimFor(side, t - DEFAULT_PINCH.minHoldMs);
-      lock = { point: anchor.point, source: anchor.source, at: t - DEFAULT_PINCH.minHoldMs };
-      this.aimLocks.set(side, lock);
-    } else if (pinching && !lock) {
-      lock = { point: { ...cursor }, source: 'live', at: t };
-      this.aimLocks.set(side, lock);
-    }
-    const aimLocked = !!lock && (start || pinching || end);
-    const aimPoint = aimLocked && lock ? lock.point : cursor;
+    const aimState = this.fp.trackAim(side, cursor, t, {
+      start,
+      pinching,
+      end,
+      anchorAt: t - DEFAULT_PINCH.minHoldMs
+    });
+    const aimLocked = aimState.aimLocked;
+    const aimPoint = aimState.aim;
     const wristScreen = mapNormalized(synthetic.landmarks[0], {
       width: w,
       height: h,
@@ -1008,7 +781,7 @@ export class CellyApp {
       handScale: synthetic.handScale,
       handSpan,
       confidence: 1,
-      pinchCandidateAt: lock?.at ?? -1,
+      pinchCandidateAt: aimState.lockAt,
       wrist: synthetic.landmarks[0],
       roll: synthetic.roll,
       tMs: t
@@ -1061,19 +834,14 @@ export class CellyApp {
     this.replayPinch.set(data.side, pinching);
     const t = performance.now();
     const cursor: Vec2 = { x: data.cursor.x, y: data.cursor.y };
-    this.aim.push(data.side, t, cursor);
-
-    let lock = this.aimLocks.get(data.side);
-    if (start) {
-      const anchor = this.aim.aimFor(data.side, t - DEFAULT_PINCH.minHoldMs);
-      lock = { point: anchor.point, source: anchor.source, at: t - DEFAULT_PINCH.minHoldMs };
-      this.aimLocks.set(data.side, lock);
-    } else if (pinching && !lock) {
-      lock = { point: { ...cursor }, source: 'live', at: t };
-      this.aimLocks.set(data.side, lock);
-    }
-    const aimLocked = !!lock && (start || pinching || end);
-    const aimPoint = aimLocked && lock ? lock.point : cursor;
+    const aimState = this.fp.trackAim(data.side, cursor, t, {
+      start,
+      pinching,
+      end,
+      anchorAt: t - DEFAULT_PINCH.minHoldMs
+    });
+    const aimLocked = aimState.aimLocked;
+    const aimPoint = aimState.aim;
 
     this.replay.set(data.side, {
       side: data.side,
@@ -1099,7 +867,7 @@ export class CellyApp {
       handScale: Math.max(0.03, dist3(data.world[0], data.world[9])),
       handSpan: data.handSpan,
       confidence: 1,
-      pinchCandidateAt: lock?.at ?? -1,
+      pinchCandidateAt: aimState.lockAt,
       wrist: data.landmarks[0],
       roll: data.roll,
       tMs: t
@@ -1119,9 +887,9 @@ export class CellyApp {
   get state(): { page: PageId | null; hands: number; uiHover: string | null; sceneHover: string | null } {
     return {
       page: this.current?.id ?? null,
-      hands: this.frames.length,
-      uiHover: this.uiHover,
-      sceneHover: this.sceneHover
+      hands: this.fp.frames.length,
+      uiHover: this.fp.uiHover,
+      sceneHover: this.fp.sceneHover
     };
   }
 
@@ -1130,9 +898,25 @@ export class CellyApp {
     return this.scene.renderStats;
   }
 
+  /** Reduce-motion snapshot for the accessibility E2E (rig rotation, dust clock, camera tween). */
+  motionState(): {
+    reducedMotion: boolean;
+    rigRotationY: number;
+    dustClock: number;
+    transitioning: boolean;
+  } {
+    const lab = this.pages.get('interactive') as InteractiveLabPage | undefined;
+    return {
+      reducedMotion: this.reducedMotion,
+      rigRotationY: lab?.rigRotationY ?? 0,
+      dustClock: this.scene.dustClock,
+      transitioning: this.scene.isTransitioning
+    };
+  }
+
   /** Test hook: where the pipeline thinks the cursor is versus where the 3D hand sits. */
   debugHand(side: HandSide): Record<string, unknown> {
-    const frame = this.frames.find((f) => f.side === side && f.present);
+    const frame = this.fp.frames.find((f) => f.side === side && f.present);
     const container = this.hands.debugContainer(side);
     if (!frame || !container) return { side, present: false };
     const map = {
@@ -1181,7 +965,7 @@ export class CellyApp {
       skeletonPoints: rig?.points ?? null,
       skeletonSegments: rig?.segments ?? null,
       skeletonSource: rig?.source ?? null,
-      pickRadius: Number(this.pickRadius.toFixed(1)),
+      pickRadius: Number(this.fp.pickRadius.toFixed(1)),
       container: [Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3))],
       scale: Number(container.scale.x.toFixed(3)),
       rig
@@ -1218,21 +1002,6 @@ function isCameraError(status: string): boolean {
     status === 'unsupported' ||
     status === 'timeout'
   );
-}
-
-/** Every pinch landmark must sit inside the frame for a pinch to register. */
-function handVisible(landmarks: Vec3[]): boolean {
-  for (const index of [0, 4, 8, 9]) {
-    const p = landmarks[index];
-    if (!p) return false;
-    if (p.x < 0.004 || p.x > 0.996 || p.y < 0.004 || p.y > 0.996) return false;
-  }
-  return true;
-}
-
-function prettify(id: string): string {
-  const text = id.replace(/[-_]/g, ' ').trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**

@@ -63,6 +63,7 @@ export class KnowledgeScene {
   focused: string | null = null;
   hovered: string | null = null;
   autoRotate = true;
+  reducedMotion = false;
 
   private readonly tweens = new Tweens();
   private readonly vertices = new Map<string, Vec3ish>();
@@ -322,6 +323,13 @@ export class KnowledgeScene {
     this.hovered = id;
   }
 
+  /** Reduce motion (audit task 3.1): hop the focus camera straight to its destination. */
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value;
+    this.tweens.reducedMotion = value;
+    if (value) this.tweens.finishAll();
+  }
+
   focus(id: string): void {
     const visual = this.nodes.get(id);
     if (!visual) return;
@@ -414,7 +422,7 @@ export class KnowledgeScene {
     if (this.disposed) return;
     this.tweens.update(dt * 1000);
 
-    if (this.autoRotate && !this.focused) this.root.rotation.y += dt * 0.055;
+    if (this.autoRotate && !this.focused && !this.reducedMotion) this.root.rotation.y += dt * 0.055;
     this.edgesMaterial.uniforms.uTime.value = elapsed;
     this.haloMaterial.uniforms.uTime.value = elapsed;
 
