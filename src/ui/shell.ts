@@ -344,7 +344,9 @@ export class Shell {
   }
 
   showHelp(): void {
-    this.onboarding.open();
+    // Help opens on the gestures step: that is where the keybinding reference lives (task 2.5),
+    // so pressing H or ? shows the answer immediately instead of the intro slide.
+    this.onboarding.open(2);
   }
 
   destroy(): void {

@@ -230,6 +230,11 @@ export class KnowledgePage implements Page {
     return this.anchorFor(id);
   }
 
+  /** Last laid-out label boxes in CSS pixels (label-collision e2e). */
+  labelDebug(): ReturnType<KnowledgeScene['labelDebug']> {
+    return this.knowledge.labelDebug();
+  }
+
   // -------------------------------------------------------------------- intents
 
   onIntent(intent: Intent): void {

@@ -51,6 +51,7 @@ export const COPY = {
     mastered: 'cards mastered',
     back: 'All tests',
     question: 'Question',
+    of: 'of',
     next: 'Next question',
     results: 'See results',
     correct: 'Correct',
@@ -95,6 +96,7 @@ export const COPY = {
     mastered: 'cartes maîtrisées',
     back: 'Tous les tests',
     question: 'Question',
+    of: 'sur',
     next: 'Question suivante',
     results: 'Voir le résultat',
     correct: 'Correct',
@@ -391,7 +393,9 @@ export class TestingPage implements Page {
           <span class="eyebrow">${state.title}</span>
           <div class="test-progress"><i style="width:${((state.index + (answered ? 1 : 0)) / state.questions.length) * 100}%"></i></div>
         </div>
-        <span class="test-count">${state.index + 1} / ${state.questions.length}</span>
+        <span class="test-count quiz-position" data-quiz-position aria-live="polite">
+          ${copy.question} <b>${state.index + 1}</b> ${copy.of} ${state.questions.length}
+        </span>
       </div>
 
       <div class="question">

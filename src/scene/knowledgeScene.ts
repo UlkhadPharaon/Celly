@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { KnowledgeNode, Language } from '../types';
 import { KNOWLEDGE_NODES, loc } from '../data/catalog';
 import { layout3d, type LayoutEdge } from './knowledgeLayout';
+import { layoutLabels, shortenLabel, type LabelBox } from './labelLayout';
 import { labelTexture } from './textures';
 import { Tweens, ease } from '../core/tween';
 import { clamp, damp } from '../core/math';
@@ -13,10 +14,32 @@ interface NodeVisual {
   material: THREE.MeshStandardMaterial;
   label: THREE.Sprite;
   labelMaterial: THREE.SpriteMaterial;
-  /** Width / height of the label texture, used when the sprite is resized for legibility. */
-  labelAspect: number;
+  labelFullText: string;
+  labelShortText: string;
+  /** Width / height of each label texture variant, used when the sprite is resized. */
+  labelFullAspect: number;
+  labelShortAspect: number;
+  labelFullMap: THREE.Texture;
+  labelShortMap: THREE.Texture | null;
+  labelShortActive: boolean;
   baseScale: number;
   radius: number;
+}
+
+/** A label's laid-out box in CSS pixels, exposed for the layout e2e. */
+export interface LabelDebugBox {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  visible: boolean;
+  short: boolean;
+  pushed: boolean;
+}
+
+function textureAspect(texture: THREE.Texture): number {
+  return texture.image instanceof HTMLCanvasElement ? texture.image.width / texture.image.height : 3;
 }
 
 const CATEGORY_ORDER: Record<string, number> = {
@@ -51,6 +74,9 @@ export class KnowledgeScene {
   private readonly haloMaterial: THREE.ShaderMaterial;
   private readonly labelWorld = new THREE.Vector3();
   private readonly labelProjection = new THREE.Vector3();
+  private readonly cameraRight = new THREE.Vector3();
+  private readonly cameraUp = new THREE.Vector3();
+  private debugLabelBoxes: LabelDebugBox[] = [];
   private language: Language;
   private disposed = false;
 
@@ -109,9 +135,12 @@ export class KnowledgeScene {
       mesh.castShadow = false;
       this.graph.add(mesh);
 
-      const tex = labelTexture(loc(node.label, this.language), node.color);
+      const fullText = loc(node.label, this.language);
+      const shortText = shortenLabel(fullText);
+      const fullMap = labelTexture(fullText, node.color);
+      const shortMap = shortText === fullText ? null : labelTexture(shortText, node.color);
       const labelMaterial = new THREE.SpriteMaterial({
-        map: tex,
+        map: fullMap,
         transparent: true,
         depthWrite: false,
         // Labels are an overlay: a node ball in front of a label made the text unreadable.
@@ -122,8 +151,8 @@ export class KnowledgeScene {
       // Draw after the graph's transparent meshes/edges but before the hands (renderOrder 2), so
       // a node in front of its own text cannot cover it while a hand still occludes it correctly.
       label.renderOrder = 1;
-      const aspect = tex.image instanceof HTMLCanvasElement ? tex.image.width / tex.image.height : 3;
-      label.scale.set(LABEL_HEIGHT * aspect, LABEL_HEIGHT, 1);
+      const fullAspect = textureAspect(fullMap);
+      label.scale.set(LABEL_HEIGHT * fullAspect, LABEL_HEIGHT, 1);
       label.position.set(p.x, p.y + radius + 0.16, p.z);
       label.userData.nodeId = node.id;
       this.graph.add(label);
@@ -135,7 +164,13 @@ export class KnowledgeScene {
         material,
         label,
         labelMaterial,
-        labelAspect: aspect,
+        labelFullText: fullText,
+        labelShortText: shortText,
+        labelFullAspect: fullAspect,
+        labelShortAspect: shortMap ? textureAspect(shortMap) : fullAspect,
+        labelFullMap: fullMap,
+        labelShortMap: shortMap,
+        labelShortActive: false,
         baseScale: 1,
         radius
       });
@@ -260,14 +295,26 @@ export class KnowledgeScene {
     if (this.language === language) return;
     this.language = language;
     for (const visual of this.nodes.values()) {
-      const previous = visual.labelMaterial.map;
-      const texture = labelTexture(loc(visual.node.label, language), visual.node.color);
-      visual.labelMaterial.map = texture;
+      const fullText = loc(visual.node.label, language);
+      const shortText = shortenLabel(fullText);
+      const fullMap = labelTexture(fullText, visual.node.color);
+      const shortMap = shortText === fullText ? null : labelTexture(shortText, visual.node.color);
+
+      const previousFull = visual.labelFullMap;
+      const previousShort = visual.labelShortMap;
+      visual.labelFullText = fullText;
+      visual.labelShortText = shortText;
+      visual.labelFullMap = fullMap;
+      visual.labelShortMap = shortMap;
+      visual.labelFullAspect = textureAspect(fullMap);
+      visual.labelShortAspect = shortMap ? textureAspect(shortMap) : visual.labelFullAspect;
+      visual.labelShortActive = false;
+      visual.labelMaterial.map = fullMap;
       visual.labelMaterial.needsUpdate = true;
-      const aspect = texture.image instanceof HTMLCanvasElement ? texture.image.width / texture.image.height : 3;
-      visual.labelAspect = aspect;
-      visual.label.scale.set(LABEL_HEIGHT * aspect, LABEL_HEIGHT, 1);
-      previous?.dispose();
+      visual.label.scale.set(LABEL_HEIGHT * visual.labelFullAspect, LABEL_HEIGHT, 1);
+
+      previousFull.dispose();
+      previousShort?.dispose();
     }
   }
 
@@ -411,10 +458,11 @@ export class KnowledgeScene {
   }
 
   /**
-   * Dense graphs pile constant-size billboard labels on top of each other. Keep the labels that
-   * matter (hovered, focused, neighbours, then the bigger concepts) and hide any label whose
-   * on-screen box would overlap one already kept. Boxes are measured in viewport fractions, so the
-   * pass is resolution-independent and needs no renderer access.
+   * Dense graphs pile constant-size billboard labels on top of each other. The pure layout pass
+   * (labelLayout.ts) keeps the labels that matter — hovered, focused, neighbours, then the bigger
+   * concepts — pushes lower-priority ones clear of them, and abbreviates every background label
+   * once full-size text starts losing too many labels. Boxes are measured in viewport fractions,
+   * so the pass is resolution-independent and needs no renderer access.
    */
   private cullLabels(camera?: THREE.PerspectiveCamera): void {
     const visuals = [...this.nodes.values()];
@@ -424,16 +472,20 @@ export class KnowledgeScene {
     }
 
     const tan = Math.tan((camera.fov * Math.PI) / 360);
+    const graphScale = this.graph.scale.x;
+    const viewAspect = window.innerWidth / Math.max(1, window.innerHeight);
     const neighbours = this.focused ? new Set(this.neighbours(this.focused)) : null;
     const boxes: Array<{
       v: NodeVisual;
       cx: number;
       cy: number;
-      w: number;
+      wFull: number;
+      wShort: number;
       h: number;
       prio: number;
       size: number;
       dist: number;
+      legibility: number;
     }> = [];
 
     for (const v of visuals) {
@@ -450,9 +502,10 @@ export class KnowledgeScene {
       // Keep labels readable on a phone: a sprite at a fixed world height shrinks with the
       // portrait camera pull-back, so compensate up to 2.4x and let the collision pass decide
       // which of the now larger labels can stay.
-      const screenPx = (LABEL_HEIGHT / (2 * dist * tan)) * window.innerHeight;
+      const screenPx = ((LABEL_HEIGHT * graphScale) / (2 * dist * tan)) * window.innerHeight;
       const legibility = clamp(LABEL_TARGET_PX / Math.max(1, screenPx), 1, 2.4);
-      v.label.scale.set(LABEL_HEIGHT * v.labelAspect * legibility, LABEL_HEIGHT * legibility, 1);
+      const activeAspect = v.labelShortActive ? v.labelShortAspect : v.labelFullAspect;
+      v.label.scale.set(LABEL_HEIGHT * activeAspect * legibility, LABEL_HEIGHT * legibility, 1);
       // Keep the text just above its node even after the sprite grows; a fixed 0.16 gap would
       // let a legibility-scaled label sink into the node ball.
       v.label.position.set(
@@ -466,9 +519,10 @@ export class KnowledgeScene {
         v.label.visible = false;
         continue;
       }
-      // Full sprite height in clip space at this depth, converted to viewport fractions.
-      const ndcH = (LABEL_HEIGHT * legibility) / (dist * tan);
-      const aspect = v.label.scale.x / Math.max(0.0001, v.label.scale.y);
+      // Full sprite height in clip space at this depth, converted to viewport fractions. The
+      // camera's separate x scale means width fractions are height x aspect / viewport aspect.
+      const ndcH = (LABEL_HEIGHT * legibility * graphScale) / (dist * tan);
+      const h = ndcH * 0.5;
       const prio =
         v.node.id === this.hovered
           ? 0
@@ -481,11 +535,13 @@ export class KnowledgeScene {
         v,
         cx: this.labelProjection.x * 0.5 + 0.5,
         cy: 0.5 - this.labelProjection.y * 0.5,
-        w: ndcH * aspect * 0.5,
-        h: ndcH * 0.5,
+        wFull: (h * v.labelFullAspect) / viewAspect,
+        wShort: (h * v.labelShortAspect) / viewAspect,
+        h,
         prio,
         size: v.node.size,
-        dist
+        dist,
+        legibility
       });
     }
 
@@ -497,16 +553,82 @@ export class KnowledgeScene {
         (a.v.node.id < b.v.node.id ? -1 : 1)
     );
 
-    const kept: typeof boxes = [];
+    const layoutBoxes: LabelBox[] = boxes.map((box) => ({
+      id: box.v.node.id,
+      cx: box.cx,
+      cy: box.cy,
+      fullWidth: box.wFull,
+      shortWidth: box.wShort,
+      height: box.h,
+      prio: box.prio,
+      canShorten: box.v.labelShortMap !== null
+    }));
+    const layout = layoutLabels(layoutBoxes);
+
+    this.cameraRight.setFromMatrixColumn(camera.matrixWorld, 0);
+    this.cameraUp.setFromMatrixColumn(camera.matrixWorld, 1);
+    this.debugLabelBoxes = [];
+
     for (const box of boxes) {
-      const clash = kept.some(
-        (k) =>
-          Math.abs(k.cx - box.cx) < (k.w + box.w) * 0.5 + 0.012 &&
-          Math.abs(k.cy - box.cy) < (k.h + box.h) * 0.5 + 0.006
-      );
-      box.v.label.visible = !clash;
-      if (!clash) kept.push(box);
+      const placement = layout.get(box.v.node.id);
+      if (!placement || !placement.visible) {
+        box.v.label.visible = false;
+        this.debugLabelBoxes.push({
+          id: box.v.node.id,
+          x: 0,
+          y: 0,
+          w: 0,
+          h: 0,
+          visible: false,
+          short: false,
+          pushed: false
+        });
+        continue;
+      }
+
+      const v = box.v;
+      this.applyLabelVariant(v, placement.short);
+      const aspect = placement.short ? v.labelShortAspect : v.labelFullAspect;
+      const width = (box.h * aspect) / viewAspect;
+      v.label.visible = true;
+      v.label.scale.set(LABEL_HEIGHT * aspect * box.legibility, LABEL_HEIGHT * box.legibility, 1);
+
+      if (placement.dx !== 0 || placement.dy !== 0) {
+        const worldPerNdcY = box.dist * tan;
+        v.label.getWorldPosition(this.labelWorld);
+        this.labelWorld.addScaledVector(
+          this.cameraRight,
+          placement.dx * 2 * worldPerNdcY * viewAspect
+        );
+        this.labelWorld.addScaledVector(this.cameraUp, -placement.dy * 2 * worldPerNdcY);
+        this.graph.worldToLocal(this.labelWorld);
+        v.label.position.copy(this.labelWorld);
+      }
+
+      this.debugLabelBoxes.push({
+        id: v.node.id,
+        x: (box.cx + placement.dx - width / 2) * window.innerWidth,
+        y: (box.cy + placement.dy - box.h / 2) * window.innerHeight,
+        w: width * window.innerWidth,
+        h: box.h * window.innerHeight,
+        visible: true,
+        short: placement.short,
+        pushed: placement.dx !== 0 || placement.dy !== 0
+      });
     }
+  }
+
+  /** Swap a sprite between its full and abbreviated texture without re-creating the material. */
+  private applyLabelVariant(v: NodeVisual, short: boolean): void {
+    if (v.labelShortActive === short) return;
+    v.labelShortActive = short;
+    v.labelMaterial.map = short && v.labelShortMap ? v.labelShortMap : v.labelFullMap;
+    v.labelMaterial.needsUpdate = true;
+  }
+
+  /** Last laid-out label boxes in CSS pixels (e2e collision audit). */
+  labelDebug(): LabelDebugBox[] {
+    return this.debugLabelBoxes;
   }
 
   private cameraDistance(obj: THREE.Object3D): number {
@@ -521,6 +643,13 @@ export class KnowledgeScene {
   dispose(): void {
     this.disposed = true;
     this.removeFocusEdges();
+    // The sprite material references only one texture at a time; dispose both variants here so
+    // the inactive map does not leak, then let the traversal release the rest.
+    for (const visual of this.nodes.values()) {
+      visual.labelFullMap.dispose();
+      visual.labelShortMap?.dispose();
+      visual.labelMaterial.map = null;
+    }
     this.graph.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       mesh.geometry?.dispose();

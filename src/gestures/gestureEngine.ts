@@ -149,7 +149,7 @@ export class GestureEngine {
             };
             this.swipe = null;
           } else if (ctx.sceneHover) {
-            intents.push({ type: 'select', id: ctx.sceneHover, aim });
+            intents.push({ type: 'select', id: ctx.sceneHover, aim, pinchStart: true });
             this.logPinch({
               t: ctx.t,
               side: primary.side,

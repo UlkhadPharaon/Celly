@@ -897,6 +897,18 @@ export class CellyApp {
     return page?.selectionTestState() ?? { active: false };
   }
 
+  /** Pinch-start halo pulse state, for the feedback E2E (null when no pulse is playing). */
+  selectionFlashState(): { id: string; remainingMs: number } | null {
+    const page = this.pages.get('interactive') as InteractiveLabPage | undefined;
+    return page?.selectionFlashState() ?? null;
+  }
+
+  /** Knowledge-graph label boxes from the last layout pass, for the collision E2E. */
+  knowledgeLabels(): ReturnType<KnowledgePage['labelDebug']> {
+    const page = this.pages.get('knowledge') as KnowledgePage | undefined;
+    return page?.labelDebug() ?? [];
+  }
+
   private updateDebugOverlay(): void {
     if (!this.debugVisible) return;
     const primary = primaryHand(this.frames);

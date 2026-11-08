@@ -466,6 +466,11 @@ export class InteractiveLabPage implements Page {
     };
   }
 
+  /** Diagnostics hook for the pinch-start halo pulse (e2e feedback test). */
+  selectionFlashState(): { id: string; remainingMs: number } | null {
+    return this.cell.flashState();
+  }
+
   private currentTestTarget(): OrganelleId | null {
     return this.test && !this.test.complete ? this.test.ids[this.test.index] ?? null : null;
   }
@@ -572,6 +577,9 @@ export class InteractiveLabPage implements Page {
     }
     switch (intent.type) {
       case 'select':
+        // Instant pinch commits get a short halo pulse so the user sees the selection land
+        // before the isolate tween and the overlay take over (audit UX-005).
+        if (intent.pinchStart) this.cell.flashSelection(intent.id as OrganelleId);
         this.select(intent.id as OrganelleId);
         break;
       case 'unselect':

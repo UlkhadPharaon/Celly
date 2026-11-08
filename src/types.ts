@@ -140,7 +140,7 @@ export type TrackingStatus = 'idle' | 'initializing' | 'gpu' | 'cpu' | 'error';
 export type GestureState = 'IDLE' | 'HOVER_UI' | 'SELECTING' | 'ROTATING' | 'SCALING' | 'SWIPING' | 'COOLDOWN';
 
 export type Intent =
-  | { type: 'select'; id: string; aim?: Vec2 }
+  | { type: 'select'; id: string; aim?: Vec2; pinchStart?: boolean }
   | { type: 'unselect'; aim?: Vec2 }
   | { type: 'click'; id: string }
   | { type: 'hover'; id: string | null; kind: 'ui' | 'scene' }
