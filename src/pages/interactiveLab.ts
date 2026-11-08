@@ -8,7 +8,7 @@ import { clamp } from '../core/math';
 import { type Page, type PageContext, type PickOptions, pageHeader } from './page';
 import { nearestWithin } from '../gestures/aim';
 
-const COPY = {
+export const COPY = {
   en: {
     eyebrow: 'Interactive lab',
     title: 'The animal cell',

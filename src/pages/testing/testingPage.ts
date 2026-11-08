@@ -31,7 +31,7 @@ interface FlashState {
   missed: string[];
 }
 
-const COPY = {
+export const COPY = {
   en: {
     eyebrow: 'Testing knowledge',
     title: 'Prove it.',

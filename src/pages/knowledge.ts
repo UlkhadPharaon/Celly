@@ -4,7 +4,7 @@ import { KnowledgeScene } from '../scene/knowledgeScene';
 import { clamp } from '../core/math';
 import { type Page, type PageContext, pageHeader } from './page';
 
-const COPY = {
+export const COPY = {
   en: {
     eyebrow: 'Knowledge network',
     title: 'Everything connects',

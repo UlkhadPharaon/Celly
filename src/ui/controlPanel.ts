@@ -30,7 +30,7 @@ export type ToggleKey =
   | 'reducedMotion'
   | 'highContrast';
 
-const COPY = {
+export const COPY = {
   en: {
     controls: 'Controls',
     openControls: 'Open controls',

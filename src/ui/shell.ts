@@ -23,7 +23,7 @@ export interface ShellHandlers {
   onOverlayClose: () => void;
 }
 
-const LEGEND = {
+export const LEGEND = {
   en: [
     { icon: ICONS.hand, label: 'Pinch a part', action: 'Select', tone: 'cyan' },
     { icon: ICONS.close, label: 'Pinch the void', action: 'Back', tone: 'slate' },
@@ -40,7 +40,7 @@ const LEGEND = {
   ]
 };
 
-const UI_COPY = {
+export const UI_COPY = {
   en: {
     autoRotate: 'Auto-rotate',
     stop: 'Stop',

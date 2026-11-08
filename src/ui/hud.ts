@@ -21,7 +21,7 @@ export interface HudState {
   hint: string;
 }
 
-const COPY = {
+export const COPY = {
   en: {
     tracking: 'Tracking',
     hands: 'hands',

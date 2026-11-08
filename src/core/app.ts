@@ -30,13 +30,15 @@ import {
   unreach
 } from '../gestures/cursor';
 import { GestureEngine } from '../gestures/gestureEngine';
+import { GESTURE_HINTS_FR } from '../gestures/hints';
 import { AimTracker } from '../gestures/aim';
 import { HandLayer } from '../scene/handLayer';
 import { DebugOverlay } from '../ui/debugOverlay';
 import { Shell } from '../ui/shell';
 import type { ControlState, ToggleKey } from '../ui/controlPanel';
 import { loadJSON, saveJSON } from './store';
-import { preferredQuality } from './device';
+import { SETTINGS_VERSION, sanitizeSettings } from './settings';
+import { APP_STRINGS } from './strings';
 import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
@@ -50,21 +52,6 @@ const SETTINGS_KEY = 'celly:v02:settings';
 const ONBOARD_KEY = 'celly:v02:onboarded';
 const HAND_LOSS_MS = 250;
 const HUD_INTERVAL_MS = 90;
-
-export const DEFAULT_SETTINGS: Settings = {
-  language: 'en',
-  mirrorX: true,
-  mirrorY: false,
-  handsSwap: false,
-  showWebcam: true,
-  showFeedback: true,
-  dwellClick: false,
-  autoRotate: true,
-  pinchSensitivity: PINCH_SENSITIVITY.normal,
-  reducedMotion: false,
-  highContrast: false,
-  quality: preferredQuality()
-};
 
 export class CellyApp {
   private readonly settings: Settings;
@@ -92,7 +79,7 @@ export class CellyApp {
   private uiHover: string | null = null;
   private sceneHover: string | null = null;
   private hoverLabel = '';
-  private cameraRequested = false;
+  private cameraAttemptCount = 0;
   private sticky: { id: string; at: number; x: number; y: number } | null = null;
   private pickRadius = 52;
   private debugVisible = false;
@@ -229,9 +216,12 @@ export class CellyApp {
   }
 
   private async startCamera(): Promise<void> {
-    if (this.tracker.ready) return;
-    if (this.cameraRequested && this.tracker.camera === 'requesting') return;
-    this.cameraRequested = true;
+    // Retry safety (audit CELLY-BUG-004): key off the tracker's real in-flight state, not a
+    // one-way flag. `camera` leaves 'requesting' on every terminal state (denied / timeout /
+    // error) and the tracker also refuses re-entry while `starting`, so a later "Try again"
+    // always gets a fresh attempt instead of a permanent block.
+    if (this.tracker.ready || this.tracker.isStarting()) return;
+    this.cameraAttemptCount += 1;
     this.shell.controls.setCameraStatus('requesting');
     this.shell.onboarding.setCameraStatus('requesting');
     await this.tracker.start();
@@ -340,7 +330,7 @@ export class CellyApp {
   }
 
   private saveSettings(): void {
-    saveJSON(SETTINGS_KEY, this.settings);
+    saveJSON(SETTINGS_KEY, { ...this.settings, _version: SETTINGS_VERSION });
   }
 
   // ---------------------------------------------------------------------- routing
@@ -390,7 +380,7 @@ export class CellyApp {
     });
 
     window.addEventListener('keydown', (event) => {
-      if (event.defaultPrevented) return;
+      if (this.disposed || event.defaultPrevented) return;
       const tag = (event.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       switch (event.key) {
@@ -437,9 +427,10 @@ export class CellyApp {
     });
 
     document.addEventListener('visibilitychange', () => {
+      if (this.disposed) return;
       if (document.hidden) {
         cancelAnimationFrame(this.raf);
-      } else if (!this.disposed) {
+      } else {
         this.lastTime = performance.now();
         this.raf = requestAnimationFrame(this.loop);
       }
@@ -773,8 +764,15 @@ export class CellyApp {
       mirrorY: this.settings.mirrorY,
       swap: this.settings.handsSwap,
       gesture: this.gestureFrame?.state ?? 'IDLE',
-      hint: this.gestureFrame?.hint ?? ''
+      hint: this.gestureHint()
     });
+  }
+
+  /** Gesture hint for display, translated when the interface is French. */
+  private gestureHint(): string {
+    const frame = this.gestureFrame;
+    if (!frame) return '';
+    return this.settings.language === 'fr' ? GESTURE_HINTS_FR[frame.state] || frame.hint : frame.hint;
   }
 
   private updateCursors(): void {
@@ -793,7 +791,7 @@ export class CellyApp {
         }));
     this.shell.cursors.update(
       cursors,
-      this.gestureFrame?.hint ?? '',
+      this.gestureHint(),
       this.uiHover ? (this.gestureFrame?.dwellProgress ?? 0) : 0,
       this.hoverLabel,
       this.shell.overlay.bounds()
@@ -880,6 +878,11 @@ export class CellyApp {
       inferenceMs: this.tracker.inferenceMs,
       ready: this.tracker.ready
     };
+  }
+
+  /** cameraAttempts() — how many real camera requests this session has issued (retry tests). */
+  get cameraAttempts(): number {
+    return this.cameraAttemptCount;
   }
 
   /** Start/stop the built-in Selection test on the interactive lab page (T key or HUD). */
@@ -1173,8 +1176,8 @@ export class CellyApp {
     };
   }
 
-  private t(key: keyof typeof STRINGS.en): string {
-    return STRINGS[this.settings.language][key];
+  private t(key: keyof typeof APP_STRINGS.en): string {
+    return APP_STRINGS[this.settings.language][key];
   }
 
   dispose(): void {
@@ -1220,34 +1223,11 @@ function prettify(id: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-const STRINGS = {
-  en: {
-    cameraUnavailable: 'Camera unavailable.',
-    trackingFailed: 'Hand model failed to load. Reload the page to retry.',
-    saved: 'Saved',
-    pinchSaved: 'Pinch sensitivity saved',
-    qualityHigh: 'High quality',
-    qualityFast: 'Fast mode'
-  },
-  fr: {
-    cameraUnavailable: 'Caméra indisponible.',
-    trackingFailed: 'Le modèle de main n’a pas pu être chargé. Rechargez la page.',
-    saved: 'Enregistré',
-    pinchSaved: 'Sensibilité du pincement enregistrée',
-    qualityHigh: 'Qualité élevée',
-    qualityFast: 'Mode rapide'
-  }
-};
-
+/**
+ * Persisted settings are sanitized, not trusted: every field is type-checked against the
+ * current schema and unknown keys never merge in (audit CELLY-BUG-002). The stored payload
+ * carries a `_version` stamp so a future schema change can discard stale shapes wholesale.
+ */
 function loadSettings(): Settings {
-  const stored = loadJSON<Partial<Settings>>(SETTINGS_KEY, {});
-  const merged: Settings = { ...DEFAULT_SETTINGS, ...stored };
-  if (merged.language !== 'fr' && merged.language !== 'en') merged.language = 'en';
-  if (merged.quality !== 'low' && merged.quality !== 'high') merged.quality = preferredQuality();
-  if (!Number.isFinite(merged.pinchSensitivity)) merged.pinchSensitivity = PINCH_SENSITIVITY.normal;
-  merged.pinchSensitivity = Math.min(
-    PINCH_SENSITIVITY.max,
-    Math.max(PINCH_SENSITIVITY.min, merged.pinchSensitivity)
-  );
-  return merged;
+  return sanitizeSettings(loadJSON<unknown>(SETTINGS_KEY, {}));
 }

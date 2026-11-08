@@ -4,7 +4,7 @@ import { svgIcon, ICONS } from './dom';
 import { createProjectLink, registerProjectLink } from './projectLinks';
 import { WebcamPreview } from './webcamPreview';
 
-const COPY = {
+export const COPY = {
   en: {
     kicker: 'Celly · v0.2',
     title: 'A cell you can hold.',
