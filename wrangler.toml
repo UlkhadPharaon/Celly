@@ -1,0 +1,5 @@
+[pages]
+pages_build_output_dir = "dist"
+
+[vars]
+CELLY_VERSION = "0.2.2"
