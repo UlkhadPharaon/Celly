@@ -45,7 +45,10 @@ async function createForDelegate(
     baseOptions: { modelAssetPath: modelPath, delegate: preference },
     runningMode: 'VIDEO',
     numHands: 2,
-    minHandDetectionConfidence: 0.5,
+    // Cellab's proven thresholds (legacy Hands: detection 0.6, tracking 0.5). The palm detector
+    // is where false positives come from; presence and tracking stay permissive so a hand that
+    // is already being tracked is not dropped for one weak frame.
+    minHandDetectionConfidence: 0.6,
     minHandPresenceConfidence: 0.5,
     minTrackingConfidence: 0.5
   });
@@ -63,12 +66,16 @@ async function init(request: Extract<TrackingWorkerRequest, { type: 'init' }>): 
   landmarker?.close();
   landmarker = null;
 
+  // `?tracker=cpu|gpu` pins a single delegate for controlled A/B runs; an unpinned start keeps
+  // the GPU-first order with the in-worker CPU fallback.
+  const delegates = request.delegates?.length ? request.delegates : (['GPU', 'CPU'] as const);
+
   let lastError = '';
   for (let i = 0; i < request.attempts.length; i++) {
     const attempt = request.attempts[i];
     try {
       const vision = await FilesetResolver.forVisionTasks(attempt.wasmBase);
-      for (const preference of ['GPU', 'CPU'] as const) {
+      for (const preference of delegates) {
         try {
           const next = await createForDelegate(vision, attempt.modelPath, preference);
           if (generation !== initGeneration) {

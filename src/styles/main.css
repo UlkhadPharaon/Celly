@@ -930,10 +930,41 @@ svg.icon {
   border: 1px solid var(--line);
 }
 
+.preview-video,
 .preview-canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* The camera image is presented by the compositor. `fill` keeps the same 4:3 -> 16:9 mapping
+   the old canvas drawImage used, so the landmark overlay stays registered without crop math. */
+.preview-video {
+  object-fit: fill;
+  background: #03080f;
+  transform-origin: center;
+}
+
+.preview-canvas {
+  pointer-events: none;
+}
+
+/* Capture sink owned by the tracker: mounted so the browser keeps presenting frames for
+   requestVideoFrameCallback, but invisible and non-interactive. Not `display: none` — some
+   browsers stop delivering video frames to a hidden element. */
+.tracker-capture-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  /* A fully transparent element is skipped by the compositor, which stops
+     requestVideoFrameCallback from firing. 0.01 alpha still composites. */
+  opacity: 0.01;
+  pointer-events: none;
+  z-index: -1;
 }
 
 .preview-empty {

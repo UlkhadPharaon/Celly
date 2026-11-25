@@ -15,6 +15,8 @@ export type TrackingWorkerRequest =
   | {
       type: 'init';
       attempts: WorkerAssetSource[];
+      /** Ordered delegate preference. `['GPU']` or `['CPU']` makes the choice explicit. */
+      delegates?: Array<'GPU' | 'CPU'>;
     }
   | {
       type: 'frame';

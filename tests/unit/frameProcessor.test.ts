@@ -145,21 +145,22 @@ describe('FrameProcessor — hand-loss tolerance', () => {
     fp.buildFrames({ hands: [rawHand()], tMs: 0 }, 1 / 60, t, VIEWPORT);
     expect(fp.frames).toHaveLength(1);
 
-    // Still inside 250 ms: the same pose is replayed unchanged, never turned into a release.
-    fp.buildFrames(null, 1 / 60, t + 100, VIEWPORT);
+    // Still inside the bridge window: the same pose is replayed unchanged, never turned into
+    // a release. Re-detection gaps of a few frames are normal in MediaPipe VIDEO mode.
+    fp.buildFrames(null, 1 / 60, t + 300, VIEWPORT);
     expect(fp.frames).toHaveLength(1);
     expect(fp.frames[0].present).toBe(true);
     expect(fp.frames[0].pinchStart).toBe(false);
     expect(fp.frames[0].pinchEnd).toBe(false);
 
     // Past the window: exactly one present:false lost frame.
-    fp.buildFrames(null, 1 / 60, t + 400, VIEWPORT);
+    fp.buildFrames(null, 1 / 60, t + 520, VIEWPORT);
     expect(fp.frames).toHaveLength(1);
     expect(fp.frames[0].present).toBe(false);
     expect(fp.frames[0].lost).toBe(true);
 
     // And it is emitted only once.
-    fp.buildFrames(null, 1 / 60, t + 500, VIEWPORT);
+    fp.buildFrames(null, 1 / 60, t + 620, VIEWPORT);
     expect(fp.frames).toHaveLength(0);
   });
 

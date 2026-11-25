@@ -15,7 +15,9 @@ export interface GestureEngineConfig {
 export const DEFAULT_GESTURE: GestureEngineConfig = {
   twoHandCooldownMs: 150,
   swipeThresholdPx: 130,
-  clickMaxMs: 500,
+  // A hand press is slower than a mouse click: people routinely hold a pinch for a second while
+  // they decide. The travel budget, not the clock, is what separates a click from a drag.
+  clickMaxMs: 1500,
   clickMaxTravelPx: 24,
   dwellMs: 900,
   rotateGain: 7,
@@ -141,11 +143,14 @@ export class GestureEngine {
           // release semantics because a click candidate still needs the full press.
           const aim = { x: primary.aim.x, y: primary.aim.y };
           if (ctx.uiHover) {
+            // The press point is the pointer, not the thumb/index contact midpoint: the midpoint
+            // slides towards the thumb as the fingers close, which would spend the click's travel
+            // budget before the user moved at all.
             this.clickCandidate = {
               id: ctx.uiHover,
               t: ctx.t,
-              x: primary.pinchPoint.x,
-              y: primary.pinchPoint.y
+              x: primary.cursor.x,
+              y: primary.cursor.y
             };
             this.swipe = null;
           } else if (ctx.sceneHover) {
@@ -188,7 +193,7 @@ export class GestureEngine {
 
         if (primary.pinching) {
           if (this.clickCandidate) {
-            const moved = dist2(primary.pinchPoint, this.clickCandidate);
+            const moved = dist2(primary.cursor, this.clickCandidate);
             if (moved > this.cfg.clickMaxTravelPx) this.clickCandidate = null;
           }
           if (this.swipe) {
@@ -205,7 +210,7 @@ export class GestureEngine {
         if (primary.pinchEnd) {
           if (this.clickCandidate) {
             const held = ctx.t - this.clickCandidate.t;
-            const moved = dist2(primary.pinchPoint, this.clickCandidate);
+            const moved = dist2(primary.cursor, this.clickCandidate);
             if (held <= this.cfg.clickMaxMs && moved <= this.cfg.clickMaxTravelPx) {
               intents.push({ type: 'click', id: this.clickCandidate.id });
               this.logPinch({
@@ -214,6 +219,18 @@ export class GestureEngine {
                 target: this.clickCandidate.id,
                 result: 'click',
                 reason: 'ui-release',
+                heldMs: held,
+                travelPx: moved,
+                aim: { x: primary.aim.x, y: primary.aim.y }
+              });
+            } else {
+              // A dropped press is a bug report on its own: the log names which budget failed.
+              this.logPinch({
+                t: ctx.t,
+                side: primary.side,
+                target: this.clickCandidate.id,
+                result: 'reject',
+                reason: held > this.cfg.clickMaxMs ? 'held-too-long' : 'moved-too-far',
                 heldMs: held,
                 travelPx: moved,
                 aim: { x: primary.aim.x, y: primary.aim.y }

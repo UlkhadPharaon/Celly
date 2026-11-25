@@ -36,6 +36,7 @@ import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
 import { FrameProcessor } from './frameProcessor';
+import { CursorMotion } from '../gestures/cursorMotion';
 import { deviceProfile, refreshDeviceProfile } from './device';
 import { InteractiveLabPage } from '../pages/interactiveLab';
 import { KnowledgePage } from '../pages/knowledge';
@@ -55,6 +56,8 @@ export class CellyApp {
   private readonly hands = new HandLayer();
   /** Per-frame hand pipeline: filters, pinch hysteresis, aim locks, hover and gestures. */
   private readonly fp: FrameProcessor;
+  /** Display-only easing so 20–30 Hz detections move the ring at the render rate. */
+  private readonly cursorMotion = new CursorMotion();
   private readonly pages = new Map<PageId, Page>();
   private readonly debug = new DebugOverlay();
 
@@ -67,11 +70,20 @@ export class CellyApp {
 
   private quality: TrackingQuality = { level: 'none', value: 0, jitter: 0, margin: 0 };
   private previousJitter: Vec3[] | null = null;
+  /** Set when the user explicitly picks a quality: disables the automatic downgrade. */
+  private qualityChosen = false;
+  /** First instant the render loop was measured below 30 fps in the current slow streak. */
+  private lowFpsSince = 0;
+  private readonly bootMs = performance.now();
   private lastHudAt = 0;
   private lastTime = 0;
   private lastTickMs = 0;
   /** Capture time of the previous detection, used to pace the landmark filters. */
   private lastDetectionMs = 0;
+  /** Hands MediaPipe reported on the newest result, before any filtering. */
+  private lastRawHands = 0;
+  /** Capture → processed ages of the newest results, for the p50/p95 latency report. */
+  private readonly frameAges: number[] = [];
   /** Ambient clock for the pages. Frozen while reduce motion is on (audit task 3.1). */
   private motionElapsed = 0;
   private renderFrames = 0;
@@ -121,9 +133,16 @@ export class CellyApp {
         this.shell.controls.setCameraStatus(status, detail);
         this.shell.onboarding.setCameraStatus(status, detail);
         if (status === 'live') {
-          this.shell.controls.preview.attach(this.tracker.video);
-          this.shell.onboarding.attachVideo(this.tracker.video);
-        } else if (isCameraError(status)) {
+          // Each preview feeds its own native <video> from the shared stream. Hiding a preview
+          // releases only that decoder; the tracker's capture element is separate.
+          const stream = this.tracker.mediaStream;
+          this.shell.controls.preview.attachStream(stream);
+          this.shell.onboarding.attachStream(stream);
+        } else {
+          this.shell.controls.preview.attachStream(null);
+          this.shell.onboarding.attachStream(null);
+        }
+        if (isCameraError(status)) {
           // Insecure context is reported once, in the interface language, by the startup check in
           // `start()`. Repeating the tracker's English detail would duplicate it.
           if (status === 'insecure-context') return;
@@ -285,12 +304,42 @@ export class CellyApp {
     this.saveSettings();
   }
 
-  private setQuality(quality: Settings['quality']): void {
+  private setQuality(quality: Settings['quality'], automatic = false): void {
+    // An explicit choice (mouse or pinch on the quality buttons) is never overridden again this
+    // session; only the untouched default may be lowered by the frame-rate guard.
+    if (!automatic) this.qualityChosen = true;
     this.settings.quality = quality;
     this.scene.setQuality(quality);
     this.shell.setControlState(this.controlState());
     this.saveSettings();
-    this.shell.toast(quality === 'high' ? this.t('qualityHigh') : this.t('qualityFast'), 'info');
+    const label = automatic
+      ? this.t('qualityAuto')
+      : quality === 'high'
+        ? this.t('qualityHigh')
+        : this.t('qualityFast');
+    this.shell.toast(label, 'info');
+  }
+
+  /**
+   * One-way safety valve for machines that cannot hold the high-quality scene. Tracking runs on
+   * its own clock, but a 15 fps render still makes the pointer feel like it is stuttering, and a
+   * dropped quality tier is cheaper than a laggy app. Five seconds below 30 fps after the first
+   * eight seconds of boot (compilation, shader warm-up) is a sustained problem, not a hitch.
+   */
+  private maybeAdaptQuality(now: number): void {
+    if (this.qualityChosen || this.settings.quality !== 'high') {
+      this.lowFpsSince = 0;
+      return;
+    }
+    if (now - this.bootMs < 8000 || this.renderFps <= 0) return;
+    if (this.renderFps >= 30) {
+      this.lowFpsSince = 0;
+      return;
+    }
+    if (this.lowFpsSince === 0) this.lowFpsSince = now;
+    if (now - this.lowFpsSince < 5000) return;
+    this.lowFpsSince = 0;
+    this.setQuality('low', true);
   }
 
   private setPinchSensitivity(value: number): void {
@@ -354,6 +403,7 @@ export class CellyApp {
     next.setAutoRotate?.(this.settings.autoRotate);
     next.enter();
     this.fp.resetInteraction();
+    this.cursorMotion.reset();
     this.shell.controls.preview.setVisible(this.settings.showWebcam);
     this.shell.refreshButtons();
   }
@@ -513,16 +563,41 @@ export class CellyApp {
       return;
     }
 
-    // Inference runs in the tracking worker, so a detection is consumed here when it arrives
-    // rather than produced here. No new result simply means the worker is still busy.
-    const raw = this.tracker.poll();
-    // Build frames every tick, result or not: with no tracker and no synthetic hands this is
-    // an empty list, but it is also what ages the 250 ms tolerance out and lets the gesture
-    // engine retire cursors, hints and hover when the hands leave the frame.
-    this.fp.buildFrames(raw, this.detectionDt(raw), this.lastTickMs, {
-      width: window.innerWidth,
-      height: window.innerHeight
-    });
+    // Inference runs in the tracking worker, so detections are consumed here when they arrive
+    // rather than produced here. Every completed result is stepped, oldest first: with capture
+    // on its own clock a slow render tick can find two results waiting, and the pinch start and
+    // release of that window must both reach the gesture engine.
+    const results = this.tracker.drain();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    if (results.length === 0) {
+      // No new detection: still age the hand-loss tolerance out and let the gesture engine retire
+      // cursors, hints and hover when the hands leave the frame.
+      this.lastRawHands = 0;
+      this.fp.buildFrames(null, 1 / 60, this.lastTickMs, viewport);
+      this.stepFrame();
+      return;
+    }
+    for (const raw of results) {
+      this.lastRawHands = raw.hands.length;
+      this.noteFrameAge(performance.now() - raw.tMs);
+      this.fp.buildFrames(raw, this.detectionDt(raw), raw.tMs, viewport);
+      this.stepFrame();
+    }
+  }
+
+  /**
+   * Capture → processed latency of one detection. This is the number the user feels: it includes
+   * the wait before inference started, the inference itself and the wait before the render tick
+   * consumed the result. Inference duration alone says nothing about it.
+   */
+  private noteFrameAge(ageMs: number): void {
+    if (!Number.isFinite(ageMs) || ageMs < 0) return;
+    this.frameAges.push(ageMs);
+    if (this.frameAges.length > 120) this.frameAges.shift();
+  }
+
+  /** Hover, gesture and dwell for the frames `buildFrames` just produced. */
+  private stepFrame(): void {
     this.fp.updateHover();
     this.dispatch(this.fp.stepGestures(this.lastTickMs));
     this.fp.clearFinishedAimLocks();
@@ -584,7 +659,17 @@ export class CellyApp {
       mirrorY: this.settings.mirrorY,
       swap: this.settings.handsSwap,
       gesture: this.fp.gestureFrame?.state ?? 'IDLE',
-      hint: this.gestureHint()
+      hint: this.gestureHint(),
+      cameraFps: Math.round(this.tracker.deviceState().frameRate),
+      captureFps: this.tracker.captureFps,
+      ageMs:
+        this.frameAges.length > 0
+          ? Math.round(this.frameAges[this.frameAges.length - 1])
+          : Math.round(this.tracker.resultAgeMs),
+      inferenceMs: this.tracker.inferenceMs,
+      queued: this.tracker.queued,
+      rawHands: this.lastRawHands,
+      previewFps: this.previewFps()
     });
   }
 
@@ -596,7 +681,7 @@ export class CellyApp {
   }
 
   private updateCursors(): void {
-    const cursors =
+    const raw =
       this.fp.gestureFrame?.cursors ??
       this.fp.frames
         .filter((f) => f.present)
@@ -609,6 +694,22 @@ export class CellyApp {
           pinchValue: f.pinchValue,
           mode: (f.pinching ? 'pinch' : 'pointer') as 'pinch' | 'pointer' | 'passive'
         }));
+
+    // Ease the drawn ring between detections (the aim, hover and pinch target stay on the
+    // detection-time cursor). A locked aim is already frozen on the selection point: easing it
+    // would slide the ring off the target the moment the pinch commits.
+    const now = performance.now();
+    const frames = new Map(this.fp.frames.map((f) => [f.side, f]));
+    const cursors = raw.map((cursor) => {
+      const frame = frames.get(cursor.side);
+      if (!frame || frame.aimLocked || frame.pinching) return cursor;
+      const eased = this.cursorMotion.sample(cursor.side, { x: cursor.x, y: cursor.y }, now);
+      return { ...cursor, x: eased.x, y: eased.y };
+    });
+    for (const side of ['left', 'right'] as const) {
+      if (!frames.get(side)?.present) this.cursorMotion.reset(side);
+    }
+
     this.shell.cursors.update(
       cursors,
       this.gestureHint(),
@@ -637,6 +738,7 @@ export class CellyApp {
       this.renderFrames = 0;
       this.renderClock = 0;
     }
+    this.maybeAdaptQuality(now);
 
     this.tick();
     this.hands.update(
@@ -696,14 +798,63 @@ export class CellyApp {
     trackerFps: number;
     inferenceMs: number;
     ready: boolean;
+    captureFps: number;
+    cameraFps: number;
+    resultAgeMs: number;
+    queued: number;
+    busy: boolean;
+    captureMode: 'video-frame' | 'timer' | 'stopped';
+    rawHands: number;
+    acceptedHands: number;
+    droppedFrames: number;
+    previewFps: number;
+    frameAgeP50: number;
+    frameAgeP95: number;
+    frameAgeMax: number;
   } {
+    const device = this.tracker.deviceState();
     return {
       camera: this.tracker.camera,
       tracking: this.tracker.tracking,
       detail: this.tracker.detail,
       trackerFps: this.tracker.trackerFps,
       inferenceMs: this.tracker.inferenceMs,
-      ready: this.tracker.ready
+      ready: this.tracker.ready,
+      // Capture and inference are separate clocks now: camera → capture (submitted frames),
+      // worker → detections, resultAgeMs → how stale the newest detection is right now.
+      captureFps: this.tracker.captureFps,
+      cameraFps: Math.round(device.frameRate),
+      resultAgeMs: Math.round(this.tracker.resultAgeMs),
+      queued: this.tracker.queued,
+      busy: this.tracker.busy,
+      captureMode: this.tracker.captureMode,
+      rawHands: this.lastRawHands,
+      acceptedHands: this.fp.frames.filter((f) => f.present).length,
+      droppedFrames: this.tracker.droppedVideoFrames(),
+      // The live preview's own decoder rate: a native video element shows camera frames as they
+      // arrive, so this number is the proof that the preview is not throttled.
+      previewFps: this.previewFps(),
+      ...this.frameAgeStats()
+    };
+  }
+
+  /** The visible preview's measured frame rate (falls back to the onboarding thumbnail). */
+  private previewFps(): number {
+    const panel = this.shell.controls.preview;
+    if (panel.visible) return panel.previewFps;
+    const onboarding = this.shell.onboarding.preview;
+    return onboarding.visible ? onboarding.previewFps : 0;
+  }
+
+  private frameAgeStats(): { frameAgeP50: number; frameAgeP95: number; frameAgeMax: number } {
+    if (this.frameAges.length === 0) return { frameAgeP50: -1, frameAgeP95: -1, frameAgeMax: -1 };
+    const sorted = [...this.frameAges].sort((a, b) => a - b);
+    const at = (p: number): number =>
+      Math.round(sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]);
+    return {
+      frameAgeP50: at(0.5),
+      frameAgeP95: at(0.95),
+      frameAgeMax: Math.round(sorted[sorted.length - 1])
     };
   }
 

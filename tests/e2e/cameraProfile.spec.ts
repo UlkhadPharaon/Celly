@@ -27,7 +27,8 @@ test('a device-class change re-opens the stream with the new constraints', async
   });
   const before = await page.evaluate(() => window.__celly!.deviceState());
   expect(before.deviceClass).toBe('desktop');
-  expect(before.cameraStreamWidth).toBe(1280);
+  // Desktop now asks for Cellab's proven 640x480 instead of 1280x720.
+  expect(before.cameraStreamWidth).toBe(640);
 
   // Nothing changed: no churn (the fake device already honours the desktop request).
   const noop = await page.evaluate(() => window.__celly!.refreshDeviceProfile());
@@ -60,7 +61,15 @@ test('a device-class change re-opens the stream with the new constraints', async
 
   const changed = await page.evaluate(() => window.__celly!.refreshDeviceProfile());
   expect(changed.deviceClass).toBe('phone');
-  expect(changed.reopened).toBe(true);
+
+  // The reopen is asynchronous (a fresh getUserMedia + metadata + play). Read its outcome as a
+  // settled fact rather than a single synchronous boolean, which is flaky when the worker's slow
+  // first inference is competing for the same thread: assert on what actually changed.
+  await expect
+    .poll(() => page.evaluate(() => window.__celly!.deviceState().cameraReopens), {
+      timeout: 30_000
+    })
+    .toBeGreaterThan(before.cameraReopens);
 
   // Still live, and the new stream is the one being pumped.
   await page.waitForFunction(() => window.__celly!.trackingState().camera === 'live');
@@ -68,7 +77,7 @@ test('a device-class change re-opens the stream with the new constraints', async
   expect(after.deviceClass).toBe('phone');
   expect(after.cameraStreamWidth).toBeLessThan(before.cameraStreamWidth);
   expect(after.cameraStreamWidth).toBeLessThanOrEqual(640);
-  expect(after.cameraReopens).toBeGreaterThan(0);
+  expect(after.cameraReopens).toBeGreaterThan(before.cameraReopens);
   // The tracker is still tracking: the reopen swapped the media source, not the worker.
   expect(await page.evaluate(() => window.__celly!.trackingState().tracking)).not.toBe('error');
 });

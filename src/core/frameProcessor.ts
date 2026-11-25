@@ -15,7 +15,6 @@ import { LandmarkFilterBank } from '../tracking/landmarkFilter';
 import {
   DEFAULT_PINCH,
   initialPinch,
-  isFist,
   pinchValue,
   updatePinch,
   type PinchState
@@ -30,8 +29,12 @@ import {
 import { AimTracker } from '../gestures/aim';
 import { clamp, dist3 } from './math';
 
-/** A hand is "lost" after this long without a detection (never mutated into a release). */
-const HAND_LOSS_MS = 250;
+/**
+ * A hand is "lost" after this long without a detection. Long enough to bridge the re-detection
+ * gap when MediaPipe drops a hand for a few frames (a natural pinch, motion blur, a hand near
+ * the frame edge), short enough that a hand which really left does not leave a ghost behind.
+ */
+const HAND_LOSS_MS = 420;
 
 export interface Viewport {
   width: number;
@@ -60,7 +63,7 @@ export interface TrackAimOptions {
 
 /**
  * The per-frame hand pipeline (audit task 4.3). It owns the state that used to be scattered
- * across `CellyApp`: hand-side resolution, One-Euro filters, pinch hysteresis, the 250 ms loss
+ * across `CellyApp`: hand-side resolution, One-Euro filters, pinch hysteresis, the loss
  * tolerance, aim locks and sticky scene hover, plus the gesture engine.
  *
  * `CellyApp` keeps the frame clock, dispatch, rendering and test injection. Keeping this module
@@ -81,8 +84,15 @@ export class FrameProcessor {
 
   private readonly engine = new GestureEngine();
   private readonly sideResolver = new HandSideResolver();
-  private readonly normFilters = new LandmarkFilterBank();
-  private readonly worldFilters = new LandmarkFilterBank();
+  /**
+   * Display-only smoothing. The filter is deliberately light (Cellab draws raw landmarks, so a
+   * strong filter is felt as lag): it removes sub-pixel shimmer while the pointer and pinch use
+   * the unfiltered landmarks below. `beta` is high for normalized units: the derivative is
+   * measured in frame-widths per second (0.1 at rest, 1+ during a reach), so this is a ~90 ms
+   * time constant at rest and ~20 ms in motion — jitter gone, deliberate movement not dragged.
+   */
+  private readonly normFilters = new LandmarkFilterBank(2.5, 5.5);
+  private readonly worldFilters = new LandmarkFilterBank(2.5, 6);
   private readonly pinchStates = new Map<HandSide, PinchState>();
   private readonly lastFrames = new Map<HandSide, HandFrame>();
   private readonly lastSeen = new Map<HandSide, number>();
@@ -103,7 +113,7 @@ export class FrameProcessor {
 
   /**
    * Turn the newest detector result into gesture frames. Runs on every render tick, result or
-   * not: with no detection it ages the 250 ms tolerance out so cursors and hover retire.
+   * not: with no detection it ages the loss tolerance out so cursors and hover retire.
    */
   buildFrames(raw: RawFrame | null, dt: number, t: number, viewport: Viewport): HandFrame[] {
     const detections = (raw?.hands ?? []).map((hand) => ({
@@ -122,32 +132,41 @@ export class FrameProcessor {
     const frames: HandFrame[] = [];
     (raw?.hands ?? []).forEach((hand, i) => {
       if (hand.landmarks.length !== 21) return;
+      // A degenerate detection is treated as *no* detection, so the loss tolerance replays the
+      // last good pose instead of the pinch state machine synthesising a release from bad data.
+      if (!Number.isFinite(hand.score) || hand.score < 0.25) return;
+      if (!landmarksFinite(hand.landmarks)) return;
       const side = sides[i] ?? 'right';
-      const norm = this.normFilters.filter(`n:${side}`, hand.landmarks, dt);
+      const rawNorm = hand.landmarks;
+      const norm = this.normFilters.filter(`n:${side}`, rawNorm, dt);
       const hasWorld = hand.worldLandmarks.length === 21;
+      // MediaPipe world is image-aligned. The skeleton is drawn in display space, so apply the
+      // same mirror the pointer mapping applies, once, at the frame boundary.
+      const mirrorWorld = (points: Vec3[]): Vec3[] =>
+        points.map((p) => ({
+          x: this.settings.mirrorX ? -p.x : p.x,
+          y: this.settings.mirrorY ? -p.y : p.y,
+          z: p.z
+        }));
+      const rawWorld = hasWorld ? mirrorWorld(hand.worldLandmarks) : [];
       const world = hasWorld
-        ? this.worldFilters
-            .filter(`w:${side}`, hand.worldLandmarks, dt)
-            // MediaPipe world is image-aligned. The skeleton is drawn in display space, so apply
-            // the same mirror the pointer mapping applies, once, at the frame boundary.
-            .map((p) => ({
-              x: this.settings.mirrorX ? -p.x : p.x,
-              y: this.settings.mirrorY ? -p.y : p.y,
-              z: p.z
-            }))
+        ? mirrorWorld(this.worldFilters.filter(`w:${side}`, hand.worldLandmarks, dt))
         : norm.map((p) => ({ ...p }));
 
-      const valid = handVisible(norm) && hand.score > 0.35;
-      const fist = isFist(norm);
-      const value = pinchValue(norm, hasWorld ? world : [], this.settings.pinchSensitivity);
+      // Pinch uses the *raw* landmarks. Cellab runs the same ratio on every MediaPipe result and
+      // feels immediate; smoothing this signal only adds delay to the one gesture that must not
+      // have any, and the hysteresis below already absorbs single-frame noise.
+      const value = pinchValue(rawNorm, rawWorld, this.settings.pinchSensitivity);
       const previous = this.pinchStates.get(side) ?? initialPinch();
-      const update = updatePinch(previous, value, { fist, valid, tMs: t }, DEFAULT_PINCH);
+      // No fist gate and no frame-margin gate: a natural pinch brings the other fingers in and
+      // often sits near the edge of frame. Both gates used to turn a held pinch into a release.
+      const update = updatePinch(previous, value, { fist: false, valid: true, tMs: t }, DEFAULT_PINCH);
       this.pinchStates.set(side, update.state);
 
-      // The pointer rides the index fingertip, so the dot always sits on the finger the user
-      // aims with (and on the thumb/index contact while pinching).
+      // The pointer rides the (lightly filtered) index fingertip, so the dot always sits on the
+      // finger the user aims with (and on the thumb/index contact while pinching).
       const { cursor, ndc } = pointCursor(norm, map);
-      const rawCursor = pointCursor(hand.landmarks, map).cursor;
+      const rawCursor = pointCursor(rawNorm, map).cursor;
       const wristScreen = mapNormalized(norm[0], map);
       const mcpScreen = mapNormalized(norm[9], map);
       const handSpan =
@@ -172,7 +191,7 @@ export class FrameProcessor {
         pinchStart: update.start,
         pinchEnd: update.end,
         cursor,
-        pinchPoint: pinchContact(norm, map),
+        pinchPoint: pinchContact(rawNorm, map),
         rawCursor,
         aim: { x: aimState.aim.x, y: aimState.aim.y },
         aimLocked: aimState.aimLocked,
@@ -197,7 +216,7 @@ export class FrameProcessor {
       this.scores.set(side, hand.score);
     });
 
-    // 250 ms hand-loss tolerance: persist the last pose between detections, but never mutate it
+    // Hand-loss tolerance: persist the last pose between detections, but never mutate it
     // into a synthetic release. Only after the window expires do we emit one explicit lost frame.
     for (const side of ['left', 'right'] as const) {
       if (frames.some((f) => f.side === side)) continue;
@@ -381,12 +400,10 @@ function primaryHand(frames: HandFrame[]): HandFrame | null {
   );
 }
 
-/** Every pinch landmark must sit inside the frame for a pinch to register. */
-function handVisible(landmarks: Vec3[]): boolean {
-  for (const index of [0, 4, 8, 9]) {
-    const p = landmarks[index];
-    if (!p) return false;
-    if (p.x < 0.004 || p.x > 0.996 || p.y < 0.004 || p.y > 0.996) return false;
+/** Reject a detection that would poison the filters (a NaN coordinate never recovers). */
+function landmarksFinite(landmarks: Vec3[]): boolean {
+  for (const p of landmarks) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return false;
   }
   return true;
 }

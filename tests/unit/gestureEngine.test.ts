@@ -145,6 +145,58 @@ describe('GestureEngine — right hand', () => {
     expect(out.intents).toContainEqual({ type: 'click', id: 'tab:knowledge' });
   });
 
+  it('clicks although the finger contact midpoint slides while the pinch closes', () => {
+    // Real (and synthetic) hands bring the thumb to the index tip: the midpoint between them
+    // travels ~30 px as the pinch closes. The travel budget measures the pointer, not that
+    // midpoint, or every press would be spent before the user moved.
+    const e = new GestureEngine();
+    e.step(
+      ctx({
+        t: 0,
+        uiHover: 'btn',
+        hands: [
+          hand({
+            side: 'right',
+            pinching: true,
+            pinchStart: true,
+            cursor: { x: 100, y: 100 },
+            pinchPoint: { x: 100, y: 130 }
+          })
+        ]
+      })
+    );
+    e.step(
+      ctx({
+        t: 120,
+        uiHover: 'btn',
+        hands: [
+          hand({
+            side: 'right',
+            pinching: true,
+            cursor: { x: 101, y: 100 },
+            pinchPoint: { x: 100, y: 76 }
+          })
+        ]
+      })
+    );
+    const out = e.step(
+      ctx({
+        t: 240,
+        uiHover: 'btn',
+        hands: [
+          hand({
+            side: 'right',
+            pinching: false,
+            pinchEnd: true,
+            cursor: { x: 101, y: 100 },
+            pinchPoint: { x: 100, y: 78 }
+          })
+        ]
+      })
+    );
+    expect(out.intents).toContainEqual({ type: 'click', id: 'btn' });
+  });
+
   it('rejects a click that travelled too far', () => {
     const e = new GestureEngine();
     e.step(

@@ -189,8 +189,8 @@ export class Onboarding {
     if (this.isOpen) this.render();
   }
 
-  attachVideo(video: HTMLVideoElement | null): void {
-    this.preview.attach(video);
+  attachStream(stream: MediaStream | null): void {
+    this.preview.attachStream(stream);
   }
 
   drawPreview(frames: HandFrame[], settings: Settings): void {
