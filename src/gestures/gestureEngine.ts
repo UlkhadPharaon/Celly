@@ -16,6 +16,8 @@ export interface GestureEngineConfig {
   rotateDeadzone: number;
   /** Hard cap on the rotation applied in one frame, so a single bad frame cannot spin the cell. */
   rotateMaxStep: number;
+  /** Change in hand separation below this (normalised units) is jitter, not a scale gesture. */
+  scaleDeadzone: number;
 }
 
 export const DEFAULT_GESTURE: GestureEngineConfig = {
@@ -26,14 +28,15 @@ export const DEFAULT_GESTURE: GestureEngineConfig = {
   clickMaxMs: 1500,
   clickMaxTravelPx: 24,
   dwellMs: 900,
-  // 7 rad per normalised unit was far too hot: a 1 cm palm tremor is ~0.01 units, which became
-  // 0.07 rad every frame — about 120 deg/s of drift from noise alone. 2.2 with smoothing and a
-  // deadzone turns the same hand movement into a controllable turn.
-  rotateGain: 2.2,
+  // Palm tracking is noisy, so the raw delta is deadzoned, eased and capped. The gain is the
+  // overall sensitivity: 2.2 felt sluggish against a real hand, 4.5 tracks a deliberate move
+  // without the tremor spin that a gain of 7 produced.
+  rotateGain: 4.5,
   scaleSmooth: 0.35,
-  rotateSmooth: 0.55,
-  rotateDeadzone: 0.0015,
-  rotateMaxStep: 0.09
+  rotateSmooth: 0.35,
+  rotateDeadzone: 0.0012,
+  rotateMaxStep: 0.16,
+  scaleDeadzone: 0.004
 };
 
 interface ClickCandidate {
@@ -74,6 +77,8 @@ export class GestureEngine {
   private swipe: SwipeSession | null = null;
   private scaleStartDist = 1;
   private scaleSmoothed = 1;
+  /** Previous raw separation ratio, so a held-still pair of hands does not creep the scale. */
+  private lastScaleRaw = 1;
   /** Smoothed palm delta, so a jittery detection cannot spin the cell. */
   private rotateDelta: Vec2 = { x: 0, y: 0 };
   private lastFactor = 1;
@@ -121,11 +126,21 @@ export class GestureEngine {
         this.rotateDelta = { x: 0, y: 0 };
       } else {
         const d = Math.max(1, dist2(right.cursor, left.cursor));
-        const factor = d / this.scaleStartDist;
-        this.scaleSmoothed += (factor - this.scaleSmoothed) * this.cfg.scaleSmooth;
+        // The factor is measured against the distance at the moment both pinches landed, so
+        // spreading the hands scales up and bringing them together scales down. A deadzone stops
+        // the cell creeping while the hands are held still, which is what made the scale appear
+        // to move on its own the instant both pinches registered.
+        const raw = d / this.scaleStartDist;
+        const moved = Math.abs(raw - this.lastScaleRaw);
+        this.lastScaleRaw = raw;
+        if (moved >= this.cfg.scaleDeadzone) {
+          this.scaleSmoothed += (raw - this.scaleSmoothed) * this.cfg.scaleSmooth;
+        }
         const delta = this.lastFactor > 0 ? this.scaleSmoothed / this.lastFactor : 1;
         this.lastFactor = this.scaleSmoothed;
-        intents.push({ type: 'scale', factor: this.scaleSmoothed, delta });
+        if (Math.abs(delta - 1) > 1e-4) {
+          intents.push({ type: 'scale', factor: this.scaleSmoothed, delta });
+        }
       }
     } else if (bothPinching && right && left && ctx.scaleEnabled) {
       // Two pinches always mean scale. A click candidate left over from the right hand's pinch
@@ -133,6 +148,7 @@ export class GestureEngine {
       // gesture often refused to start; the candidate is simply dropped instead.
       this.scaleStartDist = Math.max(1, dist2(right.cursor, left.cursor));
       this.scaleSmoothed = 1;
+      this.lastScaleRaw = 1;
       this.lastFactor = 1;
       this.state = 'SCALING';
       this.lastPalm = null;

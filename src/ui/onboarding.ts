@@ -298,7 +298,10 @@ export class Onboarding {
       skip.addEventListener('click', skipHandler);
       this.unregister.push(this.registry.register('onboarding:skip', skip, skipHandler));
     }
-    this.card.append(skip);
+    // The card itself scrolls, so the skip control is mounted on the overlay root: a child of a
+    // scrolling container scrolls out of view with the content, which is why the way out
+    // disappeared on the gesture step.
+    this.root.append(skip);
 
     if (this.step === 1) {
       const slot = this.card.querySelector('.onboarding-preview-slot');

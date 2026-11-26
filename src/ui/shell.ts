@@ -20,6 +20,8 @@ export interface ShellHandlers {
   onAutoRotate: () => void;
   onEnableCamera: () => void;
   onResetProgress: () => void;
+  /** Reset the cell's rotation and scale to the default framing. */
+  onResetView: () => void;
   onOnboardingComplete: (cameraRequested: boolean) => void;
   onOverlayClose: () => void;
   /** Open the study quiz/survey overlay. */
@@ -257,7 +259,8 @@ export class Shell {
       handlers.onPinchSensitivity,
       handlers.onHelp,
       handlers.onRetryCamera,
-      handlers.onResetProgress
+      handlers.onResetProgress,
+      handlers.onResetView
     );
     this.controls.root.dataset.tour = 'controls';
     this.root.append(this.controls.root);

@@ -124,6 +124,7 @@ export class CellyApp {
       onAutoRotate: () => this.toggleAutoRotate(),
       onEnableCamera: () => void this.startCamera(),
       onResetProgress: () => this.resetProgress(),
+      onResetView: () => this.resetView(),
       onOnboardingComplete: (cameraRequested) => {
         saveJSON(ONBOARD_KEY, true);
         if (cameraRequested) void this.startCamera();
@@ -430,6 +431,12 @@ export class CellyApp {
     const page = this.pages.get('test') as TestingPage | undefined;
     page?.resetProgress();
     this.shell.toast(this.t('progressReset'), 'success');
+  }
+
+  /** Back to the default cell framing, from any page. */
+  private resetView(): void {
+    const page = this.pages.get('interactive') as InteractiveLabPage | undefined;
+    page?.resetView();
   }
 
   private setLanguage(language: Language): void {

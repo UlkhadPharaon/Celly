@@ -924,10 +924,14 @@ svg.icon {
 .preview {
   position: relative;
   aspect-ratio: 16 / 9;
+  /* A 4:3 stream is taller than 16:9; without a cap the panel grew past the top bar and the
+     preview slid under other chrome. The width stays the panel's, the height is bounded. */
+  max-height: 210px;
   border-radius: 12px;
   overflow: hidden;
   background: #03080f;
   border: 1px solid var(--line);
+  flex: 0 0 auto;
 }
 
 .preview-video,
@@ -2186,12 +2190,25 @@ svg.icon {
   width: auto;
 }
 
+/* Pinned to the overlay, not the scrolling card, so it is always reachable. */
 .onboarding-skip {
   position: absolute;
   top: 14px;
   right: 14px;
-  z-index: 2;
-  background: rgba(6, 14, 26, 0.6);
+  z-index: 3;
+  background: rgba(6, 14, 26, 0.72);
+}
+
+/* The primary action stays reachable however tall the step is. */
+.onboarding-actions {
+  position: sticky;
+  bottom: -1px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 6px;
+  padding: 12px 0 4px;
+  background: linear-gradient(to top, var(--glass-2) 62%, rgba(12, 24, 40, 0));
 }
 
 .onboarding-privacy {
@@ -2200,13 +2217,6 @@ svg.icon {
   gap: 9px;
   font-size: 11.5px;
   color: var(--ink-dim);
-}
-
-.onboarding-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  margin-top: 6px;
 }
 
 .onboarding-error {

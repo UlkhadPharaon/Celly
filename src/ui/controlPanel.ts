@@ -56,6 +56,7 @@ export const COPY = {
     reducedMotion: 'Reduce motion',
     highContrast: 'High contrast',
     resetProgress: 'Reset learning progress',
+    resetView: 'Reset view',
     resetPrompt: 'Reset all quiz scores and flashcard boxes? This cannot be undone.',
     resetCancel: 'Cancel',
     resetConfirm: 'Reset',
@@ -89,6 +90,7 @@ export const COPY = {
     reducedMotion: 'Réduire les animations',
     highContrast: 'Contraste élevé',
     resetProgress: 'Réinitialiser la progression',
+    resetView: 'Réinitialiser la vue',
     resetPrompt: 'Réinitialiser tous les scores et les boîtes de révision ? Cette action est irréversible.',
     resetCancel: 'Annuler',
     resetConfirm: 'Réinitialiser',
@@ -113,6 +115,8 @@ export class ControlPanel {
   private readonly accessibilitySummary: HTMLElement;
   private readonly resetButton: HTMLButtonElement;
   private readonly resetLabel: HTMLElement;
+  private readonly resetViewButton: HTMLButtonElement;
+  private readonly resetViewLabel: HTMLElement;
   private readonly resetConfirm: HTMLElement;
   private readonly resetPrompt: HTMLElement;
   private readonly resetCancel: HTMLButtonElement;
@@ -130,7 +134,8 @@ export class ControlPanel {
     private readonly onPinchSensitivity: (value: number) => void,
     private readonly onHelp: () => void,
     private readonly onRetry: () => void,
-    private readonly onResetProgress: () => void
+    private readonly onResetProgress: () => void,
+    private readonly onResetView: () => void
   ) {
     this.copy = COPY[state.language];
     this.sheetQuery = window.matchMedia('(max-width: 1080px)');
@@ -285,6 +290,21 @@ export class ControlPanel {
       this.setResetConfirmOpen(false);
     });
     reset.append(this.resetButton, this.resetConfirm);
+
+    // A one-press way back to the default framing. Rotation and scale are both gestures, so a
+    // participant who has spun or zoomed the cell far from home needs a reset that is not a
+    // gesture — otherwise the only way back is to reload.
+    this.resetViewButton = document.createElement('button');
+    this.resetViewButton.className = 'ghost-btn small control-reset-view';
+    this.resetViewButton.type = 'button';
+    this.resetViewButton.dataset.celly = 'reset-view';
+    this.resetViewButton.append(svgIcon(ICONS.reset));
+    this.resetViewLabel = document.createElement('span');
+    this.resetViewButton.append(this.resetViewLabel);
+    this.resetViewButton.addEventListener('click', () => this.onResetView());
+    this.registry.register('control:reset-view', this.resetViewButton, () => this.onResetView());
+    reset.append(this.resetViewButton);
+
     this.root.append(reset);
 
     this.statusNode = document.createElement('div');
@@ -492,6 +512,7 @@ export class ControlPanel {
     this.accessibilitySummary.textContent = this.copy.accessibility;
 
     this.resetLabel.textContent = this.copy.resetProgress;
+    this.resetViewLabel.textContent = this.copy.resetView;
     this.resetPrompt.textContent = this.copy.resetPrompt;
     this.resetCancel.textContent = this.copy.resetCancel;
     this.resetAccept.textContent = this.copy.resetConfirm;
