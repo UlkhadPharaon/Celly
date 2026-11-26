@@ -1,6 +1,6 @@
 # Celly v0.2
 
-[**Live demo**](https://celly-blue.vercel.app) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009)
+[**Live demo**](https://celly-epp.pages.dev) · [**Demo video**](https://youtu.be/AT4qeiaPZDg) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009)
 
 **A touch-free 3D cell biology lab.** Celly puts a living, procedural cell in front of you and lets
 you explore it with your **bare hands** — no controller, no headset, no gloves. A webcam and a pinch
@@ -8,6 +8,8 @@ are the entire interface, with the mouse and keyboard kept as a first-class fall
 
 > **The story behind Celly:** [How to make school more valuable — what a 3D cell you can hold
 > changes about learning](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009).
+
+**Watch it in use:** [Celly demo on YouTube](https://youtu.be/AT4qeiaPZDg)
 
 The app has three sections:
 
@@ -65,6 +67,12 @@ preference, recommend_0_10, comment`.
 
 Keyboard shortcuts added for the study: **S** opens the study quiz, **G** opens the study data.
 
+Profiles live in `localStorage` under `celly:v03:session` (the run in progress) and
+`celly:v03:archive` (completed participants), and every field is re-validated on read, so a
+corrupted or newer payload degrades to a fresh session instead of poisoning the dataset. The
+quiz ratio always uses the questions **served** as its denominator, so a participant who stops
+half-way is still counted correctly.
+
 ---
 
 ## Contents
@@ -117,10 +125,53 @@ npm run preview      # serve dist/ locally
 The build is static. Serve `dist/` behind HTTPS (or `localhost`) — browsers only grant camera access
 in a secure context.
 
-### Deploy to Vercel
+### Deploy to Cloudflare Pages (live host)
 
-The repo ships a `vercel.json` for a static Vite deployment: Node 24, `npm ci`, `npm run build` and
-`dist/` as the output. Import [`UlkhadPharaon/Celly`](https://github.com/UlkhadPharaon/Celly) at
+The live demo is a **Cloudflare Pages** project named `celly`, built from the `main` branch of
+[`UlkhadPharaon/Celly`](https://github.com/UlkhadPharaon/Celly) and served at
+**<https://celly-epp.pages.dev>**.
+
+`wrangler.toml` at the repository root carries the two settings the Git build needs:
+
+```toml
+name = "celly"
+pages_build_output_dir = "dist"
+
+[vars]
+CELLY_VERSION = "0.2.2"
+```
+
+The Pages project itself must also have a build configuration (dashboard → *Settings* → *Builds &
+deployments*):
+
+| Setting | Value |
+|---|---|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Production branch | `main` |
+
+Both halves matter. Without `pages_build_output_dir` the build publishes the repository root, so the
+site serves the **source** `index.html` with `<script src="/src/main.ts">` — a module that does not
+exist in a browser, which renders as a black screen. Without a build command the build fails in
+seconds with nothing to publish.
+
+`npm run build` runs `fetch-assets.mjs` as a `prebuild` step, so the pinned MediaPipe WASM and model
+are present in `dist/` even on a clean build image. Nothing else is required: no environment
+variables, no server functions, no database. Cloudflare provides the HTTPS secure context the camera
+needs.
+
+A direct upload is also possible, and is how the first working deployment was made:
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name celly --branch main
+```
+
+### Deploy to Vercel (alternative)
+
+The repo also ships a `vercel.json` for a static Vite deployment: Node 24, `npm ci`,
+`npm run build` and `dist/` as the output. Import
+[`UlkhadPharaon/Celly`](https://github.com/UlkhadPharaon/Celly) at
 [vercel.com/new](https://vercel.com/new), name the project `celly` (Vercel project names must be
 lowercase) and keep the detected Vite settings. For a CLI deploy, create and link that lowercase
 project once:
@@ -131,12 +182,9 @@ vercel link --yes --project celly
 vercel --prod
 ```
 
-No environment variables, server functions or database are required. Vercel provides the HTTPS
-secure context the camera needs; the response headers allow `camera` for the same origin, disable
-microphone and geolocation, and cache the hashed bundles immutably. `npm run build` runs
-`fetch-assets.mjs` as a `prebuild` step, so the pinned MediaPipe WASM and model are present even
-when install scripts are restored from cache. Hand geometry is generated at runtime, so the
-deployment carries no hand mesh, rig or texture assets.
+The response headers allow `camera` for the same origin, disable microphone and geolocation, and
+cache the hashed bundles immutably. Hand geometry is generated at runtime, so the deployment carries
+no hand mesh, rig or texture assets.
 
 ---
 
@@ -144,12 +192,25 @@ deployment carries no hand mesh, rig or texture assets.
 
 | Gesture | Result |
 |---|---|
-| **Right pinch** on an organelle or node | **Select** — isolate, centre, open the info overlay |
-| **Right pinch** on empty space | **Unselect** — restore the cell |
+| **Right pinch** on an organelle or node | **Select** — focus it, dim the rest, open the info card |
+| **Right pinch** on empty space | **Unselect** — restore the cell (also closes an open card) |
 | **Right pinch** on a button | **Click** (release within 500 ms and 24 px) |
-| **Left pinch + move** | **Rotate** the cell / graph |
-| **Both hands pinch** | **Scale** — ratio-based, clamped per page |
+| **Left pinch + move** | **Rotate** the cell / graph — absolute, follows the palm |
+| **Both hands pinch** | **Scale** — spread to grow, bring together to shrink |
 | **Pinch + horizontal drag** | **Swipe** — next/previous (Knowledge and Test) |
+
+Rotation is **absolute, not accumulated**. The palm position at the start of the gesture anchors to
+the rig's current rotation, and the rig eases toward `anchor + (palm − anchorPalm) × gain`. A still
+hand therefore gives a still target, a tremor cannot reverse the direction, and nothing drifts. The
+per-frame delta is normalised by the viewport and clamped, so one bad detection cannot whip the
+model. The gain lives in `ROTATE_GAIN` at the top of `src/pages/interactiveLab.ts`.
+
+Scale is measured against the hand separation **at the moment both pinches land**: spreading the
+hands scales up, bringing them together scales down, and a small deadzone stops the cell creeping
+while the hands are held still. A two-hand pinch always wins over a rotate in progress.
+
+**Reset view** in the control panel returns rotation, scale and selection to the default framing in
+one press — both are gestures, so without it a reload was the only way back.
 
 Pinch strength is a dead-zoned ratio of tip gap to **palm width**, not to wrist length:
 
@@ -165,8 +226,10 @@ with it, because MediaPipe's z is the noisiest axis at arm's length. Real finger
 the marker centres stay a centimetre or two apart, so the dead zone makes a natural pinch read 1
 instead of stalling in the 0.5–0.6 range.
 
-A pinch becomes active above **0.55**, releases below **0.38** (hysteresis), and must be held for
-**70 ms**. Fists and incomplete hands are rejected. Losing the hand for less than **250 ms** does
+A pinch becomes active above **0.55** and releases below **0.20** (hysteresis, so the pinch does
+not chatter at the threshold). A held frame is not overdamped: `minHoldMs` is **0**, because the
+travel budget rather than the clock separates a click from a drag. Fists and incomplete hands are
+rejected. Losing the hand for less than **550 ms** does
 not cancel a gesture.
 
 Pointer movement maps the middle **84 %** of the camera frame (8 % → 92 %) onto the full viewport, a
@@ -176,7 +239,9 @@ usable frame as a dashed box.
 
 The gesture state machine is `IDLE → HOVER_UI / SELECTING / ROTATING / SCALING / SWIPING`, with a
 **150 ms cooldown** after a two-hand scale so the release cannot fire a stray select. A two-hand
-pinch always overrides a rotate in progress.
+pinch always overrides a rotate in progress. While an info card is open, a pinch that lands on the
+cell dismisses the card instead of selecting through it, so a near-miss on the close button no longer
+picks a different organelle.
 
 The **HUD** (top-left) reports hands seen, L/R chips, live pinch value and bar, landmark count,
 tracking quality (`Good / Medium / Poor` + %), mirror state, and both tracker and render FPS. The
@@ -206,13 +271,14 @@ with the gesture button registry.
   nuclear envelope, nucleolus, mitochondrion, rough ER, smooth ER, Golgi, ribosome, lysosome,
   vacuole, centriole, cytoskeleton, peroxisome.
 - Auto-rotation on by default with a **Stop** control (top-right); the left hand rotates, two hands
-  scale, and a pinch isolates.
-- Selecting tweens the whole rig so the chosen part sits at the origin; everything else ghosts to
-  8 % (opaque) / 3 % (translucent) instead of disappearing, so spatial context survives.
+  scale, and a pinch selects.
+- Selecting **focuses** the part: the rest of the cell dims to 32 % rather than vanishing, so the
+  model stays readable in context. The card offers **Isolate** (drops the rest to 10 %), **Undo**,
+  and **Open in Knowledge**; Undo clears both the isolation and the selection.
+- The card is deliberately short — a summary and up to three functions. Structure, the fun fact and
+  the related links live on the Knowledge page, so the action buttons never get pushed off screen.
 - A bottom **structure rail** lists all 15 parts for direct selection, in gesture or mouse mode.
-- Per-organelle overlay: summary, functions, structure, fun fact, related parts, and a link to the
-  matching knowledge node. The card docks to the side that fits between the HUD rail and the
-  control panel, so it never covers either.
+- **Reset view** (control panel) restores rotation, scale and selection together.
 
 ### Knowledge
 
@@ -248,11 +314,17 @@ with the gesture button registry.
 
 ## How hand tracking works
 
-- **Model:** MediaPipe Tasks Vision `HandLandmarker` (float16, 1.1.0), `numHands: 2`, running on the
-  **main thread** via `requestVideoFrameCallback` when available (falling back to
-  `requestAnimationFrame`). There is no worker and no server round-trip.
+- **Model:** MediaPipe Tasks Vision `HandLandmarker` (float16, 1.1.0), `numHands: 2`, running in a
+  **dedicated worker** (`src/tracking/trackingWorker.ts`) so inference never blocks the render loop.
+  The camera is captured on its own clock and the worker reports detections as they complete; the
+  main thread only consumes finished results. There is no server round-trip.
 - **Assets:** WASM and the `.task` model are served from `public/` — the app is offline-capable
   after its first load and never sends a frame anywhere.
+- **Thresholds:** hand detection 0.55, presence 0.45, tracking 0.35. Detection is the strict gate
+  (it is where false positives come from); tracking is deliberately permissive, because at 0.5 a
+  hand that was already being tracked was dropped for a single weaker frame, which read as the
+  skeleton flashing. A hand is only declared lost after **550 ms** without a detection, long enough
+  to bridge a slow re-detection after a pinch without leaving a ghost behind.
 - **Landmarks:** 21 per hand in normalized image space plus metric **world** landmarks. MediaPipe's
   world axes are image-aligned (y down, z negative toward the camera); Celly converts once in
   `handTracker.detect()` to a y-up, +z-toward-viewer frame.
@@ -294,17 +366,19 @@ tests exercise is what a camera produces.
 src/
   core/        app shell, render loop, page router, tween engine, store, math, replay hand,
                device profiles (phone/tablet/desktop budgets and quality defaults)
-  tracking/    camera, HandLandmarker, One-Euro filter, side resolver, quality
+  tracking/    camera, HandLandmarker worker, One-Euro filter, side resolver, quality
   gestures/    pinch hysteresis, gesture state machine, virtual cursors
   scene/       one renderer/scene: cellModel, knowledgeScene, skeletonHand, handLayer, textures,
                shapes
   ui/          shell, tabs, HUD, overlay, collapsible control panel, onboarding, cursor layer,
-               webcam preview
-  pages/       interactiveLab, knowledge, testing/{testingPage, leitner, progress, session}
+               webcam preview, mode gate, guided tour, research panel
+  pages/       interactiveLab, knowledge, study (studyLayer, textbook, chapters), testing/{testingPage, leitner, progress, session}
+  study/       research instrument: types, store, quiz, survey, mode copy, tour steps, download
   data/        organelles.json, knowledge.json, questions.json, catalog helpers
   styles/      design tokens, glass/grain, layout, cursor, responsive sheet/safe-area rules
 tests/
-  unit/        pinch, side resolution, gesture engine, Leitner/progress, data integrity
+  unit/        pinch, side resolution, gesture engine, Leitner/progress, data integrity,
+               study store
   e2e/         smoke + synthetic-hand replay (Playwright)
 scripts/
   fetch-assets.mjs   local WASM/model provisioning + stale hand-mesh cleanup
@@ -331,8 +405,8 @@ research and asset audit are in [`docs/RESEARCH.md`](docs/RESEARCH.md) and
 ## Testing
 
 ```bash
-npm test             # Vitest: 91 unit tests
-npm run test:e2e     # Playwright: 10 tests (smoke + gesture replay)
+npm test             # Vitest: 19 files, 187 unit tests
+npm run test:e2e     # Playwright: 18 specs, 31 tests (smoke + gesture replay)
 npm run lint         # ESLint (flat config, typescript-eslint)
 npm run typecheck    # tsc --noEmit, strict
 npm run build        # typecheck + production bundle
@@ -351,7 +425,11 @@ Unit coverage:
 - Leitner promotion/demotion, ordering, persistence and corrupt-storage sanitising;
 - scoring labels, best-ratio persistence;
 - content minimums and integrity: 15 organelles, 36 nodes, 48 MCQs, 36 cards, 3 sets, bilingual
-  coverage, valid links, four distinct options per question.
+  coverage, valid links, four distinct options per question;
+- the study instrument: session sanitisation, quiz ratio with a stable denominator, per-mode
+  aggregation and CSV/JSON export shape (`tests/unit/studyStore.test.ts`);
+- rotation sensitivity: a fifth-of-screen sweep must produce a visible turn, a tremor must not, and
+  a single large jump must be capped.
 
 E2E runs with a fake camera (Chrome's test pattern) so MediaPipe initialises, then injects synthetic
 21-landmark hands through the real pipeline; it selects an organelle, opens and closes the overlay,
@@ -405,7 +483,7 @@ Device profiles in `src/core/device.ts` choose the budget before the first frame
 |---|---|---|---|---|---|---|
 | Phone | Fast (`low`) | 1.5 | off | off, even at High | 120 | 640×480 @ 24 fps |
 | Tablet | Fast (`low`) | 1.75 | off | on at High | 220 | 960×540 @ 30 fps |
-| Desktop | High | 2 | on at High | on at High | 420 | 1280×720 @ 30 fps |
+| Desktop | High | 2 | on at High | on at High | 420 | 640×480 @ 30 fps |
 
 Fast quality renders at DPR 1, disables bloom/shadows and draws roughly half the dust. High quality
 uses the profile's DPR cap and restores the full effects where the device supports them (bloom stays

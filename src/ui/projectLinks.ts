@@ -6,7 +6,7 @@ import { ICONS, svgIcon } from './dom';
  * onboarding card agree, and gives future surfaces a single source of truth.
  */
 export const PROJECT_LINKS = {
-  live: 'https://celly-blue.vercel.app/',
+  live: 'https://celly-epp.pages.dev/',
   github: 'https://github.com/UlkhadPharaon/Celly',
   article:
     'https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009'
