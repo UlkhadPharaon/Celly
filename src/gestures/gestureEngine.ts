@@ -298,8 +298,16 @@ export class GestureEngine {
         this.beginRotate(left);
       }
       if (left.pinching && this.state === 'ROTATING' && this.lastPalm) {
+        // The palm position is emitted every frame while rotating. The consumer maps it
+        // absolutely (anchor + delta), so no deadzone is needed here: a still hand produces a
+        // still target, and a small tremor produces a proportionally small rotation.
         const step = this.rotateStep(left.palm);
-        if (step.x !== 0 || step.y !== 0) intents.push({ type: 'rotate', dx: step.x, dy: step.y });
+        intents.push({
+          type: 'rotate',
+          dx: step.x,
+          dy: step.y,
+          palm: { x: left.palm.x, y: left.palm.y }
+        });
       }
       if (left.pinchEnd && this.state === 'ROTATING') {
         this.lastPalm = null;
@@ -310,7 +318,12 @@ export class GestureEngine {
     if (primaryIsLeft && primary && !primary.lost) {
       if (primary.pinching && this.state === 'ROTATING' && this.lastPalm) {
         const step = this.rotateStep(primary.palm);
-        if (step.x !== 0 || step.y !== 0) intents.push({ type: 'rotate', dx: step.x, dy: step.y });
+        intents.push({
+          type: 'rotate',
+          dx: step.x,
+          dy: step.y,
+          palm: { x: primary.palm.x, y: primary.palm.y }
+        });
       }
       if (primary.pinchEnd) this.lastPalm = null;
     }

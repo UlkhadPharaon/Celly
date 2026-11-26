@@ -391,10 +391,11 @@ describe('GestureEngine — left hand and both hands', () => {
     expect(total).toBeLessThan(1.0);
   });
 
-  it('does not spin the cell from a trembling hand', () => {
-    // The bug this pins: raw palm noise multiplied by the gain made a still hand rotate
-    // frantically. A tremor below the deadzone must produce no rotation at all, and a single
-    // large jump must be capped rather than applied whole.
+  it('reports the raw palm position so the consumer can map it absolutely', () => {
+    // Rotation is absolute: the consumer anchors on the first palm position and eases toward
+    // anchor + delta. The engine therefore reports the palm verbatim every frame rather than
+    // filtering it — a tremor of 0.0005 units becomes 0.0016 rad at the consumer's gain, which
+    // is invisible, and a still hand produces a still target.
     const e = new GestureEngine();
     e.step(
       ctx({
@@ -409,17 +410,21 @@ describe('GestureEngine — left hand and both hands', () => {
         hands: [hand({ side: 'left', pinching: true, palm: { x: 0.5005, y: 0.5004 } })]
       })
     );
-    expect(tremor.intents.some((i) => i.type === 'rotate')).toBe(false);
+    const rotate = tremor.intents.find((i) => i.type === 'rotate');
+    expect(rotate).toBeDefined();
+    expect(rotate!.type === 'rotate' ? rotate!.palm!.x : 0).toBeCloseTo(0.5005, 6);
+    expect(rotate!.type === 'rotate' ? rotate!.palm!.y : 0).toBeCloseTo(0.5004, 6);
 
+    // A large jump is still capped, so one bad detection cannot whip the cell.
     const jump = e.step(
       ctx({
         t: 100,
         hands: [hand({ side: 'left', pinching: true, palm: { x: 0.9, y: 0.5 } })]
       })
     );
-    const rotate = jump.intents.find((i) => i.type === 'rotate');
-    expect(rotate).toBeDefined();
-    expect(Math.abs(rotate!.type === 'rotate' ? rotate!.dx : 0)).toBeLessThanOrEqual(
+    const jumpRotate = jump.intents.find((i) => i.type === 'rotate');
+    expect(jumpRotate).toBeDefined();
+    expect(Math.abs(jumpRotate!.type === 'rotate' ? jumpRotate!.dx : 0)).toBeLessThanOrEqual(
       DEFAULT_GESTURE.rotateMaxStep
     );
   });

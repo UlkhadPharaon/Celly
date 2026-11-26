@@ -144,7 +144,7 @@ export type Intent =
   | { type: 'unselect'; aim?: Vec2 }
   | { type: 'click'; id: string }
   | { type: 'hover'; id: string | null; kind: 'ui' | 'scene' }
-  | { type: 'rotate'; dx: number; dy: number }
+  | { type: 'rotate'; dx: number; dy: number; palm?: Vec2 }
   | { type: 'scale'; factor: number; delta: number }
   | { type: 'swipe'; direction: 'left' | 'right'; progress: number; phase: 'move' | 'end' }
   | { type: 'state'; state: GestureState; hint: string };

@@ -2047,7 +2047,28 @@ svg.icon {
 
 .onboarding-card[data-step='1'],
 .onboarding-card[data-step='2'] {
-  grid-template-columns: 1fr;
+  /* Column: the body scrolls, the action row is a fixed footer. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.onboarding-card[data-step='1'] .onboarding-body,
+.onboarding-card[data-step='2'] .onboarding-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 26px clamp(22px, 4vw, 40px) 8px;
+}
+
+/* The action row is a footer, never scrolls, never overlaps the content. */
+.onboarding-card > .onboarding-actions {
+  flex: 0 0 auto;
+  position: static;
+  margin: 0;
+  padding: 14px clamp(22px, 4vw, 40px) 18px;
+  border-top: 1px solid var(--line);
+  background: var(--glass-2);
 }
 
 @keyframes card-in {
@@ -2219,17 +2240,13 @@ svg.icon {
   background: rgba(6, 14, 26, 0.72);
 }
 
-/* Pinned to the bottom of the scrolling card, so Continue / Enter is always reachable. */
+/* The primary action stays reachable however tall the step is. */
 .onboarding-actions {
-  position: sticky;
-  bottom: -1px;
-  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
   margin-top: 6px;
-  padding: 14px 0 6px;
-  background: linear-gradient(to top, var(--glass-2) 70%, rgba(12, 24, 40, 0));
+  padding-top: 12px;
 }
 
 .onboarding-privacy {

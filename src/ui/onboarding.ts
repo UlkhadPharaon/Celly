@@ -267,6 +267,14 @@ export class Onboarding {
     this.card.innerHTML = steps[this.step] ?? steps[0];
     this.card.dataset.step = String(this.step);
 
+    /*
+     * The action row is moved out of the scrolling body and made a direct child of the card, so
+     * it sits in its own grid row and is always on screen. While it lived inside the body it
+     * scrolled with the content, which is why Continue and Skip disappeared on the gesture step.
+     */
+    const actions = this.card.querySelector<HTMLElement>('.onboarding-actions');
+    if (actions && this.step > 0) this.card.append(actions);
+
     const projectLinks = this.card.querySelector<HTMLElement>('[data-project-links]');
     if (projectLinks) {
       for (const kind of ['github', 'article'] as const) {

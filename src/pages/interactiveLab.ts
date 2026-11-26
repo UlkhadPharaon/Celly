@@ -50,6 +50,13 @@ export const COPY = {
 
 const IDS = ORGANELLES.map((o) => o.id as OrganelleId);
 
+/**
+ * Radians of rig rotation per normalised unit of palm travel. The palm crosses the whole screen
+ * (1.0) in a large sweep, so 3.2 gives roughly half a turn edge to edge — enough to look around
+ * the cell without the wrist leaving the camera frame.
+ */
+const ROTATE_GAIN = 3.2;
+
 export class InteractiveLabPage implements Page {
   readonly id = 'interactive' as const;
   readonly root: HTMLElement;
@@ -66,6 +73,15 @@ export class InteractiveLabPage implements Page {
   private selected: OrganelleId | null = null;
   private hovered: OrganelleId | null = null;
   private rotateHeld = false;
+  /** Absolute rotation anchor for the current left-hand gesture, or null when not rotating. */
+  private rotateAnchor: {
+    startX: number;
+    startY: number;
+    palmX: number;
+    palmY: number;
+    rotY: number;
+    rotX: number;
+  } | null = null;
   private scaleBase = 1;
   private lastGesture: GestureState = 'IDLE';
   private pausedUntil = 0;
@@ -315,6 +331,7 @@ export class InteractiveLabPage implements Page {
     const fromZoom = this.zoom.scale.x;
     this.inertia.set(0, 0);
     this.rotateHeld = false;
+    this.rotateAnchor = null;
     this.pausedUntil = 0;
 
     this.tweens.add(
@@ -650,12 +667,23 @@ export class InteractiveLabPage implements Page {
       case 'rotate':
         this.rotateHeld = true;
         this.pausedUntil = performance.now() + 2600;
-        // `intent.dx`/`dy` are already radians: the gesture engine applies the gain, the deadzone
-        // and the per-frame cap. Multiplying by 0.0034 here as well attenuated the rotation to
-        // about 1.5% of the intended speed, which is why a full hand sweep barely moved the cell.
-        this.rig.rotation.y += intent.dx;
-        this.rig.rotation.x = clamp(this.rig.rotation.x + intent.dy, -0.9, 0.9);
-        this.inertia.set(intent.dy * 0.28, intent.dx * 0.28);
+        // Anchor on the first frame of the gesture, then track the palm absolutely (see update()).
+        if (!this.rotateAnchor && intent.palm) {
+          this.rotateAnchor = {
+            startX: intent.palm.x,
+            startY: intent.palm.y,
+            palmX: intent.palm.x,
+            palmY: intent.palm.y,
+            rotY: this.rig.rotation.y,
+            rotX: this.rig.rotation.x
+          };
+        }
+        if (this.rotateAnchor && intent.palm) {
+          this.rotateAnchor.palmX = intent.palm.x;
+          this.rotateAnchor.palmY = intent.palm.y;
+        }
+        // No inertia kick: it fought the absolute target and made the cell coast past the hand.
+        this.inertia.set(0, 0);
         break;
       case 'scale': {
         if (this.lastGesture !== 'SCALING') this.scaleBase = this.zoom.scale.x;
@@ -664,6 +692,9 @@ export class InteractiveLabPage implements Page {
       }
       case 'state':
         this.lastGesture = intent.state;
+        // The gesture ended (pinch released, hand lost, or a two-hand scale took over): drop the
+        // anchor so the next pinch starts from wherever the rig now is.
+        if (intent.state !== 'ROTATING') this.rotateAnchor = null;
         break;
       default:
         break;
@@ -743,7 +774,30 @@ export class InteractiveLabPage implements Page {
     ) {
       this.rig.rotation.y += dt * 0.12;
     }
-    if (!this.rotateHeld && !this.reducedMotion) {
+
+    /*
+     * Rotation is absolute, not accumulated. The palm position at the start of the gesture is
+     * anchored to the rig's rotation at that moment, and the rig eases toward
+     * anchor + (palm - anchorPalm) * gain. Accumulating per-detection deltas made the cell
+     * integrate every jitter of the palm estimate — the middle-finger knuckle moves as the
+     * fingers curl into a pinch — so the direction flipped frame to frame and the motion looked
+     * robotic. An absolute target cannot drift, cannot reverse on noise, and follows the hand.
+     */
+    if (this.rotateAnchor) {
+      // `intent.palm` is in CSS pixels, so the delta is normalised by the viewport before the
+      // gain is applied. Skipping that step multiplied a 12 px frame delta by 3.2 and spun the
+      // rig tens of radians per frame.
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      // A single frame that claims more than half the screen is a bad detection, not a hand.
+      const dx = clamp((this.rotateAnchor.palmX - this.rotateAnchor.startX) / vw, -0.5, 0.5);
+      const dy = clamp((this.rotateAnchor.palmY - this.rotateAnchor.startY) / vh, -0.5, 0.5);
+      const targetY = this.rotateAnchor.rotY + dx * ROTATE_GAIN;
+      const targetX = clamp(this.rotateAnchor.rotX + dy * ROTATE_GAIN, -0.9, 0.9);
+      const ease = 1 - Math.exp(-14 * dt);
+      this.rig.rotation.y += (targetY - this.rig.rotation.y) * ease;
+      this.rig.rotation.x += (targetX - this.rig.rotation.x) * ease;
+    } else if (!this.reducedMotion) {
       this.rig.rotation.y += this.inertia.y * dt;
       this.rig.rotation.x = clamp(this.rig.rotation.x + this.inertia.x * dt, -0.9, 0.9);
       this.inertia.multiplyScalar(Math.exp(-3.2 * dt));
