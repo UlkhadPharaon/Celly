@@ -650,8 +650,11 @@ export class InteractiveLabPage implements Page {
       case 'rotate':
         this.rotateHeld = true;
         this.pausedUntil = performance.now() + 2600;
-        this.rig.rotation.y += intent.dx * 0.0034;
-        this.rig.rotation.x = clamp(this.rig.rotation.x + intent.dy * 0.0034, -0.9, 0.9);
+        // `intent.dx`/`dy` are already radians: the gesture engine applies the gain, the deadzone
+        // and the per-frame cap. Multiplying by 0.0034 here as well attenuated the rotation to
+        // about 1.5% of the intended speed, which is why a full hand sweep barely moved the cell.
+        this.rig.rotation.y += intent.dx;
+        this.rig.rotation.x = clamp(this.rig.rotation.x + intent.dy, -0.9, 0.9);
         this.inertia.set(intent.dy * 0.28, intent.dx * 0.28);
         break;
       case 'scale': {

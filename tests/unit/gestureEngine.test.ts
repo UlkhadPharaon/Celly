@@ -362,6 +362,35 @@ describe('GestureEngine — left hand and both hands', () => {
     expect(end.state).toBe('IDLE');
   });
 
+  it('turns a realistic hand sweep into a usable angle', () => {
+    // Guards the double-attenuation bug: the engine used to return radians that the lab then
+    // multiplied by 0.0034, so a 20 cm sweep moved the cell about a tenth of a degree. A sweep
+    // across a fifth of the screen must now produce a clearly visible turn.
+    const e = new GestureEngine();
+    e.step(
+      ctx({
+        t: 0,
+        hands: [hand({ side: 'left', pinching: true, pinchStart: true, palm: { x: 0.4, y: 0.5 } })]
+      })
+    );
+
+    let total = 0;
+    for (let i = 1; i <= 10; i++) {
+      const frame = e.step(
+        ctx({
+          t: i * 40,
+          hands: [hand({ side: 'left', pinching: true, palm: { x: 0.4 + i * 0.02, y: 0.5 } })]
+        })
+      );
+      for (const intent of frame.intents) {
+        if (intent.type === 'rotate') total += intent.dx;
+      }
+    }
+    // 0.2 normalised units of travel at gain 3.2 is about 0.64 rad (~37 degrees).
+    expect(total).toBeGreaterThan(0.4);
+    expect(total).toBeLessThan(1.0);
+  });
+
   it('does not spin the cell from a trembling hand', () => {
     // The bug this pins: raw palm noise multiplied by the gain made a still hand rotate
     // frantically. A tremor below the deadzone must produce no rotation at all, and a single

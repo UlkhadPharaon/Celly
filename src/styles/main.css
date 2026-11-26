@@ -2007,11 +2007,10 @@ svg.icon {
   align-items: flex-start;
   justify-content: center;
   padding: 24px;
-  /* The overlay scrolls as well as the card. On a short window the gesture step is taller than
-     the viewport, and with `place-items: center` the overflow was clipped at both ends with no
-     scrollbar — the way out was simply unreachable. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  /* The overlay itself never scrolls: the card is bounded to the viewport and owns the scroll.
+     Two nested scrollers made the way out unreachable, because the card could be pushed past the
+     bottom edge with no visible scrollbar. */
+  overflow: hidden;
   background: rgba(2, 6, 12, 0.72);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -2028,11 +2027,14 @@ svg.icon {
 .onboarding-card {
   position: relative;
   width: min(880px, 100%);
-  /* `margin: auto` centres it while the overlay is taller than the card, and lets the overlay
-     scroll instead of clipping when the card is taller than the viewport. */
   margin: auto;
-  max-height: none;
-  overflow: visible;
+  /* Bounded to the viewport and scrollable inside, which keeps the action row on screen however
+     tall the step is. `vh` first as a fallback, then `dvh` where supported so mobile browser
+     chrome is included in the measurement. */
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   grid-template-columns: 0.85fr 1.15fr;
   gap: 0;
@@ -2217,13 +2219,17 @@ svg.icon {
   background: rgba(6, 14, 26, 0.72);
 }
 
-/* The primary action stays reachable however tall the step is. */
+/* Pinned to the bottom of the scrolling card, so Continue / Enter is always reachable. */
 .onboarding-actions {
+  position: sticky;
+  bottom: -1px;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
   margin-top: 6px;
-  padding-top: 12px;
+  padding: 14px 0 6px;
+  background: linear-gradient(to top, var(--glass-2) 70%, rgba(12, 24, 40, 0));
 }
 
 .onboarding-privacy {
@@ -2380,8 +2386,8 @@ svg.icon {
 .gesture-card {
   position: relative;
   display: grid;
-  gap: 6px;
-  padding: 16px 14px 14px;
+  gap: 4px;
+  padding: 12px 12px 11px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--line);
@@ -2419,8 +2425,8 @@ svg.icon {
 /* Keybinding reference (audit task 2.5): a compact two-column list under the gesture cards. */
 .shortcut-sheet {
   display: grid;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 11px 14px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--line);
@@ -2441,8 +2447,8 @@ svg.icon {
 
 .shortcut-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 6px 20px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 4px 18px;
   margin: 0;
 }
 

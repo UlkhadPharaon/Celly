@@ -29,13 +29,15 @@ export const DEFAULT_GESTURE: GestureEngineConfig = {
   clickMaxTravelPx: 24,
   dwellMs: 900,
   // Palm tracking is noisy, so the raw delta is deadzoned, eased and capped. The gain is the
-  // overall sensitivity: 2.2 felt sluggish against a real hand, 4.5 tracks a deliberate move
-  // without the tremor spin that a gain of 7 produced.
-  rotateGain: 4.5,
+  // overall sensitivity, in radians per normalised unit of palm travel. The previous value was
+  // further attenuated downstream, so the cell barely moved; with that removed, 3.2 gives a
+  // deliberate 10 cm sweep roughly a third of a turn, and the light smoothing keeps it locked to
+    // the hand instead of lagging behind it.
+  rotateGain: 3.2,
   scaleSmooth: 0.35,
-  rotateSmooth: 0.35,
+  rotateSmooth: 0.2,
   rotateDeadzone: 0.0012,
-  rotateMaxStep: 0.16,
+  rotateMaxStep: 0.22,
   scaleDeadzone: 0.004
 };
 
