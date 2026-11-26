@@ -3,6 +3,34 @@
 All notable changes to Celly. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses `MAJOR.MINOR.PATCH` with a `v0.2` product label.
 
+## [Unreleased] — study build
+
+The research instrument: three selectable learning conditions, a mandatory end-of-session quiz and
+survey, and per-participant profiles that can be exported and compared.
+
+### Added
+
+- **Mode gate** on first launch: hand tracking, mouse, or a text-only textbook. The choice is a
+  recorded data field, not a preference.
+- **Guided tour** that spotlights each region of the real interface and explains it in the
+  participant's own mode; steps whose anchor is hidden (the whole 3D app in text mode) are skipped.
+- **Textbook condition**: eight chapters, a table of contents, figures described in words, a
+  glossary and a reading timer — no 3D, no camera, and the render loop is stopped.
+- **Study quiz** (10 questions from the same bank as the Test page) with per-answer timing.
+- **Post-experience survey**: three Likert scales, a five-point preference, a 0–10 recommendation
+  and a free-text comment.
+- **Research panel** (`G` or the chart button): every participant on the device, a per-mode
+  comparison table, and CSV / per-answer CSV / JSON exports.
+- Participant profiles persisted under `celly:v03:session` and `celly:v03:archive`, with
+  field-by-field sanitisation on read.
+- `S` opens the study quiz; `G` opens the study data.
+
+### Fixed
+
+- Switching language mid-quiz or mid-survey no longer discards the answers already given.
+- "Start a new participant" no longer deletes the archive of earlier participants.
+- The tour no longer spotlights hidden elements in the text condition.
+
 ## [0.2.2] — 2026-10-31
 
 A hand-overlay and onboarding pass. The 3D hand meshes are gone: the hands are now a light

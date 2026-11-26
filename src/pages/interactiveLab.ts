@@ -136,6 +136,7 @@ export class InteractiveLabPage implements Page {
 
     const rail = document.createElement('div');
     rail.className = 'structure-rail';
+    rail.dataset.tour = 'structure';
     const railHead = document.createElement('div');
     railHead.className = 'structure-rail-head';
     railHead.innerHTML = `<span class="eyebrow"></span><span class="structure-count">${IDS.length}</span>`;

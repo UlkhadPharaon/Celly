@@ -1,5 +1,6 @@
 import type { ButtonRegistry } from './buttons';
 import type { CameraStatus, HandFrame, Settings } from '../types';
+import type { InteractionMode } from '../study/types';
 import { svgIcon, ICONS, escapeHtml } from './dom';
 import { createProjectLink, registerProjectLink } from './projectLinks';
 import { WebcamPreview } from './webcamPreview';
@@ -48,11 +49,25 @@ export const COPY = {
     shortcutLanguage: 'Switch language',
     shortcutDebug: 'Debug overlay',
     shortcutTest: 'Selection test',
+    shortcutStudy: 'Study quiz',
+    shortcutData: 'Study data',
     shortcutHelp: 'Open this help',
     shortcutClose: 'Close the overlay',
     enter: 'Enter the lab',
     skip: 'Skip tour',
     back: 'Back',
+    mouseLead: 'Same cell, no camera. Drag to rotate, scroll to zoom, click a part to select it.',
+    cameraOffNote: 'The camera stays off in this mode.',
+    mouseStepTitle: 'Four controls, that is all',
+    mouseStepLead: 'Drag, scroll, click. Everything else follows.',
+    m1: 'Select',
+    m1s: 'Click an organelle',
+    m2: 'Click',
+    m2s: 'Click a button',
+    m3: 'Rotate',
+    m3s: 'Drag with the left button',
+    m4: 'Zoom',
+    m4s: 'Scroll wheel',
     settings: 'Camera settings',
     blocked: 'Camera unavailable. You can still explore with the mouse.',
     projectLinks: 'Project links',
@@ -104,11 +119,25 @@ export const COPY = {
     shortcutLanguage: 'Changer de langue',
     shortcutDebug: 'Superposition de débogage',
     shortcutTest: 'Test de sélection',
+    shortcutStudy: 'Quiz de l’étude',
+    shortcutData: 'Données de l’étude',
     shortcutHelp: 'Ouvrir cette aide',
     shortcutClose: 'Fermer la fenêtre',
     enter: 'Entrer au laboratoire',
     skip: 'Passer la visite',
     back: 'Retour',
+    mouseLead: 'La même cellule, sans caméra. Glissez pour tourner, molettez pour zoomer, cliquez une pièce pour la sélectionner.',
+    cameraOffNote: 'La caméra reste éteinte dans ce mode.',
+    mouseStepTitle: 'Quatre commandes, c’est tout',
+    mouseStepLead: 'Glisser, moletter, cliquer. Le reste suit naturellement.',
+    m1: 'Sélectionner',
+    m1s: 'Cliquez un organite',
+    m2: 'Cliquer',
+    m2s: 'Cliquez un bouton',
+    m3: 'Tourner',
+    m3s: 'Glissez avec le bouton gauche',
+    m4: 'Zoomer',
+    m4s: 'Molette de la souris',
     settings: 'Réglages caméra',
     blocked: 'Caméra indisponible. Vous pouvez explorer à la souris.',
     projectLinks: 'Liens du projet',
@@ -131,6 +160,7 @@ export class Onboarding {
   private readonly card: HTMLElement;
   private step = 0;
   private language: Language = 'en';
+  private mode: InteractionMode = 'hands';
   private hands = 0;
   private cameraRequested = false;
   private cameraStatus: CameraStatus = 'idle';
@@ -162,8 +192,9 @@ export class Onboarding {
     return this.root.classList.contains('is-open');
   }
 
-  open(step = 0): void {
+  open(step = 0, mode: InteractionMode = 'hands'): void {
     this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    this.mode = mode;
     this.step = Math.min(2, Math.max(0, step));
     this.hands = 0;
     this.root.classList.add('is-open');
@@ -320,6 +351,7 @@ export class Onboarding {
   }
 
   private renderIntro(copy: (typeof COPY)['en']): string {
+    const mouse = this.mode === 'mouse';
     return `
       <div class="onboarding-visual">
         <div class="orb"><i></i><i></i><i></i><b></b></div>
@@ -328,17 +360,23 @@ export class Onboarding {
       <div class="onboarding-body">
         <span class="eyebrow">${copy.kicker}</span>
         <h1 id="celly-onboarding-title">${copy.title}</h1>
-        <p class="onboarding-lead">${copy.lead}</p>
+        <p class="onboarding-lead">${mouse ? copy.mouseLead : copy.lead}</p>
         <div class="onboarding-privacy">
           ${svgIcon(ICONS.privacy).outerHTML}
-          <span>${copy.privacy}</span>
+          <span>${mouse ? copy.cameraOffNote : copy.privacy}</span>
         </div>
         <nav class="onboarding-links" aria-label="${copy.projectLinks}" data-project-links></nav>
         <div class="onboarding-actions">
-          <button class="btn primary" type="button" data-celly="enable">
-            ${svgIcon(ICONS.camera).outerHTML}<span>${copy.enable}</span>
-          </button>
-          <button class="btn ghost" type="button" data-celly="mouse"><span>${copy.mouse}</span></button>
+          ${
+            mouse
+              ? `<button class="btn primary" type="button" data-celly="enter">
+                   ${svgIcon(ICONS.lab).outerHTML}<span>${copy.enter}</span>
+                 </button>`
+              : `<button class="btn primary" type="button" data-celly="enable">
+                   ${svgIcon(ICONS.camera).outerHTML}<span>${copy.enable}</span>
+                 </button>
+                 <button class="btn ghost" type="button" data-celly="mouse"><span>${copy.mouse}</span></button>`
+          }
         </div>
         ${this.errorMarkup()}
       </div>
@@ -380,12 +418,20 @@ export class Onboarding {
   }
 
   private renderGestures(copy: (typeof COPY)['en']): string {
-    const cards: Array<[string, string, string]> = [
-      [ICONS.hand, copy.g1, copy.g1s],
-      [ICONS.quiz, copy.g2, copy.g2s],
-      [ICONS.rotate, copy.g3, copy.g3s],
-      [ICONS.scale, copy.g4, copy.g4s]
-    ];
+    const mouse = this.mode === 'mouse';
+    const cards: Array<[string, string, string]> = mouse
+      ? [
+          [ICONS.hand, copy.m1, copy.m1s],
+          [ICONS.quiz, copy.m2, copy.m2s],
+          [ICONS.rotate, copy.m3, copy.m3s],
+          [ICONS.scale, copy.m4, copy.m4s]
+        ]
+      : [
+          [ICONS.hand, copy.g1, copy.g1s],
+          [ICONS.quiz, copy.g2, copy.g2s],
+          [ICONS.rotate, copy.g3, copy.g3s],
+          [ICONS.scale, copy.g4, copy.g4s]
+        ];
     // Keybindings live in the help modal (audit task 2.5) because the top-bar and H/? keys were
     // the only way to discover them. The list mirrors the switch in app.ts exactly.
     const shortcuts: Array<[string[], string]> = [
@@ -395,14 +441,16 @@ export class Onboarding {
       [['L'], copy.shortcutLanguage],
       [['D'], copy.shortcutDebug],
       [['T'], copy.shortcutTest],
+      [['S'], copy.shortcutStudy],
+      [['G'], copy.shortcutData],
       [['H', '?'], copy.shortcutHelp],
       [['Esc'], copy.shortcutClose]
     ];
     return `
       <div class="onboarding-body wide">
         <span class="eyebrow">${copy.step3kicker}</span>
-        <h2 id="celly-onboarding-title">${copy.step3title}</h2>
-        <p class="onboarding-lead">${copy.step3lead}</p>
+        <h2 id="celly-onboarding-title">${mouse ? copy.mouseStepTitle : copy.step3title}</h2>
+        <p class="onboarding-lead">${mouse ? copy.mouseStepLead : copy.step3lead}</p>
         <div class="gesture-cards">
           ${cards
             .map(

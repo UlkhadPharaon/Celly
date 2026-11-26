@@ -43,6 +43,12 @@ import { KnowledgePage } from '../pages/knowledge';
 import { TestingPage } from '../pages/testing/testingPage';
 import type { Page, PageActions } from '../pages/page';
 import { KNOWLEDGE_NODES } from '../data/catalog';
+import { StudyStore } from '../study/store';
+import type { InteractionMode } from '../study/types';
+import { ModeGate } from '../ui/modeGate';
+import { GuidedTour } from '../ui/guidedTour';
+import { ResearchPanel } from '../ui/researchPanel';
+import { StudyLayer } from '../pages/study/studyLayer';
 
 const SETTINGS_KEY = 'celly:v02:settings';
 const ONBOARD_KEY = 'celly:v02:onboarded';
@@ -60,6 +66,14 @@ export class CellyApp {
   private readonly cursorMotion = new CursorMotion();
   private readonly pages = new Map<PageId, Page>();
   private readonly debug = new DebugOverlay();
+
+  /** Research instrument: participant mode, quiz answers and survey. */
+  private readonly study = new StudyStore();
+  private readonly modeGate: ModeGate;
+  private readonly tour: GuidedTour;
+  private readonly research: ResearchPanel;
+  private studyLayer: StudyLayer | null = null;
+  private mode: InteractionMode | null = null;
 
   private current: Page | null = null;
   private cameraAttemptCount = 0;
@@ -110,12 +124,30 @@ export class CellyApp {
       onAutoRotate: () => this.toggleAutoRotate(),
       onEnableCamera: () => void this.startCamera(),
       onResetProgress: () => this.resetProgress(),
-      onOnboardingComplete: () => {
+      onOnboardingComplete: (cameraRequested) => {
         saveJSON(ONBOARD_KEY, true);
+        if (cameraRequested) void this.startCamera();
+        if (!this.study.tourCompleted) window.setTimeout(() => this.startTour(), 380);
       },
-      onOverlayClose: () => this.current?.closeOverlay()
+      onOverlayClose: () => this.current?.closeOverlay(),
+      onStudy: () => this.openStudy(),
+      onResearch: () => this.openResearch()
     });
     mount.append(this.shell.root);
+
+    this.modeGate = new ModeGate(this.shell.registry, {
+      onChoose: (mode) => this.chooseMode(mode),
+      onResume: () => this.resumeSession(),
+      onShowData: () => this.openResearch()
+    });
+    this.tour = new GuidedTour(this.shell.registry, {
+      onFinish: (completed) => this.onTourFinished(completed)
+    });
+    this.research = new ResearchPanel(this.shell.registry, {
+      study: this.study,
+      language: this.settings.language
+    });
+    document.body.append(this.modeGate.root, this.tour.root, this.research.root);
     document.body.append(this.debug.root);
     this.fp = new FrameProcessor(this.settings, () => this.current, this.shell.registry);
     this.deviceClass = deviceProfile().deviceClass;
@@ -213,13 +245,117 @@ export class CellyApp {
 
   // ------------------------------------------------------------------- bootstrap
 
+  /**
+   * Startup order for the study:
+   *   mode gate (first run) → onboarding (hands only) → guided tour → camera → lab.
+   * A returning participant resumes the stored mode; a finished participant starts over.
+   */
   private async boot(): Promise<void> {
-    const onboarded = loadJSON<boolean>(ONBOARD_KEY, false);
-    if (!onboarded) {
-      window.setTimeout(() => this.shell.onboarding.open(), 520);
+    const stored = this.study.mode;
+    if (!stored) {
+      window.setTimeout(() => this.openGate(), 320);
       return;
     }
-    window.setTimeout(() => void this.startCamera(), 420);
+    this.enterMode(stored);
+  }
+
+  private openGate(): void {
+    this.modeGate.open(this.settings.language, {
+      resumable: this.study.hasSession && this.study.mode !== null,
+      recorded: this.study.all().length
+    });
+  }
+
+  private chooseMode(mode: InteractionMode): void {
+    this.study.current(this.settings.language);
+    this.study.setMode(mode);
+    this.enterMode(mode);
+  }
+
+  private resumeSession(): void {
+    const mode = this.study.mode;
+    if (!mode) {
+      this.openGate();
+      return;
+    }
+    this.enterMode(mode);
+  }
+
+  private enterMode(mode: InteractionMode): void {
+    this.mode = mode;
+    document.documentElement.dataset.mode = mode;
+    this.shell.root.dataset.mode = mode;
+
+    if (mode === 'text') {
+      this.enterTextMode();
+      return;
+    }
+
+    const onboarded = loadJSON<boolean>(ONBOARD_KEY, false);
+    if (!onboarded) {
+      // Mouse participants have no camera step: send them straight to the controls reference.
+      const step = mode === 'mouse' ? 2 : 0;
+      window.setTimeout(() => this.shell.onboarding.open(step, mode), 520);
+      return;
+    }
+    if (!this.study.tourCompleted) {
+      window.setTimeout(() => this.startTour(), 560);
+      return;
+    }
+    if (mode === 'hands') window.setTimeout(() => void this.startCamera(), 420);
+  }
+
+  /**
+   * The text condition is a separate surface: the 3D app is hidden, the render loop is stopped
+   * (no point burning GPU on a canvas nobody sees) and the textbook owns the screen. The scene
+   * object stays allocated so a later reload can return to the lab without a second construction
+   * path; nothing is rendered from it in this mode.
+   */
+  private enterTextMode(): void {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.shell.onboarding.close();
+    this.openStudy(true);
+    if (!this.study.tourCompleted) {
+      window.setTimeout(() => this.startTour(), 900);
+    }
+  }
+
+  private startTour(): void {
+    // Text mode has its own steps (the chapters and the reading surface), so the exclusion is
+    // only the safety guard for "no mode chosen yet".
+    if (!this.mode) return;
+    this.tour.start(this.mode, this.settings.language);
+  }
+
+  private onTourFinished(completed: boolean): void {
+    if (completed) this.study.completeTour();
+    this.shell.refreshButtons();
+    if (this.mode === 'hands') void this.startCamera();
+  }
+
+  private openStudy(withReading = false): void {
+    const mode = this.mode ?? 'text';
+    if (!this.studyLayer) {
+      this.studyLayer = new StudyLayer(this.shell.registry, {
+        study: this.study,
+        language: this.settings.language,
+        mode,
+        allowClose: mode !== 'text',
+        onClose: () => {
+          if (this.mode === 'text') this.studyLayer?.open(true);
+          else this.shell.toast(this.t('studySaved'), 'info');
+        },
+        onShowData: () => this.openResearch()
+      });
+      document.body.append(this.studyLayer.root);
+    }
+    this.studyLayer.open(withReading || this.mode === 'text');
+  }
+
+  private openResearch(): void {
+    this.research.setLanguage(this.settings.language);
+    this.research.open();
   }
 
   private async startCamera(): Promise<void> {
@@ -301,6 +437,10 @@ export class CellyApp {
     document.documentElement.lang = language;
     this.shell.setLanguage(language);
     for (const page of this.pages.values()) page.setLanguage(language);
+    this.modeGate.setLanguage(language);
+    this.tour.setLanguage(language);
+    this.research.setLanguage(language);
+    this.studyLayer?.setLanguage(language);
     this.saveSettings();
   }
 
@@ -501,6 +641,14 @@ export class CellyApp {
         case 'T':
           this.toggleSelectionTest();
           break;
+        case 's':
+        case 'S':
+          this.openStudy();
+          break;
+        case 'g':
+        case 'G':
+          this.openResearch();
+          break;
         case 'h':
         case 'H':
         case '?':
@@ -518,7 +666,9 @@ export class CellyApp {
       if (this.disposed) return;
       if (document.hidden) {
         cancelAnimationFrame(this.raf);
-      } else {
+      } else if (this.mode !== 'text') {
+        // The text condition has no scene to render: restarting the loop would resurrect the
+        // hidden 3D canvas behind the textbook.
         this.lastTime = performance.now();
         this.raf = requestAnimationFrame(this.loop);
       }
@@ -759,7 +909,7 @@ export class CellyApp {
 
   start(): void {
     this.lastTime = performance.now();
-    this.raf = requestAnimationFrame(this.loop);
+    if (this.mode !== 'text') this.raf = requestAnimationFrame(this.loop);
     // Insecure-context warning (audit task 5.3): served over plain http, `getUserMedia` is
     // unavailable, so the camera can never start. Say so at startup instead of letting the user
     // find out by pressing "Enable camera". The onboarding card still carries its own inline
@@ -1200,6 +1350,10 @@ export class CellyApp {
     for (const page of this.pages.values()) page.dispose();
     this.scene.dispose();
     this.debug.root.remove();
+    this.studyLayer?.dispose();
+    this.modeGate.root.remove();
+    this.tour.root.remove();
+    this.research.root.remove();
     this.shell.destroy();
   }
 }

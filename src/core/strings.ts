@@ -15,6 +15,7 @@ export const APP_STRINGS = {
     previewOff: 'Webcam preview hidden — hand tracking stays on.',
     previewOn: 'Webcam preview on',
     progressReset: 'Learning progress reset',
+    studySaved: 'Study answers saved on this device.',
     insecureContext:
       'Camera unavailable: hand tracking needs https:// or localhost. Reload over a secure connection.'
   },
@@ -29,6 +30,7 @@ export const APP_STRINGS = {
     previewOff: 'Aperçu caméra masqué — le suivi des mains reste actif.',
     previewOn: 'Aperçu caméra activé',
     progressReset: 'Progression réinitialisée',
+    studySaved: 'Réponses de l’étude enregistrées sur cet appareil.',
     insecureContext:
       'Caméra indisponible : le suivi des mains exige https:// ou localhost. Rechargez via une connexion sécurisée.'
   }
