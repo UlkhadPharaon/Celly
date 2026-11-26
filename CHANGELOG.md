@@ -24,12 +24,32 @@ survey, and per-participant profiles that can be exported and compared.
 - Participant profiles persisted under `celly:v03:session` and `celly:v03:archive`, with
   field-by-field sanitisation on read.
 - `S` opens the study quiz; `G` opens the study data.
+- **Reset view** in the control panel: rotation, scale and selection back to the default framing
+  in one press, so a participant who has spun or zoomed the cell far from home is not stuck.
+- **Isolate** and **Undo** on the organelle card, and a gentle focus dim on the rest of the cell
+  when a part is selected.
 
 ### Fixed
 
 - Switching language mid-quiz or mid-survey no longer discards the answers already given.
 - "Start a new participant" no longer deletes the archive of earlier participants.
 - The tour no longer spotlights hidden elements in the text condition.
+- The webcam preview is no longer stretched: the frame takes the stream's own aspect ratio
+  instead of forcing 16:9 with `object-fit: fill`.
+- Rotation no longer spins on a trembling hand: the palm delta is deadzoned, eased and capped,
+  and the gain dropped from 7 to 4.5.
+- Two-hand scale starts reliably (a stale click candidate no longer vetoes it) and only reacts to
+  a real change in hand separation.
+- Hand detection no longer flashes: tracking confidence 0.5 → 0.35 and the hand-loss window
+  420 → 550 ms, so a held hand survives one weaker frame.
+- Isolation and focus dimming now actually render: three.js bakes `transparent` into the shader,
+  so the flag change needs `needsUpdate` to take effect.
+- The camera preview no longer overlaps the switches (the control panel is a flex column).
+- The onboarding's last step is reachable on a short window: the overlay scrolls and Skip is
+  pinned to the overlay root.
+- The info card is short enough to keep its buttons visible; a pinch that lands on the cell while
+  it is open dismisses it instead of selecting through.
+- Article link updated to the new post.
 
 ## [0.2.2] — 2026-10-31
 
