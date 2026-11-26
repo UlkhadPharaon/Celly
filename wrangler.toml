@@ -1,4 +1,10 @@
-[pages]
+# Cloudflare Pages configuration.
+#
+# `pages_build_output_dir` is what tells the Pages Git build which directory to publish. Without
+# it the build published the repository root, so the site served the source `index.html`
+# (`<script src="/src/main.ts">`) instead of the built bundle — a black screen, because that
+# module does not exist in the browser.
+name = "celly"
 pages_build_output_dir = "dist"
 
 [vars]
