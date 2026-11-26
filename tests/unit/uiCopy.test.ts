@@ -8,6 +8,14 @@ import { COPY as labCopy } from '../../src/pages/interactiveLab';
 import { COPY as knowledgeCopy } from '../../src/pages/knowledge';
 import { COPY as testingCopy } from '../../src/pages/testing/testingPage';
 import { APP_STRINGS } from '../../src/core/strings';
+import { GATE_COPY } from '../../src/ui/modeGate';
+import { TOUR_COPY } from '../../src/ui/guidedTour';
+import { COPY as researchCopy } from '../../src/ui/researchPanel';
+import { COPY as studyLayerCopy } from '../../src/pages/study/studyLayer';
+import { COPY as textbookCopy } from '../../src/pages/study/textbook';
+import { COPY as quizCopy } from '../../src/study/studyQuiz';
+import { COPY as surveyCopy } from '../../src/study/surveyForm';
+import { MODE_COPY } from '../../src/study/modeCopy';
 import { GESTURE_HINTS, GESTURE_HINTS_FR } from '../../src/gestures/hints';
 
 /**
@@ -97,6 +105,15 @@ describe('UI copy is complete in French (R-03)', () => {
   it('knowledge page', () => expectComplete(knowledgeCopy, 'knowledge'));
   it('testing page', () => expectComplete(testingCopy, 'testingPage'));
   it('app strings', () => expectComplete(APP_STRINGS, 'appStrings'));
+
+  it('study mode gate', () => expectComplete(GATE_COPY, 'modeGate'));
+  it('guided tour chrome', () => expectComplete(TOUR_COPY, 'guidedTour'));
+  it('study layer', () => expectComplete(studyLayerCopy, 'studyLayer'));
+  it('textbook', () => expectComplete(textbookCopy, 'textbook'));
+  it('study quiz', () => expectComplete(quizCopy, 'studyQuiz'));
+  it('survey form', () => expectComplete(surveyCopy, 'surveyForm'));
+  it('research panel', () => expectComplete(researchCopy, 'researchPanel'));
+  it('mode display names', () => expectComplete(MODE_COPY, 'modeCopy'));
 
   it('every gesture-state hint has a French counterpart', () => {
     expect(Object.keys(GESTURE_HINTS_FR).sort()).toEqual(Object.keys(GESTURE_HINTS).sort());

@@ -20,8 +20,14 @@ export interface ShellHandlers {
   onAutoRotate: () => void;
   onEnableCamera: () => void;
   onResetProgress: () => void;
+  /** Reset the cell's rotation and scale to the default framing. */
+  onResetView: () => void;
   onOnboardingComplete: (cameraRequested: boolean) => void;
   onOverlayClose: () => void;
+  /** Open the study quiz/survey overlay. */
+  onStudy: () => void;
+  /** Open the researcher panel. */
+  onResearch: () => void;
 }
 
 export const LEGEND = {
@@ -103,6 +109,7 @@ export class Shell {
     const stage = document.createElement('div');
     stage.className = 'stage';
     stage.id = 'stage';
+    stage.dataset.tour = 'stage';
     this.root.append(stage);
 
     const grain = document.createElement('div');
@@ -126,6 +133,7 @@ export class Shell {
     topbar.append(brand);
 
     this.tabs = new Tabs(this.registry, handlers.onPage, settings.language);
+    this.tabs.root.dataset.tour = 'tabs';
     topbar.append(this.tabs.root);
 
     const actions = document.createElement('div');
@@ -158,9 +166,33 @@ export class Shell {
     this.autoLabel = this.autoButton.querySelector('.auto-label') as HTMLElement;
     actions.append(this.autoButton);
 
+    // Study and data are first-class actions: the quiz is the measurement phase of every
+    // session, and the researcher needs one obvious way back to the profiles.
+    const study = document.createElement('button');
+    study.className = 'study-open';
+    study.type = 'button';
+    study.append(svgIcon(ICONS.book));
+    const studyLabel = document.createElement('span');
+    studyLabel.textContent = this.language === 'fr' ? 'Quiz de l’étude' : 'Study quiz';
+    study.append(studyLabel);
+    study.addEventListener('click', handlers.onStudy);
+    this.registry.register('top:study', study, handlers.onStudy);
+    actions.append(study);
+
+    const research = document.createElement('button');
+    research.className = 'icon-btn top-research';
+    research.type = 'button';
+    research.dataset.tour = 'research';
+    research.append(svgIcon(ICONS.chart));
+    research.setAttribute('aria-label', this.language === 'fr' ? 'Données de l’étude' : 'Study data');
+    research.addEventListener('click', handlers.onResearch);
+    this.registry.register('top:research', research, handlers.onResearch);
+    actions.append(research);
+
     const help = document.createElement('button');
     help.className = 'icon-btn top-help';
     help.type = 'button';
+    help.dataset.tour = 'help';
     help.append(svgIcon(ICONS.help));
     help.addEventListener('click', handlers.onHelp);
     this.registry.register('top:help', help, handlers.onHelp);
@@ -191,11 +223,13 @@ export class Shell {
     this.root.append(rail);
 
     this.hud = new Hud(settings.language);
+    this.hud.root.dataset.tour = 'hud';
     rail.append(this.hud.root);
 
     // ----------------------------------------------------------------- legend
     this.legendRoot = document.createElement('aside');
     this.legendRoot.className = 'legend glass';
+    this.legendRoot.dataset.tour = 'legend';
     rail.append(this.legendRoot);
     this.renderLegend();
     this.syncLegend();
@@ -225,8 +259,10 @@ export class Shell {
       handlers.onPinchSensitivity,
       handlers.onHelp,
       handlers.onRetryCamera,
-      handlers.onResetProgress
+      handlers.onResetProgress,
+      handlers.onResetView
     );
+    this.controls.root.dataset.tour = 'controls';
     this.root.append(this.controls.root);
 
     // -------------------------------------------------------------------- pages
@@ -295,6 +331,11 @@ export class Shell {
     this.syncPreviewChip();
     this.syncProjectLinks();
     this.renderLegend();
+    const studyLabel = this.root.querySelector<HTMLElement>('.study-open span');
+    if (studyLabel) studyLabel.textContent = language === 'fr' ? 'Quiz de l’étude' : 'Study quiz';
+    this.root
+      .querySelector('.top-research')
+      ?.setAttribute('aria-label', language === 'fr' ? 'Données de l’étude' : 'Study data');
   }
 
   private syncProjectLinks(): void {

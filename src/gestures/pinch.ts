@@ -15,10 +15,16 @@ export interface PinchConfig {
  * centres stay a couple of centimetres apart, and MediaPipe's metric z is noisy at arm's length.
  * The value is therefore a dead-zoned smoothstep over tip distance / palm width, not 1 - ratio.
  */
-export const DEFAULT_PINCH: PinchConfig = { enter: 0.55, exit: 0.38, minHoldMs: 0 };
+/**
+ * Hysteresis band calibrated against Cellab's raw ratio thresholds (enter `< 0.35`, stay
+ * `< 0.55` of tip gap / palm width). `enter` 0.55 maps to a ratio of ~0.36 and `exit` 0.20 to
+ * ~0.49, so the pinch starts as easily as Cellab's and releases only once the fingers are
+ * genuinely apart. The wide band is what stops the chatter a narrow one produced on raw data.
+ */
+export const DEFAULT_PINCH: PinchConfig = { enter: 0.55, exit: 0.2, minHoldMs: 0 };
 
 /** Tip-gap / palm-width ratio at which the pinch reads 1 and 0 respectively. */
-export const PINCH_RATIO = { touch: 0.1, open: 0.55 } as const;
+export const PINCH_RATIO = { touch: 0.1, open: 0.65 } as const;
 
 export const PINCH_SENSITIVITY = { min: 0.7, max: 1.5, firm: 0.8, normal: 1, light: 1.3 } as const;
 

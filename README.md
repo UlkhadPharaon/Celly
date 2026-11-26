@@ -1,13 +1,13 @@
 # Celly v0.2
 
-[**Live demo**](https://celly-blue.vercel.app) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba)
+[**Live demo**](https://celly-blue.vercel.app) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009)
 
 **A touch-free 3D cell biology lab.** Celly puts a living, procedural cell in front of you and lets
 you explore it with your **bare hands** — no controller, no headset, no gloves. A webcam and a pinch
 are the entire interface, with the mouse and keyboard kept as a first-class fallback.
 
-> **The story behind Celly:** [From RGB camera to 3D interaction — how controller-free XR could
-> transform learning](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba).
+> **The story behind Celly:** [How to make school more valuable — what a 3D cell you can hold
+> changes about learning](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009).
 
 The app has three sections:
 
@@ -21,9 +21,56 @@ The app has three sections:
 
 ---
 
+## The study mode (research build)
+
+Celly is also an instrument for comparing **three ways of learning the same material**. On first
+launch a participant picks a condition, and that choice is recorded as data — not a cosmetic
+preference:
+
+| Condition | What the participant gets |
+|---|---|
+| **Hand tracking** | The 3D cell driven by bare-hand pinches through the webcam. |
+| **Mouse** | The same 3D cell driven by clicks and dragging. The camera never starts. |
+| **Textbook** | The same content as a written textbook page: eight chapters, figures described in words, no 3D and no camera. |
+
+Every participant then follows the same path: **read or explore → a 10-question quiz → a short
+survey → a completion screen with an anonymous participant code**. Nothing is uploaded; each
+profile is stored on the device and can be exported as CSV or JSON for analysis.
+
+The survey asks the four questions the comparison needs — how hard it was, how different it was
+from their usual studying, how effective it felt, and whether they would study this way again —
+plus a 0–10 recommendation and a free-text comment.
+
+### Running the study
+
+1. Open the app. The **mode gate** appears before any UI is shown.
+2. Pick a condition. Hands and mouse participants get a short onboarding and a guided tour of the
+   interface; the textbook condition goes straight to the reading.
+3. Finish the quiz and the survey. The completion screen shows the participant code
+   (`CL-XXXXXX`) and offers a JSON download of that one profile.
+4. The researcher opens **Study data** (the chart button in the top bar, or `G`) to see every
+   participant on the device, the per-mode comparison, and the exports.
+
+### Export schema
+
+`celly-study.csv` has one row per participant:
+`participant_id, mode, language, started_at, ended_at, duration_seconds, reading_seconds,
+tour_completed, quiz_correct, quiz_total, quiz_ratio, quiz_seconds,
+difficulty_1_easy_5_hard, difference_1_same_5_different, effectiveness_1_worse_5_better,
+preference, recommend_0_10, comment`.
+
+`celly-study-answers.csv` has one row per answered question
+(`participant_id, mode, question_id, correct, seconds`) for item-level analysis.
+`celly-study.json` contains the raw sessions plus the aggregated per-mode means.
+
+Keyboard shortcuts added for the study: **S** opens the study quiz, **G** opens the study data.
+
+---
+
 ## Contents
 
 - [Quick start](#quick-start)
+- [The study mode (research build)](#the-study-mode-research-build)
 - [The gesture vocabulary](#the-gesture-vocabulary)
 - [What is in the box](#what-is-in-the-box)
 - [How hand tracking works](#how-hand-tracking-works)
@@ -407,7 +454,7 @@ degrades to mouse mode if no camera is available.
 - [`FINAL_REPORT_ROUND2.md`](FINAL_REPORT_ROUND2.md) — measured results, limitations and v0.3 plan
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — scene graph, data flow, module contracts
 - [`docs/RESEARCH.md`](docs/RESEARCH.md) — prior-art and asset research
-- [Learn article: From RGB camera to 3D interaction](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba) — the story and design rationale
+- [Learn article: How to make school more valuable](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009) - the story and design rationale
 - [`ASSET_INVENTORY.md`](ASSET_INVENTORY.md) — what ships, where it came from, licence audit
 - [`CREDITS.md`](CREDITS.md) — attribution for models, fonts, WASM and code
 - [`CHANGELOG.md`](CHANGELOG.md) — v0.1 → v0.2

@@ -14,7 +14,9 @@ export default tseslint.config(
       'Handtracking systems/**',
       '3d models/**',
       'Unreal environnements/**',
-      'depedences/**'
+      'depedences/**',
+      // A nested checkout (its own .git/worktrees and built bundle), not source of this project.
+      'Celly By claude/**'
     ]
   },
   js.configs.recommended,

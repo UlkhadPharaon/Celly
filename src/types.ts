@@ -82,7 +82,7 @@ export interface HandFrame {
   pinchValue: number;
   pinchStart: boolean;
   pinchEnd: boolean;
-  /** Set when the frame is a stale hold during the tracker's 250 ms loss tolerance. */
+  /** Set on the single frame emitted once the hand-loss tolerance expires. */
   lost?: boolean;
   /** Screen-space pinch cursor in CSS pixels (filtered): the index fingertip (landmark 8). */
   cursor: Vec2;

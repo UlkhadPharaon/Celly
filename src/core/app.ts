@@ -36,12 +36,19 @@ import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
 import { FrameProcessor } from './frameProcessor';
+import { CursorMotion } from '../gestures/cursorMotion';
 import { deviceProfile, refreshDeviceProfile } from './device';
 import { InteractiveLabPage } from '../pages/interactiveLab';
 import { KnowledgePage } from '../pages/knowledge';
 import { TestingPage } from '../pages/testing/testingPage';
 import type { Page, PageActions } from '../pages/page';
 import { KNOWLEDGE_NODES } from '../data/catalog';
+import { StudyStore } from '../study/store';
+import type { InteractionMode } from '../study/types';
+import { ModeGate } from '../ui/modeGate';
+import { GuidedTour } from '../ui/guidedTour';
+import { ResearchPanel } from '../ui/researchPanel';
+import { StudyLayer } from '../pages/study/studyLayer';
 
 const SETTINGS_KEY = 'celly:v02:settings';
 const ONBOARD_KEY = 'celly:v02:onboarded';
@@ -55,8 +62,18 @@ export class CellyApp {
   private readonly hands = new HandLayer();
   /** Per-frame hand pipeline: filters, pinch hysteresis, aim locks, hover and gestures. */
   private readonly fp: FrameProcessor;
+  /** Display-only easing so 20–30 Hz detections move the ring at the render rate. */
+  private readonly cursorMotion = new CursorMotion();
   private readonly pages = new Map<PageId, Page>();
   private readonly debug = new DebugOverlay();
+
+  /** Research instrument: participant mode, quiz answers and survey. */
+  private readonly study = new StudyStore();
+  private readonly modeGate: ModeGate;
+  private readonly tour: GuidedTour;
+  private readonly research: ResearchPanel;
+  private studyLayer: StudyLayer | null = null;
+  private mode: InteractionMode | null = null;
 
   private current: Page | null = null;
   private cameraAttemptCount = 0;
@@ -67,11 +84,20 @@ export class CellyApp {
 
   private quality: TrackingQuality = { level: 'none', value: 0, jitter: 0, margin: 0 };
   private previousJitter: Vec3[] | null = null;
+  /** Set when the user explicitly picks a quality: disables the automatic downgrade. */
+  private qualityChosen = false;
+  /** First instant the render loop was measured below 30 fps in the current slow streak. */
+  private lowFpsSince = 0;
+  private readonly bootMs = performance.now();
   private lastHudAt = 0;
   private lastTime = 0;
   private lastTickMs = 0;
   /** Capture time of the previous detection, used to pace the landmark filters. */
   private lastDetectionMs = 0;
+  /** Hands MediaPipe reported on the newest result, before any filtering. */
+  private lastRawHands = 0;
+  /** Capture → processed ages of the newest results, for the p50/p95 latency report. */
+  private readonly frameAges: number[] = [];
   /** Ambient clock for the pages. Frozen while reduce motion is on (audit task 3.1). */
   private motionElapsed = 0;
   private renderFrames = 0;
@@ -98,12 +124,31 @@ export class CellyApp {
       onAutoRotate: () => this.toggleAutoRotate(),
       onEnableCamera: () => void this.startCamera(),
       onResetProgress: () => this.resetProgress(),
-      onOnboardingComplete: () => {
+      onResetView: () => this.resetView(),
+      onOnboardingComplete: (cameraRequested) => {
         saveJSON(ONBOARD_KEY, true);
+        if (cameraRequested) void this.startCamera();
+        if (!this.study.tourCompleted) window.setTimeout(() => this.startTour(), 380);
       },
-      onOverlayClose: () => this.current?.closeOverlay()
+      onOverlayClose: () => this.current?.closeOverlay(),
+      onStudy: () => this.openStudy(),
+      onResearch: () => this.openResearch()
     });
     mount.append(this.shell.root);
+
+    this.modeGate = new ModeGate(this.shell.registry, {
+      onChoose: (mode) => this.chooseMode(mode),
+      onResume: () => this.resumeSession(),
+      onShowData: () => this.openResearch()
+    });
+    this.tour = new GuidedTour(this.shell.registry, {
+      onFinish: (completed) => this.onTourFinished(completed)
+    });
+    this.research = new ResearchPanel(this.shell.registry, {
+      study: this.study,
+      language: this.settings.language
+    });
+    document.body.append(this.modeGate.root, this.tour.root, this.research.root);
     document.body.append(this.debug.root);
     this.fp = new FrameProcessor(this.settings, () => this.current, this.shell.registry);
     this.deviceClass = deviceProfile().deviceClass;
@@ -121,9 +166,16 @@ export class CellyApp {
         this.shell.controls.setCameraStatus(status, detail);
         this.shell.onboarding.setCameraStatus(status, detail);
         if (status === 'live') {
-          this.shell.controls.preview.attach(this.tracker.video);
-          this.shell.onboarding.attachVideo(this.tracker.video);
-        } else if (isCameraError(status)) {
+          // Each preview feeds its own native <video> from the shared stream. Hiding a preview
+          // releases only that decoder; the tracker's capture element is separate.
+          const stream = this.tracker.mediaStream;
+          this.shell.controls.preview.attachStream(stream);
+          this.shell.onboarding.attachStream(stream);
+        } else {
+          this.shell.controls.preview.attachStream(null);
+          this.shell.onboarding.attachStream(null);
+        }
+        if (isCameraError(status)) {
           // Insecure context is reported once, in the interface language, by the startup check in
           // `start()`. Repeating the tracker's English detail would duplicate it.
           if (status === 'insecure-context') return;
@@ -194,13 +246,117 @@ export class CellyApp {
 
   // ------------------------------------------------------------------- bootstrap
 
+  /**
+   * Startup order for the study:
+   *   mode gate (first run) → onboarding (hands only) → guided tour → camera → lab.
+   * A returning participant resumes the stored mode; a finished participant starts over.
+   */
   private async boot(): Promise<void> {
-    const onboarded = loadJSON<boolean>(ONBOARD_KEY, false);
-    if (!onboarded) {
-      window.setTimeout(() => this.shell.onboarding.open(), 520);
+    const stored = this.study.mode;
+    if (!stored) {
+      window.setTimeout(() => this.openGate(), 320);
       return;
     }
-    window.setTimeout(() => void this.startCamera(), 420);
+    this.enterMode(stored);
+  }
+
+  private openGate(): void {
+    this.modeGate.open(this.settings.language, {
+      resumable: this.study.hasSession && this.study.mode !== null,
+      recorded: this.study.all().length
+    });
+  }
+
+  private chooseMode(mode: InteractionMode): void {
+    this.study.current(this.settings.language);
+    this.study.setMode(mode);
+    this.enterMode(mode);
+  }
+
+  private resumeSession(): void {
+    const mode = this.study.mode;
+    if (!mode) {
+      this.openGate();
+      return;
+    }
+    this.enterMode(mode);
+  }
+
+  private enterMode(mode: InteractionMode): void {
+    this.mode = mode;
+    document.documentElement.dataset.mode = mode;
+    this.shell.root.dataset.mode = mode;
+
+    if (mode === 'text') {
+      this.enterTextMode();
+      return;
+    }
+
+    const onboarded = loadJSON<boolean>(ONBOARD_KEY, false);
+    if (!onboarded) {
+      // Mouse participants have no camera step: send them straight to the controls reference.
+      const step = mode === 'mouse' ? 2 : 0;
+      window.setTimeout(() => this.shell.onboarding.open(step, mode), 520);
+      return;
+    }
+    if (!this.study.tourCompleted) {
+      window.setTimeout(() => this.startTour(), 560);
+      return;
+    }
+    if (mode === 'hands') window.setTimeout(() => void this.startCamera(), 420);
+  }
+
+  /**
+   * The text condition is a separate surface: the 3D app is hidden, the render loop is stopped
+   * (no point burning GPU on a canvas nobody sees) and the textbook owns the screen. The scene
+   * object stays allocated so a later reload can return to the lab without a second construction
+   * path; nothing is rendered from it in this mode.
+   */
+  private enterTextMode(): void {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.shell.onboarding.close();
+    this.openStudy(true);
+    if (!this.study.tourCompleted) {
+      window.setTimeout(() => this.startTour(), 900);
+    }
+  }
+
+  private startTour(): void {
+    // Text mode has its own steps (the chapters and the reading surface), so the exclusion is
+    // only the safety guard for "no mode chosen yet".
+    if (!this.mode) return;
+    this.tour.start(this.mode, this.settings.language);
+  }
+
+  private onTourFinished(completed: boolean): void {
+    if (completed) this.study.completeTour();
+    this.shell.refreshButtons();
+    if (this.mode === 'hands') void this.startCamera();
+  }
+
+  private openStudy(withReading = false): void {
+    const mode = this.mode ?? 'text';
+    if (!this.studyLayer) {
+      this.studyLayer = new StudyLayer(this.shell.registry, {
+        study: this.study,
+        language: this.settings.language,
+        mode,
+        allowClose: mode !== 'text',
+        onClose: () => {
+          if (this.mode === 'text') this.studyLayer?.open(true);
+          else this.shell.toast(this.t('studySaved'), 'info');
+        },
+        onShowData: () => this.openResearch()
+      });
+      document.body.append(this.studyLayer.root);
+    }
+    this.studyLayer.open(withReading || this.mode === 'text');
+  }
+
+  private openResearch(): void {
+    this.research.setLanguage(this.settings.language);
+    this.research.open();
   }
 
   private async startCamera(): Promise<void> {
@@ -277,20 +433,60 @@ export class CellyApp {
     this.shell.toast(this.t('progressReset'), 'success');
   }
 
+  /** Back to the default cell framing, from any page. */
+  private resetView(): void {
+    const page = this.pages.get('interactive') as InteractiveLabPage | undefined;
+    page?.resetView();
+  }
+
   private setLanguage(language: Language): void {
     this.settings.language = language;
     document.documentElement.lang = language;
     this.shell.setLanguage(language);
     for (const page of this.pages.values()) page.setLanguage(language);
+    this.modeGate.setLanguage(language);
+    this.tour.setLanguage(language);
+    this.research.setLanguage(language);
+    this.studyLayer?.setLanguage(language);
     this.saveSettings();
   }
 
-  private setQuality(quality: Settings['quality']): void {
+  private setQuality(quality: Settings['quality'], automatic = false): void {
+    // An explicit choice (mouse or pinch on the quality buttons) is never overridden again this
+    // session; only the untouched default may be lowered by the frame-rate guard.
+    if (!automatic) this.qualityChosen = true;
     this.settings.quality = quality;
     this.scene.setQuality(quality);
     this.shell.setControlState(this.controlState());
     this.saveSettings();
-    this.shell.toast(quality === 'high' ? this.t('qualityHigh') : this.t('qualityFast'), 'info');
+    const label = automatic
+      ? this.t('qualityAuto')
+      : quality === 'high'
+        ? this.t('qualityHigh')
+        : this.t('qualityFast');
+    this.shell.toast(label, 'info');
+  }
+
+  /**
+   * One-way safety valve for machines that cannot hold the high-quality scene. Tracking runs on
+   * its own clock, but a 15 fps render still makes the pointer feel like it is stuttering, and a
+   * dropped quality tier is cheaper than a laggy app. Five seconds below 30 fps after the first
+   * eight seconds of boot (compilation, shader warm-up) is a sustained problem, not a hitch.
+   */
+  private maybeAdaptQuality(now: number): void {
+    if (this.qualityChosen || this.settings.quality !== 'high') {
+      this.lowFpsSince = 0;
+      return;
+    }
+    if (now - this.bootMs < 8000 || this.renderFps <= 0) return;
+    if (this.renderFps >= 30) {
+      this.lowFpsSince = 0;
+      return;
+    }
+    if (this.lowFpsSince === 0) this.lowFpsSince = now;
+    if (now - this.lowFpsSince < 5000) return;
+    this.lowFpsSince = 0;
+    this.setQuality('low', true);
   }
 
   private setPinchSensitivity(value: number): void {
@@ -354,6 +550,7 @@ export class CellyApp {
     next.setAutoRotate?.(this.settings.autoRotate);
     next.enter();
     this.fp.resetInteraction();
+    this.cursorMotion.reset();
     this.shell.controls.preview.setVisible(this.settings.showWebcam);
     this.shell.refreshButtons();
   }
@@ -451,6 +648,14 @@ export class CellyApp {
         case 'T':
           this.toggleSelectionTest();
           break;
+        case 's':
+        case 'S':
+          this.openStudy();
+          break;
+        case 'g':
+        case 'G':
+          this.openResearch();
+          break;
         case 'h':
         case 'H':
         case '?':
@@ -468,7 +673,9 @@ export class CellyApp {
       if (this.disposed) return;
       if (document.hidden) {
         cancelAnimationFrame(this.raf);
-      } else {
+      } else if (this.mode !== 'text') {
+        // The text condition has no scene to render: restarting the loop would resurrect the
+        // hidden 3D canvas behind the textbook.
         this.lastTime = performance.now();
         this.raf = requestAnimationFrame(this.loop);
       }
@@ -513,16 +720,41 @@ export class CellyApp {
       return;
     }
 
-    // Inference runs in the tracking worker, so a detection is consumed here when it arrives
-    // rather than produced here. No new result simply means the worker is still busy.
-    const raw = this.tracker.poll();
-    // Build frames every tick, result or not: with no tracker and no synthetic hands this is
-    // an empty list, but it is also what ages the 250 ms tolerance out and lets the gesture
-    // engine retire cursors, hints and hover when the hands leave the frame.
-    this.fp.buildFrames(raw, this.detectionDt(raw), this.lastTickMs, {
-      width: window.innerWidth,
-      height: window.innerHeight
-    });
+    // Inference runs in the tracking worker, so detections are consumed here when they arrive
+    // rather than produced here. Every completed result is stepped, oldest first: with capture
+    // on its own clock a slow render tick can find two results waiting, and the pinch start and
+    // release of that window must both reach the gesture engine.
+    const results = this.tracker.drain();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    if (results.length === 0) {
+      // No new detection: still age the hand-loss tolerance out and let the gesture engine retire
+      // cursors, hints and hover when the hands leave the frame.
+      this.lastRawHands = 0;
+      this.fp.buildFrames(null, 1 / 60, this.lastTickMs, viewport);
+      this.stepFrame();
+      return;
+    }
+    for (const raw of results) {
+      this.lastRawHands = raw.hands.length;
+      this.noteFrameAge(performance.now() - raw.tMs);
+      this.fp.buildFrames(raw, this.detectionDt(raw), raw.tMs, viewport);
+      this.stepFrame();
+    }
+  }
+
+  /**
+   * Capture → processed latency of one detection. This is the number the user feels: it includes
+   * the wait before inference started, the inference itself and the wait before the render tick
+   * consumed the result. Inference duration alone says nothing about it.
+   */
+  private noteFrameAge(ageMs: number): void {
+    if (!Number.isFinite(ageMs) || ageMs < 0) return;
+    this.frameAges.push(ageMs);
+    if (this.frameAges.length > 120) this.frameAges.shift();
+  }
+
+  /** Hover, gesture and dwell for the frames `buildFrames` just produced. */
+  private stepFrame(): void {
     this.fp.updateHover();
     this.dispatch(this.fp.stepGestures(this.lastTickMs));
     this.fp.clearFinishedAimLocks();
@@ -584,7 +816,17 @@ export class CellyApp {
       mirrorY: this.settings.mirrorY,
       swap: this.settings.handsSwap,
       gesture: this.fp.gestureFrame?.state ?? 'IDLE',
-      hint: this.gestureHint()
+      hint: this.gestureHint(),
+      cameraFps: Math.round(this.tracker.deviceState().frameRate),
+      captureFps: this.tracker.captureFps,
+      ageMs:
+        this.frameAges.length > 0
+          ? Math.round(this.frameAges[this.frameAges.length - 1])
+          : Math.round(this.tracker.resultAgeMs),
+      inferenceMs: this.tracker.inferenceMs,
+      queued: this.tracker.queued,
+      rawHands: this.lastRawHands,
+      previewFps: this.previewFps()
     });
   }
 
@@ -596,7 +838,7 @@ export class CellyApp {
   }
 
   private updateCursors(): void {
-    const cursors =
+    const raw =
       this.fp.gestureFrame?.cursors ??
       this.fp.frames
         .filter((f) => f.present)
@@ -609,6 +851,22 @@ export class CellyApp {
           pinchValue: f.pinchValue,
           mode: (f.pinching ? 'pinch' : 'pointer') as 'pinch' | 'pointer' | 'passive'
         }));
+
+    // Ease the drawn ring between detections (the aim, hover and pinch target stay on the
+    // detection-time cursor). A locked aim is already frozen on the selection point: easing it
+    // would slide the ring off the target the moment the pinch commits.
+    const now = performance.now();
+    const frames = new Map(this.fp.frames.map((f) => [f.side, f]));
+    const cursors = raw.map((cursor) => {
+      const frame = frames.get(cursor.side);
+      if (!frame || frame.aimLocked || frame.pinching) return cursor;
+      const eased = this.cursorMotion.sample(cursor.side, { x: cursor.x, y: cursor.y }, now);
+      return { ...cursor, x: eased.x, y: eased.y };
+    });
+    for (const side of ['left', 'right'] as const) {
+      if (!frames.get(side)?.present) this.cursorMotion.reset(side);
+    }
+
     this.shell.cursors.update(
       cursors,
       this.gestureHint(),
@@ -637,6 +895,7 @@ export class CellyApp {
       this.renderFrames = 0;
       this.renderClock = 0;
     }
+    this.maybeAdaptQuality(now);
 
     this.tick();
     this.hands.update(
@@ -657,7 +916,7 @@ export class CellyApp {
 
   start(): void {
     this.lastTime = performance.now();
-    this.raf = requestAnimationFrame(this.loop);
+    if (this.mode !== 'text') this.raf = requestAnimationFrame(this.loop);
     // Insecure-context warning (audit task 5.3): served over plain http, `getUserMedia` is
     // unavailable, so the camera can never start. Say so at startup instead of letting the user
     // find out by pressing "Enable camera". The onboarding card still carries its own inline
@@ -696,14 +955,63 @@ export class CellyApp {
     trackerFps: number;
     inferenceMs: number;
     ready: boolean;
+    captureFps: number;
+    cameraFps: number;
+    resultAgeMs: number;
+    queued: number;
+    busy: boolean;
+    captureMode: 'video-frame' | 'timer' | 'stopped';
+    rawHands: number;
+    acceptedHands: number;
+    droppedFrames: number;
+    previewFps: number;
+    frameAgeP50: number;
+    frameAgeP95: number;
+    frameAgeMax: number;
   } {
+    const device = this.tracker.deviceState();
     return {
       camera: this.tracker.camera,
       tracking: this.tracker.tracking,
       detail: this.tracker.detail,
       trackerFps: this.tracker.trackerFps,
       inferenceMs: this.tracker.inferenceMs,
-      ready: this.tracker.ready
+      ready: this.tracker.ready,
+      // Capture and inference are separate clocks now: camera → capture (submitted frames),
+      // worker → detections, resultAgeMs → how stale the newest detection is right now.
+      captureFps: this.tracker.captureFps,
+      cameraFps: Math.round(device.frameRate),
+      resultAgeMs: Math.round(this.tracker.resultAgeMs),
+      queued: this.tracker.queued,
+      busy: this.tracker.busy,
+      captureMode: this.tracker.captureMode,
+      rawHands: this.lastRawHands,
+      acceptedHands: this.fp.frames.filter((f) => f.present).length,
+      droppedFrames: this.tracker.droppedVideoFrames(),
+      // The live preview's own decoder rate: a native video element shows camera frames as they
+      // arrive, so this number is the proof that the preview is not throttled.
+      previewFps: this.previewFps(),
+      ...this.frameAgeStats()
+    };
+  }
+
+  /** The visible preview's measured frame rate (falls back to the onboarding thumbnail). */
+  private previewFps(): number {
+    const panel = this.shell.controls.preview;
+    if (panel.visible) return panel.previewFps;
+    const onboarding = this.shell.onboarding.preview;
+    return onboarding.visible ? onboarding.previewFps : 0;
+  }
+
+  private frameAgeStats(): { frameAgeP50: number; frameAgeP95: number; frameAgeMax: number } {
+    if (this.frameAges.length === 0) return { frameAgeP50: -1, frameAgeP95: -1, frameAgeMax: -1 };
+    const sorted = [...this.frameAges].sort((a, b) => a - b);
+    const at = (p: number): number =>
+      Math.round(sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]);
+    return {
+      frameAgeP50: at(0.5),
+      frameAgeP95: at(0.95),
+      frameAgeMax: Math.round(sorted[sorted.length - 1])
     };
   }
 
@@ -1049,6 +1357,10 @@ export class CellyApp {
     for (const page of this.pages.values()) page.dispose();
     this.scene.dispose();
     this.debug.root.remove();
+    this.studyLayer?.dispose();
+    this.modeGate.root.remove();
+    this.tour.root.remove();
+    this.research.root.remove();
     this.shell.destroy();
   }
 }

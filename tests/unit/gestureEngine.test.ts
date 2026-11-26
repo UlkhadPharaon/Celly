@@ -145,6 +145,58 @@ describe('GestureEngine — right hand', () => {
     expect(out.intents).toContainEqual({ type: 'click', id: 'tab:knowledge' });
   });
 
+  it('clicks although the finger contact midpoint slides while the pinch closes', () => {
+    // Real (and synthetic) hands bring the thumb to the index tip: the midpoint between them
+    // travels ~30 px as the pinch closes. The travel budget measures the pointer, not that
+    // midpoint, or every press would be spent before the user moved.
+    const e = new GestureEngine();
+    e.step(
+      ctx({
+        t: 0,
+        uiHover: 'btn',
+        hands: [
+          hand({
+            side: 'right',
+            pinching: true,
+            pinchStart: true,
+            cursor: { x: 100, y: 100 },
+            pinchPoint: { x: 100, y: 130 }
+          })
+        ]
+      })
+    );
+    e.step(
+      ctx({
+        t: 120,
+        uiHover: 'btn',
+        hands: [
+          hand({
+            side: 'right',
+            pinching: true,
+            cursor: { x: 101, y: 100 },
+            pinchPoint: { x: 100, y: 76 }
+          })
+        ]
+      })
+    );
+    const out = e.step(
+      ctx({
+        t: 240,
+        uiHover: 'btn',
+        hands: [
+          hand({
+            side: 'right',
+            pinching: false,
+            pinchEnd: true,
+            cursor: { x: 101, y: 100 },
+            pinchPoint: { x: 100, y: 78 }
+          })
+        ]
+      })
+    );
+    expect(out.intents).toContainEqual({ type: 'click', id: 'btn' });
+  });
+
   it('rejects a click that travelled too far', () => {
     const e = new GestureEngine();
     e.step(
@@ -282,7 +334,7 @@ describe('GestureEngine — left hand and both hands', () => {
     const start = e.step(
       ctx({
         t: 0,
-        hands: [hand({ side: 'left', pinching: true, pinchStart: true, palm: { x: 400, y: 400 } })]
+        hands: [hand({ side: 'left', pinching: true, pinchStart: true, palm: { x: 0.4, y: 0.4 } })]
       })
     );
     expect(start.state).toBe('ROTATING');
@@ -290,22 +342,57 @@ describe('GestureEngine — left hand and both hands', () => {
     const move = e.step(
       ctx({
         t: 100,
-        hands: [hand({ side: 'left', pinching: true, palm: { x: 420, y: 396 } })]
+        hands: [hand({ side: 'left', pinching: true, palm: { x: 0.42, y: 0.396 } })]
       })
     );
-    expect(move.intents).toContainEqual({
-      type: 'rotate',
-      dx: 20 * DEFAULT_GESTURE.rotateGain,
-      dy: -4 * DEFAULT_GESTURE.rotateGain
-    });
+    // Palm coordinates are normalised, and the step is eased and capped: a raw delta of 0.02
+    // becomes 0.02 * (1 - smooth) * gain, well under the per-frame cap.
+    const eased = (1 - DEFAULT_GESTURE.rotateSmooth) * DEFAULT_GESTURE.rotateGain;
+    const rotate = move.intents.find((i) => i.type === 'rotate');
+    expect(rotate).toBeDefined();
+    expect(rotate!.type === 'rotate' ? rotate!.dx : 0).toBeCloseTo(0.02 * eased, 6);
+    expect(rotate!.type === 'rotate' ? rotate!.dy : 0).toBeCloseTo(-0.004 * eased, 6);
 
     const end = e.step(
       ctx({
         t: 200,
-        hands: [hand({ side: 'left', pinching: false, pinchEnd: true, palm: { x: 420, y: 396 } })]
+        hands: [hand({ side: 'left', pinching: false, pinchEnd: true, palm: { x: 0.42, y: 0.396 } })]
       })
     );
     expect(end.state).toBe('IDLE');
+  });
+
+  it('does not spin the cell from a trembling hand', () => {
+    // The bug this pins: raw palm noise multiplied by the gain made a still hand rotate
+    // frantically. A tremor below the deadzone must produce no rotation at all, and a single
+    // large jump must be capped rather than applied whole.
+    const e = new GestureEngine();
+    e.step(
+      ctx({
+        t: 0,
+        hands: [hand({ side: 'left', pinching: true, pinchStart: true, palm: { x: 0.5, y: 0.5 } })]
+      })
+    );
+
+    const tremor = e.step(
+      ctx({
+        t: 50,
+        hands: [hand({ side: 'left', pinching: true, palm: { x: 0.5005, y: 0.5004 } })]
+      })
+    );
+    expect(tremor.intents.some((i) => i.type === 'rotate')).toBe(false);
+
+    const jump = e.step(
+      ctx({
+        t: 100,
+        hands: [hand({ side: 'left', pinching: true, palm: { x: 0.9, y: 0.5 } })]
+      })
+    );
+    const rotate = jump.intents.find((i) => i.type === 'rotate');
+    expect(rotate).toBeDefined();
+    expect(Math.abs(rotate!.type === 'rotate' ? rotate!.dx : 0)).toBeLessThanOrEqual(
+      DEFAULT_GESTURE.rotateMaxStep
+    );
   });
 
   it('lets the left hand rotate while the right hand hovers', () => {
@@ -315,7 +402,7 @@ describe('GestureEngine — left hand and both hands', () => {
         t: 0,
         hands: [
           hand({ side: 'right', cursor: { x: 900, y: 500 } }),
-          hand({ side: 'left', pinching: true, pinchStart: true, palm: { x: 300, y: 300 } })
+          hand({ side: 'left', pinching: true, pinchStart: true, palm: { x: 0.3, y: 0.3 } })
         ]
       })
     );
@@ -325,11 +412,15 @@ describe('GestureEngine — left hand and both hands', () => {
         t: 100,
         hands: [
           hand({ side: 'right', cursor: { x: 900, y: 500 } }),
-          hand({ side: 'left', pinching: true, palm: { x: 310, y: 300 } })
+          hand({ side: 'left', pinching: true, palm: { x: 0.31, y: 0.3 } })
         ]
       })
     );
-    expect(move.intents).toContainEqual({ type: 'rotate', dx: 70, dy: 0 });
+    const eased = (1 - DEFAULT_GESTURE.rotateSmooth) * DEFAULT_GESTURE.rotateGain;
+    const rotate = move.intents.find((i) => i.type === 'rotate');
+    expect(rotate).toBeDefined();
+    expect(rotate!.type === 'rotate' ? rotate!.dx : 0).toBeCloseTo(0.01 * eased, 6);
+    expect(rotate!.type === 'rotate' ? rotate!.dy : 0).toBeCloseTo(0, 6);
   });
 
   it('scales with two pinches, then cools down before returning to idle', () => {

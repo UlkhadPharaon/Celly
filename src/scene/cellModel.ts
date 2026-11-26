@@ -33,6 +33,8 @@ interface EmissiveTarget {
 }
 
 const GHOST = 0.1;
+/** Opacity of the parts the camera is not focused on. */
+const FOCUS_DIM = 0.32;
 
 /**
  * Foreground structures a hand pinch may select. Background shells and particles are deliberately
@@ -76,6 +78,8 @@ export class CellModel {
   selected: OrganelleId | null = null;
   hovered: OrganelleId | null = null;
   isolation: OrganelleId | null = null;
+  /** Part the rest of the cell dims around, or null for no dimming. */
+  focusDim: OrganelleId | null = null;
   testTarget: OrganelleId | null = null;
 
   private readonly halo: THREE.Mesh;
@@ -922,6 +926,16 @@ export class CellModel {
     this.isolation = id;
   }
 
+  /**
+   * Dim everything except `id` without hiding it. Selection used to jump straight to the ghost
+   * level (0.1), which made the rest of the cell vanish and the model hard to read in context;
+   * a gentle dim keeps the selected part unmistakable while the cell around it stays visible.
+   * Isolation is the separate, stronger state the participant opts into.
+   */
+  setFocusDim(id: OrganelleId | null): void {
+    this.focusDim = id;
+  }
+
   setSelected(id: OrganelleId | null): void {
     this.selected = id;
     this.halo.visible = !!id;
@@ -933,7 +947,11 @@ export class CellModel {
         this.haloMaterial.uniforms.uColor.value.set(ORGANELLE_BY_ID.get(id)?.color ?? '#ffb347');
       }
     }
-    this.setIsolation(id);
+    // Selecting does NOT isolate. It used to, which made the Isolate button a no-op: the rest of
+    // the cell was already ghosted, so toggling isolation changed nothing visible. Focus dimming
+    // is the gentle default; isolation is the explicit, stronger opt-in.
+    this.setFocusDim(id);
+    if (!id) this.setIsolation(null);
   }
 
   /**
@@ -992,7 +1010,12 @@ export class CellModel {
       const em = damp(this.emphasis.get(part.id) ?? 0, targetEmphasis, 9, dt);
       this.emphasis.set(part.id, em);
 
-      const targetScale = this.isolation && this.isolation !== part.id ? GHOST : 1;
+      const targetScale =
+        this.isolation && this.isolation !== part.id
+          ? GHOST
+          : this.focusDim && this.focusDim !== part.id
+            ? FOCUS_DIM
+            : 1;
       const scale = damp(this.opacityScale.get(part.id) ?? 1, targetScale, 7, dt);
       this.opacityScale.set(part.id, scale);
 
@@ -1002,7 +1025,15 @@ export class CellModel {
         else {
           const mat = t.mat as THREE.MeshStandardMaterial;
           mat.opacity = v;
-          if (v < 0.985) mat.transparent = true;
+          // three.js bakes `transparent` into the shader program. Flipping it at runtime without
+          // `needsUpdate` leaves the old program in use, so the material stays fully opaque no
+          // matter what opacity says — which is why isolation and focus dimming changed the
+          // numbers but never the picture.
+          const wantsTransparent = v < 0.985;
+          if (mat.transparent !== wantsTransparent) {
+            mat.transparent = wantsTransparent;
+            mat.needsUpdate = true;
+          }
           mat.depthWrite = v > 0.82 && !(mat.userData.noDepthWrite as boolean);
         }
       }

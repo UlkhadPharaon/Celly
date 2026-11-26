@@ -9,7 +9,7 @@ export const PROJECT_LINKS = {
   live: 'https://celly-blue.vercel.app/',
   github: 'https://github.com/UlkhadPharaon/Celly',
   article:
-    'https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba'
+    'https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009'
 } as const;
 
 export type ProjectLinkKind = 'github' | 'article';

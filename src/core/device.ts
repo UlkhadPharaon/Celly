@@ -75,8 +75,12 @@ export function deviceProfileFor(
     dustCount: devClass === 'phone' ? 120 : devClass === 'tablet' ? 220 : 420,
     floorSegments: devClass === 'phone' ? 48 : devClass === 'tablet' ? 64 : 96,
     ringSegments: devClass === 'phone' ? 96 : devClass === 'tablet' ? 128 : 180,
-    cameraWidth: devClass === 'phone' ? 640 : devClass === 'tablet' ? 960 : 1280,
-    cameraHeight: devClass === 'phone' ? 480 : devClass === 'tablet' ? 540 : 720,
+    // A 640x480 request is the reference point: Cellab proves it is enough for MediaPipe at
+    // arm's length, and it is a quarter of the pixels the old 1280x720 request copied into an
+    // ImageBitmap on every captured frame. Higher resolution did not buy detectable accuracy;
+    // it only made every capture and inference step more expensive.
+    cameraWidth: devClass === 'phone' ? 480 : devClass === 'tablet' ? 960 : 640,
+    cameraHeight: devClass === 'phone' ? 360 : devClass === 'tablet' ? 540 : 480,
     cameraFps: devClass === 'phone' ? 24 : 30
   };
 }

@@ -19,6 +19,19 @@ export interface HudState {
   swap: boolean;
   gesture: GestureState;
   hint: string;
+  /** Resolved source frame rate reported by the camera track. */
+  cameraFps: number;
+  /** Frames submitted for inference per second. */
+  captureFps: number;
+  /** Age of the newest detection result, in milliseconds (-1 before the first). */
+  ageMs: number;
+  inferenceMs: number;
+  /** Completed detections waiting for the render loop. */
+  queued: number;
+  /** Hands the model reported on the newest result, before filtering. */
+  rawHands: number;
+  /** Frame rate of the live preview's own video element. */
+  previewFps: number;
 }
 
 export const COPY = {
@@ -36,6 +49,13 @@ export const COPY = {
     tracker: 'Tracker',
     render: 'Render',
     gesture: 'Gesture',
+    camera: 'Camera',
+    capture: 'Capture',
+    preview: 'Preview',
+    age: 'Age',
+    infer: 'Infer',
+    queue: 'Queue',
+    raw: 'Raw',
     privacy: 'On-device only'
   },
   fr: {
@@ -52,6 +72,13 @@ export const COPY = {
     tracker: 'Suivi',
     render: 'Rendu',
     gesture: 'Geste',
+    camera: 'Caméra',
+    capture: 'Capture',
+    preview: 'Aperçu',
+    age: 'Âge',
+    infer: 'Inférence',
+    queue: 'File',
+    raw: 'Brut',
     privacy: 'Traitement local'
   }
 };
@@ -110,8 +137,15 @@ export class Hud {
       <details class="hud-debug">
         <summary>${escapeHtml(this.copy.debug)}</summary>
         <div class="hud-debug-grid">
-          <span>${escapeHtml(this.copy.tracker)}</span><b class="fps-tracker">0 fps</b>
-          <span>${escapeHtml(this.copy.render)}</span><b class="fps-render">0 fps</b>
+          <span class="dbg-camera">${escapeHtml(this.copy.camera)}</span><b class="fps-camera">0 fps</b>
+          <span class="dbg-preview">${escapeHtml(this.copy.preview)}</span><b class="fps-preview">0 fps</b>
+          <span class="dbg-capture">${escapeHtml(this.copy.capture)}</span><b class="fps-capture">0 fps</b>
+          <span class="dbg-raw">${escapeHtml(this.copy.raw)}</span><b class="raw-hands">0</b>
+          <span class="dbg-age">${escapeHtml(this.copy.age)}</span><b class="result-age">—</b>
+          <span class="dbg-infer">${escapeHtml(this.copy.infer)}</span><b class="infer-ms">—</b>
+          <span class="dbg-queue">${escapeHtml(this.copy.queue)}</span><b class="queue">0</b>
+          <span class="dbg-tracker">${escapeHtml(this.copy.tracker)}</span><b class="fps-tracker">0 fps</b>
+          <span class="dbg-render">${escapeHtml(this.copy.render)}</span><b class="fps-render">0 fps</b>
           <span>Jitter</span><b class="jitter">0.000</b>
           <span>Margin</span><b class="margin">0.00</b>
         </div>
@@ -162,9 +196,15 @@ export class Hud {
     if (cells[1]) cells[1].textContent = this.copy.mirror;
     if (cells[3]) cells[3].textContent = this.copy.gesture;
     set('.hud-debug > summary', this.copy.debug);
-    const debugLabels = this.root.querySelectorAll('.hud-debug-grid span');
-    if (debugLabels[0]) debugLabels[0].textContent = this.copy.tracker;
-    if (debugLabels[1]) debugLabels[1].textContent = this.copy.render;
+    set('.dbg-camera', this.copy.camera);
+    set('.dbg-preview', this.copy.preview);
+    set('.dbg-capture', this.copy.capture);
+    set('.dbg-raw', this.copy.raw);
+    set('.dbg-age', this.copy.age);
+    set('.dbg-infer', this.copy.infer);
+    set('.dbg-queue', this.copy.queue);
+    set('.dbg-tracker', this.copy.tracker);
+    set('.dbg-render', this.copy.render);
     set('.hud-foot span', this.copy.privacy);
     this.updateHandsLabel(this.lastHands);
   }
@@ -201,6 +241,15 @@ export class Hud {
 
     this.trackerValue.textContent = `${state.trackerFps} fps`;
     this.renderValue.textContent = `${state.renderFps} fps`;
+    (this.root.querySelector('.fps-camera') as HTMLElement).textContent = `${state.cameraFps} fps`;
+    (this.root.querySelector('.fps-preview') as HTMLElement).textContent = `${state.previewFps} fps`;
+    (this.root.querySelector('.fps-capture') as HTMLElement).textContent = `${state.captureFps} fps`;
+    (this.root.querySelector('.raw-hands') as HTMLElement).textContent = `${state.rawHands}`;
+    (this.root.querySelector('.result-age') as HTMLElement).textContent =
+      state.ageMs < 0 ? '—' : `${state.ageMs} ms`;
+    (this.root.querySelector('.infer-ms') as HTMLElement).textContent =
+      state.inferenceMs <= 0 ? '—' : `${state.inferenceMs.toFixed(1)} ms`;
+    (this.root.querySelector('.queue') as HTMLElement).textContent = `${state.queued}`;
     (this.root.querySelector('.jitter') as HTMLElement).textContent = q.jitter.toFixed(4);
     (this.root.querySelector('.margin') as HTMLElement).textContent = q.margin.toFixed(2);
   }

@@ -13,7 +13,7 @@ describe('deviceProfileFor', () => {
     expect(portrait.shadows).toBe(false);
     expect(portrait.bloom).toBe(false);
     expect(portrait.antialias).toBe(false);
-    expect(portrait.cameraWidth).toBe(640);
+    expect(portrait.cameraWidth).toBe(480);
   });
 
   it('treats a coarse medium viewport as a tablet', () => {

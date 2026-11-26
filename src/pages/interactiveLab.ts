@@ -23,6 +23,8 @@ export const COPY = {
     fact: 'Did you know',
     related: 'Related',
     openKnowledge: 'Open in Knowledge',
+    isolate: 'Isolate',
+    undo: 'Undo',
     prev: 'Previous structure',
     next: 'Next structure'
   },
@@ -39,6 +41,8 @@ export const COPY = {
     fact: 'Le saviez-vous',
     related: 'Lié à',
     openKnowledge: 'Ouvrir dans Savoirs',
+    isolate: 'Isoler',
+    undo: 'Annuler',
     prev: 'Structure précédente',
     next: 'Structure suivante'
   }
@@ -136,6 +140,7 @@ export class InteractiveLabPage implements Page {
 
     const rail = document.createElement('div');
     rail.className = 'structure-rail';
+    rail.dataset.tour = 'structure';
     const railHead = document.createElement('div');
     railHead.className = 'structure-rail-head';
     railHead.innerHTML = `<span class="eyebrow"></span><span class="structure-count">${IDS.length}</span>`;
@@ -238,6 +243,9 @@ export class InteractiveLabPage implements Page {
     if (!this.cell.parts.has(id)) return;
     this.selected = id;
     this.cell.setSelected(id);
+    // Selecting focuses the part and gently dims the rest. Isolation is a separate, stronger
+    // state the participant opts into from the card, so it survives a re-selection.
+    this.cell.setFocusDim(id);
     this.syncRail();
     this.pausedUntil = 0;
 
@@ -265,6 +273,8 @@ export class InteractiveLabPage implements Page {
     if (!this.selected) return;
     this.selected = null;
     this.cell.setSelected(null);
+    this.cell.setFocusDim(null);
+    this.cell.setIsolation(null);
     this.syncRail();
     this.ctx.overlay.hide();
 
@@ -285,13 +295,46 @@ export class InteractiveLabPage implements Page {
     this.unselect();
   }
 
+  /**
+   * Back to the default framing: no selection, no isolation, rotation and scale at rest.
+   * Bound to the "Reset view" button so a participant who has spun or zoomed the cell far from
+   * home is never stuck — the only other way back was a reload.
+   */
+  resetView(): void {
+    this.selected = null;
+    this.cell.setSelected(null);
+    this.cell.setFocusDim(null);
+    this.cell.setIsolation(null);
+    this.syncRail();
+    this.ctx.overlay.hide();
+
+    const fromPos = this.focus.position.clone();
+    const fromScale = this.cell.root.scale.x;
+    const fromRotY = this.rig.rotation.y;
+    const fromRotX = this.rig.rotation.x;
+    const fromZoom = this.zoom.scale.x;
+    this.inertia.set(0, 0);
+    this.rotateHeld = false;
+    this.pausedUntil = 0;
+
+    this.tweens.add(
+      620,
+      (t) => {
+        this.focus.position.lerpVectors(fromPos, new THREE.Vector3(), t);
+        this.cell.root.scale.setScalar(fromScale + (1 - fromScale) * t);
+        this.rig.rotation.y = fromRotY + (0.45 - fromRotY) * t;
+        this.rig.rotation.x = fromRotX + (-0.06 - fromRotX) * t;
+        this.zoom.scale.setScalar(fromZoom + (0.72 - fromZoom) * t);
+      },
+      ease.outCubic
+    );
+    this.updateHint();
+  }
+
   private openOverlay(id: OrganelleId): void {
     const meta = ORGANELLE_BY_ID.get(id);
     if (!meta) return;
     const copy = COPY[this.language];
-    const index = IDS.indexOf(id);
-    const prev = IDS[(index - 1 + IDS.length) % IDS.length];
-    const next = IDS[(index + 1) % IDS.length];
 
     this.ctx.overlay.show(
       {
@@ -299,35 +342,22 @@ export class InteractiveLabPage implements Page {
         title: loc(meta.name, this.language),
         accent: meta.color,
         summary: loc(meta.shortDescription, this.language),
-        sections: [
-          { title: copy.function, items: locList(meta.function, this.language) },
-          { title: copy.structure, body: loc(meta.structure, this.language) },
-          { title: copy.fact, body: loc(meta.funFact, this.language) }
-        ],
-        chipsLabel: copy.related,
-        chips: meta.relatedIds
-          .filter((rid) => ORGANELLE_BY_ID.has(rid))
-          .map((rid) => {
-            const related = ORGANELLE_BY_ID.get(rid);
-            return {
-              id: rid,
-              label: related ? loc(related.name, this.language) : rid,
-              color: related?.color,
-              onClick: () => this.select(rid as OrganelleId)
-            };
-          }),
+        // The card is deliberately short. The full structure text, the fun fact and the related
+        // links live on the Knowledge page; a card that carries everything pushed the action
+        // buttons off screen and made the panel hard to dismiss with a pinch.
+        sections: [{ title: copy.function, items: locList(meta.function, this.language).slice(0, 3) }],
         buttons: [
           {
-            id: 'prev',
-            label: copy.prev,
-            icon: 'arrowLeft',
-            onClick: () => this.select(prev)
+            id: 'isolate',
+            label: this.cell.isolation === id ? copy.undo : copy.isolate,
+            icon: 'focus',
+            onClick: () => this.toggleIsolation(id)
           },
           {
-            id: 'next',
-            label: copy.next,
-            icon: 'arrowRight',
-            onClick: () => this.select(next)
+            id: 'undo',
+            label: copy.undo,
+            icon: 'arrowLeft',
+            onClick: () => this.unselect()
           },
           {
             id: 'open-knowledge',
@@ -340,6 +370,14 @@ export class InteractiveLabPage implements Page {
       },
       this.anchorFor(id)
     );
+  }
+
+  /** Isolate the selected part (hide the rest), or undo the isolation. */
+  private toggleIsolation(id: OrganelleId): void {
+    const isolating = this.cell.isolation !== id;
+    this.cell.setIsolation(isolating ? id : null);
+    // Re-render so the button reflects the new state instead of silently doing nothing visible.
+    this.openOverlay(id);
   }
 
   private anchorFor(id: OrganelleId): { x: number; y: number } | null {
@@ -593,6 +631,14 @@ export class InteractiveLabPage implements Page {
     }
     switch (intent.type) {
       case 'select':
+        // With the card open, a pinch that lands on the cell rather than on a control is a
+        // request to dismiss, not to select something else. The close button sits near
+        // selectable parts, so without this a near-miss selected a new organelle instead of
+        // closing the panel.
+        if (this.selected) {
+          this.unselect();
+          break;
+        }
         // Instant pinch commits get a short halo pulse so the user sees the selection land
         // before the isolate tween and the overlay take over (audit UX-005).
         if (intent.pinchStart) this.cell.flashSelection(intent.id as OrganelleId);
