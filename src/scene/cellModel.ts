@@ -1025,7 +1025,15 @@ export class CellModel {
         else {
           const mat = t.mat as THREE.MeshStandardMaterial;
           mat.opacity = v;
-          if (v < 0.985) mat.transparent = true;
+          // three.js bakes `transparent` into the shader program. Flipping it at runtime without
+          // `needsUpdate` leaves the old program in use, so the material stays fully opaque no
+          // matter what opacity says — which is why isolation and focus dimming changed the
+          // numbers but never the picture.
+          const wantsTransparent = v < 0.985;
+          if (mat.transparent !== wantsTransparent) {
+            mat.transparent = wantsTransparent;
+            mat.needsUpdate = true;
+          }
           mat.depthWrite = v > 0.82 && !(mat.userData.noDepthWrite as boolean);
         }
       }
