@@ -153,14 +153,14 @@ describe('FrameProcessor — hand-loss tolerance', () => {
     expect(fp.frames[0].pinchStart).toBe(false);
     expect(fp.frames[0].pinchEnd).toBe(false);
 
-    // Past the window: exactly one present:false lost frame.
-    fp.buildFrames(null, 1 / 60, t + 520, VIEWPORT);
+    // Past the window (550 ms): exactly one present:false lost frame.
+    fp.buildFrames(null, 1 / 60, t + 700, VIEWPORT);
     expect(fp.frames).toHaveLength(1);
     expect(fp.frames[0].present).toBe(false);
     expect(fp.frames[0].lost).toBe(true);
 
     // And it is emitted only once.
-    fp.buildFrames(null, 1 / 60, t + 620, VIEWPORT);
+    fp.buildFrames(null, 1 / 60, t + 800, VIEWPORT);
     expect(fp.frames).toHaveLength(0);
   });
 

@@ -45,12 +45,14 @@ async function createForDelegate(
     baseOptions: { modelAssetPath: modelPath, delegate: preference },
     runningMode: 'VIDEO',
     numHands: 2,
-    // Cellab's proven thresholds (legacy Hands: detection 0.6, tracking 0.5). The palm detector
-    // is where false positives come from; presence and tracking stay permissive so a hand that
-    // is already being tracked is not dropped for one weak frame.
-    minHandDetectionConfidence: 0.6,
-    minHandPresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5
+    // Detection stays the strict gate (it is where false positives come from); presence and
+    // tracking are deliberately permissive. At 0.5 tracking, a hand that is already held was
+    // dropped for a single weaker frame, which is what read as flashing and glitching: the
+    // skeleton blinked out and came back several times a second. 0.35 keeps a held hand through
+    // motion blur and a partly closed fist without inventing one that was never there.
+    minHandDetectionConfidence: 0.55,
+    minHandPresenceConfidence: 0.45,
+    minTrackingConfidence: 0.35
   });
 }
 

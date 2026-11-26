@@ -33,8 +33,10 @@ import { clamp, dist3 } from './math';
  * A hand is "lost" after this long without a detection. Long enough to bridge the re-detection
  * gap when MediaPipe drops a hand for a few frames (a natural pinch, motion blur, a hand near
  * the frame edge), short enough that a hand which really left does not leave a ghost behind.
+ * Raised from 420 ms: at 30 fps that was ~12 frames, and a slow re-detection after a pinch
+ * routinely took longer, so the hand was declared lost and the pinch was cancelled mid-gesture.
  */
-const HAND_LOSS_MS = 420;
+const HAND_LOSS_MS = 550;
 
 export interface Viewport {
   width: number;

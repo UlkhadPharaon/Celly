@@ -60,6 +60,20 @@ export class WebcamPreview {
     this.video.muted = true;
     this.video.playsInline = true;
     this.video.autoplay = true;
+
+    // A camera that is not 16:9 (most 640x480 webcams are 4:3) must not be stretched into the
+    // 16:9 box: `object-fit: fill` squeezed the height and widened the image. Sizing the frame to
+    // the real stream keeps the picture undistorted, and because the landmark overlay uses the
+    // same normalised coordinates, the skeleton stays registered without any crop maths.
+    this.video.addEventListener('loadedmetadata', () => this.fitToStream());
+  }
+
+  /** Match the frame's aspect ratio to the delivered stream (4:3, 16:9, or anything else). */
+  private fitToStream(): void {
+    const width = this.video.videoWidth;
+    const height = this.video.videoHeight;
+    if (!width || !height) return;
+    this.root.style.aspectRatio = `${width} / ${height}`;
   }
 
   /** Adopt the live camera stream. `null` stops the local decoder. */

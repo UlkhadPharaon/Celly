@@ -939,10 +939,10 @@ svg.icon {
   height: 100%;
 }
 
-/* The camera image is presented by the compositor. `fill` keeps the same 4:3 -> 16:9 mapping
-   the old canvas drawImage used, so the landmark overlay stays registered without crop math. */
+/* The frame takes the stream's own aspect ratio (set from `videoWidth`/`videoHeight`), so the
+   camera image is never stretched. `contain` is the safe fallback before metadata arrives. */
 .preview-video {
-  object-fit: fill;
+  object-fit: contain;
   background: #03080f;
   transform-origin: center;
 }

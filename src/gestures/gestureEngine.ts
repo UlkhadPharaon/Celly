@@ -10,6 +10,12 @@ export interface GestureEngineConfig {
   dwellMs: number;
   rotateGain: number;
   scaleSmooth: number;
+  /** Fraction of the previous palm delta kept each frame: 1 = no smoothing, 0 = frozen. */
+  rotateSmooth: number;
+  /** Palm movement below this (normalised units) is treated as jitter, not a rotation. */
+  rotateDeadzone: number;
+  /** Hard cap on the rotation applied in one frame, so a single bad frame cannot spin the cell. */
+  rotateMaxStep: number;
 }
 
 export const DEFAULT_GESTURE: GestureEngineConfig = {
@@ -20,8 +26,14 @@ export const DEFAULT_GESTURE: GestureEngineConfig = {
   clickMaxMs: 1500,
   clickMaxTravelPx: 24,
   dwellMs: 900,
-  rotateGain: 7,
-  scaleSmooth: 0.35
+  // 7 rad per normalised unit was far too hot: a 1 cm palm tremor is ~0.01 units, which became
+  // 0.07 rad every frame — about 120 deg/s of drift from noise alone. 2.2 with smoothing and a
+  // deadzone turns the same hand movement into a controllable turn.
+  rotateGain: 2.2,
+  scaleSmooth: 0.35,
+  rotateSmooth: 0.55,
+  rotateDeadzone: 0.0015,
+  rotateMaxStep: 0.09
 };
 
 interface ClickCandidate {
@@ -62,6 +74,8 @@ export class GestureEngine {
   private swipe: SwipeSession | null = null;
   private scaleStartDist = 1;
   private scaleSmoothed = 1;
+  /** Smoothed palm delta, so a jittery detection cannot spin the cell. */
+  private rotateDelta: Vec2 = { x: 0, y: 0 };
   private lastFactor = 1;
   private lastPalm: { x: number; y: number } | null = null;
   private lastHover: string | null = null;
@@ -78,6 +92,7 @@ export class GestureEngine {
     this.clickCandidate = null;
     this.swipe = null;
     this.lastPalm = null;
+    this.rotateDelta = { x: 0, y: 0 };
     this.lastHover = null;
     this.dwellSince = 0;
     this.dwellFired = false;
@@ -103,6 +118,7 @@ export class GestureEngine {
         this.state = 'COOLDOWN';
         this.cooldownUntil = ctx.t + this.cfg.twoHandCooldownMs;
         this.lastPalm = null;
+        this.rotateDelta = { x: 0, y: 0 };
       } else {
         const d = Math.max(1, dist2(right.cursor, left.cursor));
         const factor = d / this.scaleStartDist;
@@ -111,12 +127,16 @@ export class GestureEngine {
         this.lastFactor = this.scaleSmoothed;
         intents.push({ type: 'scale', factor: this.scaleSmoothed, delta });
       }
-    } else if (bothPinching && right && left && ctx.scaleEnabled && !this.clickCandidate) {
+    } else if (bothPinching && right && left && ctx.scaleEnabled) {
+      // Two pinches always mean scale. A click candidate left over from the right hand's pinch
+      // (it landed on a button a frame earlier) used to veto this branch, which is why the scale
+      // gesture often refused to start; the candidate is simply dropped instead.
       this.scaleStartDist = Math.max(1, dist2(right.cursor, left.cursor));
       this.scaleSmoothed = 1;
       this.lastFactor = 1;
       this.state = 'SCALING';
       this.lastPalm = null;
+      this.rotateDelta = { x: 0, y: 0 };
       this.swipe = null;
       this.clickCandidate = null;
     }
@@ -260,10 +280,8 @@ export class GestureEngine {
         this.beginRotate(left);
       }
       if (left.pinching && this.state === 'ROTATING' && this.lastPalm) {
-        const dx = (left.palm.x - this.lastPalm.x) * this.cfg.rotateGain;
-        const dy = (left.palm.y - this.lastPalm.y) * this.cfg.rotateGain;
-        if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) intents.push({ type: 'rotate', dx, dy });
-        this.lastPalm = { x: left.palm.x, y: left.palm.y };
+        const step = this.rotateStep(left.palm);
+        if (step.x !== 0 || step.y !== 0) intents.push({ type: 'rotate', dx: step.x, dy: step.y });
       }
       if (left.pinchEnd && this.state === 'ROTATING') {
         this.lastPalm = null;
@@ -273,10 +291,8 @@ export class GestureEngine {
     // ------------------------------------------------------- rotate (left-only)
     if (primaryIsLeft && primary && !primary.lost) {
       if (primary.pinching && this.state === 'ROTATING' && this.lastPalm) {
-        const dx = (primary.palm.x - this.lastPalm.x) * this.cfg.rotateGain;
-        const dy = (primary.palm.y - this.lastPalm.y) * this.cfg.rotateGain;
-        if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) intents.push({ type: 'rotate', dx, dy });
-        this.lastPalm = { x: primary.palm.x, y: primary.palm.y };
+        const step = this.rotateStep(primary.palm);
+        if (step.x !== 0 || step.y !== 0) intents.push({ type: 'rotate', dx: step.x, dy: step.y });
       }
       if (primary.pinchEnd) this.lastPalm = null;
     }
@@ -349,7 +365,38 @@ export class GestureEngine {
   private beginRotate(hand: HandFrame): void {
     this.state = 'ROTATING';
     this.lastPalm = { x: hand.palm.x, y: hand.palm.y };
+    this.rotateDelta = { x: 0, y: 0 };
     this.clickCandidate = null;
     this.swipe = null;
+  }
+
+  /**
+   * Palm delta → a smoothed, deadzoned, clamped rotation step.
+   *
+   * Raw palm tracking is noisy at the sub-pixel level, and the previous version multiplied that
+   * noise by the gain with no filtering, which is why the cell spun on a still hand. Three guards
+   * run in order: drop movement too small to be intentional, ease the rest over frames, then cap
+   * the worst case so one dropped or wrong detection cannot whip the model around.
+   */
+  private rotateStep(current: { x: number; y: number }): Vec2 {
+    const previous = this.lastPalm ?? current;
+    let dx = current.x - previous.x;
+    let dy = current.y - previous.y;
+    this.lastPalm = { x: current.x, y: current.y };
+
+    if (Math.abs(dx) < this.cfg.rotateDeadzone) dx = 0;
+    if (Math.abs(dy) < this.cfg.rotateDeadzone) dy = 0;
+
+    const smooth = this.cfg.rotateSmooth;
+    this.rotateDelta = {
+      x: this.rotateDelta.x * smooth + dx * (1 - smooth),
+      y: this.rotateDelta.y * smooth + dy * (1 - smooth)
+    };
+
+    const cap = this.cfg.rotateMaxStep;
+    return {
+      x: Math.max(-cap, Math.min(cap, this.rotateDelta.x * this.cfg.rotateGain)),
+      y: Math.max(-cap, Math.min(cap, this.rotateDelta.y * this.cfg.rotateGain))
+    };
   }
 }
