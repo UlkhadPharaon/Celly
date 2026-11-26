@@ -916,7 +916,10 @@ svg.icon {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 12px;
-  display: grid;
+  /* Flex column, not grid: the preview is a flow item and must push the rows down. In the grid
+     it was laid out on top of the first switches, which is the overlap reported from the field. */
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   font-size: 12px;
 }
@@ -932,6 +935,12 @@ svg.icon {
   background: #03080f;
   border: 1px solid var(--line);
   flex: 0 0 auto;
+}
+
+/* The preview is a flow item in the controls column: it takes its own row and never overlaps the
+   switches below it. */
+.controls > .preview {
+  width: 100%;
 }
 
 .preview-video,
@@ -1994,9 +2003,15 @@ svg.icon {
   position: fixed;
   inset: 0;
   z-index: 80;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
   padding: 24px;
+  /* The overlay scrolls as well as the card. On a short window the gesture step is taller than
+     the viewport, and with `place-items: center` the overflow was clipped at both ends with no
+     scrollbar — the way out was simply unreachable. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: rgba(2, 6, 12, 0.72);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -2013,8 +2028,11 @@ svg.icon {
 .onboarding-card {
   position: relative;
   width: min(880px, 100%);
-  max-height: min(760px, 92vh);
-  overflow: auto;
+  /* `margin: auto` centres it while the overlay is taller than the card, and lets the overlay
+     scroll instead of clipping when the card is taller than the viewport. */
+  margin: auto;
+  max-height: none;
+  overflow: visible;
   display: grid;
   grid-template-columns: 0.85fr 1.15fr;
   gap: 0;
@@ -2201,14 +2219,11 @@ svg.icon {
 
 /* The primary action stays reachable however tall the step is. */
 .onboarding-actions {
-  position: sticky;
-  bottom: -1px;
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
   margin-top: 6px;
-  padding: 12px 0 4px;
-  background: linear-gradient(to top, var(--glass-2) 62%, rgba(12, 24, 40, 0));
+  padding-top: 12px;
 }
 
 .onboarding-privacy {

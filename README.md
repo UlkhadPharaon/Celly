@@ -1,13 +1,13 @@
 # Celly v0.2
 
-[**Live demo**](https://celly-blue.vercel.app) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba)
+[**Live demo**](https://celly-blue.vercel.app) · [**Source on GitHub**](https://github.com/UlkhadPharaon/Celly) · [**Learn article**](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009)
 
 **A touch-free 3D cell biology lab.** Celly puts a living, procedural cell in front of you and lets
 you explore it with your **bare hands** — no controller, no headset, no gloves. A webcam and a pinch
 are the entire interface, with the mouse and keyboard kept as a first-class fallback.
 
-> **The story behind Celly:** [From RGB camera to 3D interaction — how controller-free XR could
-> transform learning](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba).
+> **The story behind Celly:** [How to make school more valuable — what a 3D cell you can hold
+> changes about learning](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009).
 
 The app has three sections:
 
@@ -454,7 +454,7 @@ degrades to mouse mode if no camera is available.
 - [`FINAL_REPORT_ROUND2.md`](FINAL_REPORT_ROUND2.md) — measured results, limitations and v0.3 plan
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — scene graph, data flow, module contracts
 - [`docs/RESEARCH.md`](docs/RESEARCH.md) — prior-art and asset research
-- [Learn article: From RGB camera to 3D interaction](https://medium.com/@ulrichtapsoba2009/from-rgb-camera-to-3d-interaction-how-controller-free-xr-could-transform-learning-d920d92cf5ba) — the story and design rationale
+- [Learn article: How to make school more valuable](https://medium.com/@ulrichtapsoba2009/how-to-make-school-more-valuable-94ac46cecc32?sharedUserId=ulrichtapsoba2009) - the story and design rationale
 - [`ASSET_INVENTORY.md`](ASSET_INVENTORY.md) — what ships, where it came from, licence audit
 - [`CREDITS.md`](CREDITS.md) — attribution for models, fonts, WASM and code
 - [`CHANGELOG.md`](CHANGELOG.md) — v0.1 → v0.2

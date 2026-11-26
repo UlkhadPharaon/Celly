@@ -947,7 +947,11 @@ export class CellModel {
         this.haloMaterial.uniforms.uColor.value.set(ORGANELLE_BY_ID.get(id)?.color ?? '#ffb347');
       }
     }
-    this.setIsolation(id);
+    // Selecting does NOT isolate. It used to, which made the Isolate button a no-op: the rest of
+    // the cell was already ghosted, so toggling isolation changed nothing visible. Focus dimming
+    // is the gentle default; isolation is the explicit, stronger opt-in.
+    this.setFocusDim(id);
+    if (!id) this.setIsolation(null);
   }
 
   /**

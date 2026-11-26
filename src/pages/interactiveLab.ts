@@ -274,6 +274,7 @@ export class InteractiveLabPage implements Page {
     this.selected = null;
     this.cell.setSelected(null);
     this.cell.setFocusDim(null);
+    this.cell.setIsolation(null);
     this.syncRail();
     this.ctx.overlay.hide();
 
@@ -348,7 +349,7 @@ export class InteractiveLabPage implements Page {
         buttons: [
           {
             id: 'isolate',
-            label: copy.isolate,
+            label: this.cell.isolation === id ? copy.undo : copy.isolate,
             icon: 'focus',
             onClick: () => this.toggleIsolation(id)
           },
@@ -373,7 +374,10 @@ export class InteractiveLabPage implements Page {
 
   /** Isolate the selected part (hide the rest), or undo the isolation. */
   private toggleIsolation(id: OrganelleId): void {
-    this.cell.setIsolation(this.cell.isolation === id ? null : id);
+    const isolating = this.cell.isolation !== id;
+    this.cell.setIsolation(isolating ? id : null);
+    // Re-render so the button reflects the new state instead of silently doing nothing visible.
+    this.openOverlay(id);
   }
 
   private anchorFor(id: OrganelleId): { x: number; y: number } | null {
