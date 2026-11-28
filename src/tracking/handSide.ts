@@ -21,7 +21,7 @@ interface Slot {
   pendingSince: number;
 }
 
-const FLIP: Record<'Left' | 'Right', HandSide> = { Left: 'right', Right: 'left' };
+const DIRECT: Record<'Left' | 'Right', HandSide> = { Left: 'left', Right: 'right' };
 const LOST_MS = 450;
 const SWITCH_MS = 150;
 const MATCH_DIST = 0.4;
@@ -29,9 +29,9 @@ const MATCH_DIST = 0.4;
 /**
  * Resolves which of the user's hands is Left/Right.
  *
- * MediaPipe's handedness assumes a *mirrored* (selfie) input image. The tracker feeds it the
- * raw camera frame, so the label is flipped once. `handsSwap` is the user's manual correction.
- * Assignments are debounced per tracking slot (nearest wrist) so the label never flickers L↔R.
+ * MediaPipe's HandLandmarker reports the user's anatomical handedness directly (`Left` -> `'left'`,
+ * `Right` -> `'right'`). `handsSwap` is the user's manual correction if their camera driver
+ * pre-mirrors the stream. Assignments are debounced per tracking slot so the label never flickers.
  */
 export class HandSideResolver {
   private slots: Slot[] = [];
@@ -106,7 +106,7 @@ export class HandSideResolver {
 
   private rawSide(label: 'Left' | 'Right' | 'Unknown', swap: boolean): HandSide {
     if (label === 'Unknown') return 'right';
-    const anatomical = FLIP[label];
+    const anatomical = DIRECT[label];
     if (!swap) return anatomical;
     return anatomical === 'left' ? 'right' : 'left';
   }

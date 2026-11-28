@@ -50,9 +50,9 @@ async function createForDelegate(
     // dropped for a single weaker frame, which is what read as flashing and glitching: the
     // skeleton blinked out and came back several times a second. 0.35 keeps a held hand through
     // motion blur and a partly closed fist without inventing one that was never there.
-    minHandDetectionConfidence: 0.55,
-    minHandPresenceConfidence: 0.45,
-    minTrackingConfidence: 0.35
+    minHandDetectionConfidence: 0.42,
+    minHandPresenceConfidence: 0.35,
+    minTrackingConfidence: 0.25
   });
 }
 

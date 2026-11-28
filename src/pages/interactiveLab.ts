@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { InteractionMode } from '../study/types';
 import type { GestureState, Intent, Language } from '../types';
 import type { OrganelleId } from '../scene/types';
 import { CellModel } from '../scene/cellModel';
@@ -14,8 +15,11 @@ export const COPY = {
     eyebrow: 'Interactive lab',
     title: 'The animal cell',
     lead: 'Pinch a structure to isolate it. Pinch empty space to release.',
+    pointerLead: 'Drag, pinch or scroll to turn and zoom. Tap a part to open it.',
     hintIdle: 'Pinch a structure to explore',
+    pointerHintIdle: 'Drag to turn · pinch or scroll to zoom',
     hintSelected: 'Pinch empty space to release · left pinch to rotate',
+    pointerHintSelected: 'Tap empty space to close · drag to turn',
     index: 'Structures',
     organelle: 'Organelle',
     function: 'Function',
@@ -32,8 +36,11 @@ export const COPY = {
     eyebrow: 'Laboratoire interactif',
     title: 'La cellule animale',
     lead: 'Pincez une structure pour l’isoler. Pincez le vide pour revenir.',
+    pointerLead: 'Glissez, pincez ou faites défiler pour tourner et zoomer. Touchez une structure pour l’ouvrir.',
     hintIdle: 'Pincez une structure pour l’explorer',
+    pointerHintIdle: 'Glissez pour tourner · pincez ou défilez pour zoomer',
     hintSelected: 'Pincez le vide pour relâcher · pincement gauche pour tourner',
+    pointerHintSelected: 'Touchez le vide pour fermer · glissez pour tourner',
     index: 'Structures',
     organelle: 'Organite',
     function: 'Fonction',
@@ -88,6 +95,7 @@ export class InteractiveLabPage implements Page {
   private anchorClock = 0;
   private readonly anchorMemory = new Map<OrganelleId, { x: number; y: number }>();
   private language: Language;
+  private mode: InteractionMode;
   private readonly labels = new Map<string, HTMLElement>();
   private readonly chips = new Map<string, HTMLElement>();
   private readonly eyebrow: HTMLElement;
@@ -112,6 +120,7 @@ export class InteractiveLabPage implements Page {
 
   constructor(private readonly ctx: PageContext) {
     this.language = ctx.settings.language;
+    this.mode = ctx.mode;
     this.root = document.createElement('section');
     this.root.className = 'page page-lab';
 
@@ -230,6 +239,7 @@ export class InteractiveLabPage implements Page {
   }
 
   /** Test hook: the rig's current Y rotation, used by the reduce-motion E2E. */
+  /** Current Y rotation of the cell rig (hands or pointer). */
   get rigRotationY(): number {
     return this.rig.rotation.y;
   }
@@ -237,12 +247,17 @@ export class InteractiveLabPage implements Page {
   private autoRotate = true;
   private reducedMotion = false;
 
+  setMode(mode: InteractionMode): void {
+    this.mode = mode;
+    this.setLanguage(this.language);
+  }
+
   setLanguage(language: Language): void {
     this.language = language;
     const copy = COPY[language];
     this.eyebrow.textContent = copy.eyebrow;
     this.title.textContent = copy.title;
-    this.lead.textContent = copy.lead;
+    this.lead.textContent = this.mode === 'hands' ? copy.lead : copy.pointerLead;
     this.indexLabel.textContent = copy.index;
     for (const meta of ORGANELLES) {
       const label = this.labels.get(meta.id);
@@ -628,7 +643,13 @@ export class InteractiveLabPage implements Page {
   private updateHint(): void {
     const copy = COPY[this.language];
     const text = this.hint.querySelector('span');
-    if (text) text.textContent = this.selected ? copy.hintSelected : copy.hintIdle;
+    if (text) {
+      if (this.mode === 'hands') {
+        text.textContent = this.selected ? copy.hintSelected : copy.hintIdle;
+      } else {
+        text.textContent = this.selected ? copy.pointerHintSelected : copy.pointerHintIdle;
+      }
+    }
     this.hint.classList.toggle('is-selected', !!this.selected);
   }
 
@@ -692,9 +713,18 @@ export class InteractiveLabPage implements Page {
       }
       case 'state':
         this.lastGesture = intent.state;
-        // The gesture ended (pinch released, hand lost, or a two-hand scale took over): drop the
-        // anchor so the next pinch starts from wherever the rig now is.
-        if (intent.state !== 'ROTATING') this.rotateAnchor = null;
+        // The gesture ended (pinch released, hand lost, or a two-hand scale took over): commit
+        // any un-eased target from the current anchor, then drop it so the next gesture starts
+        // from wherever the rig now is.
+        if (intent.state !== 'ROTATING' && this.rotateAnchor) {
+          const vw = Math.max(1, window.innerWidth);
+          const vh = Math.max(1, window.innerHeight);
+          const dx = clamp((this.rotateAnchor.palmX - this.rotateAnchor.startX) / vw, -0.5, 0.5);
+          const dy = clamp((this.rotateAnchor.palmY - this.rotateAnchor.startY) / vh, -0.5, 0.5);
+          this.rig.rotation.y = this.rotateAnchor.rotY + dx * ROTATE_GAIN;
+          this.rig.rotation.x = clamp(this.rotateAnchor.rotX + dy * ROTATE_GAIN, -0.9, 0.9);
+          this.rotateAnchor = null;
+        }
         break;
       default:
         break;

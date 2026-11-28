@@ -33,10 +33,22 @@ import { clamp, dist3 } from './math';
  * A hand is "lost" after this long without a detection. Long enough to bridge the re-detection
  * gap when MediaPipe drops a hand for a few frames (a natural pinch, motion blur, a hand near
  * the frame edge), short enough that a hand which really left does not leave a ghost behind.
- * Raised from 420 ms: at 30 fps that was ~12 frames, and a slow re-detection after a pinch
- * routinely took longer, so the hand was declared lost and the pinch was cancelled mid-gesture.
+ * Raised from 550 → 850 ms because:
+ * 1. At 30 fps, 550 ms was ~16 frames — not enough when MediaPipe's re-detection after tracking
+ *    loss routinely takes 20–30 frames (the detection model runs every N-th frame, N=5 by default).
+ * 2. User-reported "flashing" was caused by repeated loss→re-detect→loss cycles that fell within
+ *    the detection latency window.
+ * 850 ms gives the detector a full re-detection cycle. Combined with the lower tracking confidence
+ * threshold (0.25), a hand that is physically present is never visibly lost.
  */
-const HAND_LOSS_MS = 550;
+const HAND_LOSS_MS = 850;
+
+/**
+ * Minimum consecutive unseen frames before we actually begin the loss countdown. This prevents
+ * a single dropped frame from starting the HAND_LOSS_MS clock — only a sustained absence triggers
+ * it. At 30 fps, 3 consecutive misses ≈ 100 ms, which filters out single-frame detector hiccups.
+ */
+const MIN_LOSS_FRAMES = 3;
 
 export interface Viewport {
   width: number;
@@ -98,6 +110,7 @@ export class FrameProcessor {
   private readonly pinchStates = new Map<HandSide, PinchState>();
   private readonly lastFrames = new Map<HandSide, HandFrame>();
   private readonly lastSeen = new Map<HandSide, number>();
+  private readonly missCounts = new Map<HandSide, number>();
   private readonly lostSent = new Set<HandSide>();
   private sticky: { id: string; at: number; x: number; y: number } | null = null;
 
@@ -134,9 +147,12 @@ export class FrameProcessor {
     const frames: HandFrame[] = [];
     (raw?.hands ?? []).forEach((hand, i) => {
       if (hand.landmarks.length !== 21) return;
-      // A degenerate detection is treated as *no* detection, so the loss tolerance replays the
-      // last good pose instead of the pinch state machine synthesising a release from bad data.
-      if (!Number.isFinite(hand.score) || hand.score < 0.25) return;
+      // `hand.score` is MediaPipe's *handedness* (Left/Right) confidence, not a presence signal.
+      // Gating presence on it dropped a physically-present hand whenever the L/R classifier was
+      // momentarily unsure — the skeleton blinked out and back several times a second. Presence is
+      // already gated upstream by the detector's minHandDetection/Presence/Tracking confidences, so
+      // here we only reject a non-finite score (which would poison the filters and the HUD).
+      if (!Number.isFinite(hand.score)) return;
       if (!landmarksFinite(hand.landmarks)) return;
       const side = sides[i] ?? 'right';
       const rawNorm = hand.landmarks;
@@ -214,17 +230,24 @@ export class FrameProcessor {
       // where the camera has not produced a new frame, so a pinch cannot be ended by a stale tick.
       this.lastFrames.set(side, frames[frames.length - 1]);
       this.lastSeen.set(side, t);
+      this.missCounts.set(side, 0);
       this.lostSent.delete(side);
       this.scores.set(side, hand.score);
     });
 
     // Hand-loss tolerance: persist the last pose between detections, but never mutate it
-    // into a synthetic release. Only after the window expires do we emit one explicit lost frame.
+    // into a synthetic release. A hand is only declared lost once it has been unseen for the
+    // whole time window AND for at least MIN_LOSS_FRAMES consecutive ticks — a single dropped
+    // detection (detector hiccup, motion blur) must not start the countdown or retire the hand.
     for (const side of ['left', 'right'] as const) {
       if (frames.some((f) => f.side === side)) continue;
       const last = this.lastFrames.get(side);
       const seen = this.lastSeen.get(side) ?? -Infinity;
-      if (last && t - seen < HAND_LOSS_MS) {
+      const misses = (this.missCounts.get(side) ?? 0) + 1;
+      this.missCounts.set(side, misses);
+      const withinWindow = t - seen < HAND_LOSS_MS;
+      const withinGrace = misses < MIN_LOSS_FRAMES;
+      if (last && (withinWindow || withinGrace)) {
         frames.push({ ...last, pinchStart: false, pinchEnd: false });
       } else if (last && !this.lostSent.has(side)) {
         // A single present:false transition lets the gesture engine clear in-flight candidates
@@ -246,6 +269,7 @@ export class FrameProcessor {
         this.lostSent.add(side);
         this.lastFrames.delete(side);
         this.lastSeen.delete(side);
+        this.missCounts.delete(side);
         this.scores.delete(side);
         this.pinchStates.set(side, initialPinch());
         this.aimLocks.delete(side);

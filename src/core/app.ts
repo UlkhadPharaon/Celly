@@ -36,6 +36,7 @@ import { synthHand } from './replayHand';
 import { buildPose, buildPoseSequence, type PoseData, type PoseName } from './handPoses';
 import { clamp, dist3 } from './math';
 import { FrameProcessor } from './frameProcessor';
+import { PointerControls } from './pointerControls';
 import { CursorMotion } from '../gestures/cursorMotion';
 import { deviceProfile, refreshDeviceProfile } from './device';
 import { InteractiveLabPage } from '../pages/interactiveLab';
@@ -74,6 +75,7 @@ export class CellyApp {
   private readonly research: ResearchPanel;
   private studyLayer: StudyLayer | null = null;
   private mode: InteractionMode | null = null;
+  private pointerControls: PointerControls | null = null;
 
   private current: Page | null = null;
   private cameraAttemptCount = 0;
@@ -224,6 +226,7 @@ export class CellyApp {
       overlay: this.shell.overlay,
       shell: this.shell,
       settings: this.settings,
+      mode: this.mode ?? 'mouse',
       actions
     };
 
@@ -286,6 +289,9 @@ export class CellyApp {
     this.mode = mode;
     document.documentElement.dataset.mode = mode;
     this.shell.root.dataset.mode = mode;
+    for (const page of this.pages.values()) {
+      page.setMode?.(mode);
+    }
 
     if (mode === 'text') {
       this.enterTextMode();
@@ -593,26 +599,35 @@ export class CellyApp {
     this.bindDeviceProfile();
 
     const canvas = this.scene.renderer.domElement;
-    canvas.addEventListener('pointermove', (event: PointerEvent) => {
-      if (this.fp.frames.length) return;
-      this.mouseHover(event.clientX, event.clientY);
-    });
-    canvas.addEventListener('pointerleave', () => {
-      if (this.fp.frames.length) return;
-      this.shell.registry.setHover(null);
-      this.current?.setHovered(null);
-    });
-    canvas.addEventListener('click', (event: MouseEvent) => {
-      if (this.fp.frames.length) return;
-      const ui = this.shell.registry.hitTest(event.clientX, event.clientY);
-      if (ui) {
-        this.shell.registry.trigger(ui);
-        return;
+    this.pointerControls = new PointerControls({
+      canvas,
+      isEnabled: () =>
+        !this.fp.frames.length &&
+        !(
+          this.modeGate.isOpen ||
+          this.tour.isOpen ||
+          this.shell.onboarding.isOpen ||
+          this.research.isOpen ||
+          this.studyLayer?.isOpen
+        ),
+      onIntent: (intent) => this.dispatch([intent]),
+      onTap: (x, y) => {
+        const ui = this.shell.registry.hitTest(x, y);
+        if (ui) {
+          this.shell.registry.trigger(ui);
+          return;
+        }
+        const id = this.current?.pick(x, y) ?? null;
+        if (id) this.current?.onIntent({ type: 'select', id });
+        else this.current?.onIntent({ type: 'unselect' });
+      },
+      onHover: (x, y) => this.mouseHover(x, y),
+      onHoverLeave: () => {
+        this.shell.registry.setHover(null);
+        this.current?.setHovered(null);
       }
-      const id = this.current?.pick(event.clientX, event.clientY) ?? null;
-      if (id) this.current?.onIntent({ type: 'select', id });
-      else this.current?.onIntent({ type: 'unselect' });
     });
+    this.pointerControls.attach();
 
     window.addEventListener('keydown', (event) => {
       if (this.disposed || event.defaultPrevented) return;
@@ -776,6 +791,7 @@ export class CellyApp {
         case 'hover':
           break;
         case 'state':
+          this.current?.onIntent(intent);
           break;
         default:
           this.current?.onIntent(intent);
@@ -1351,6 +1367,7 @@ export class CellyApp {
     if (this.disposed) return;
     this.disposed = true;
     if (this.deviceCheckTimer) window.clearInterval(this.deviceCheckTimer);
+    this.pointerControls?.detach();
     cancelAnimationFrame(this.raf);
     void this.tracker.stop();
     this.hands.dispose();

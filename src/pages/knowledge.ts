@@ -1,3 +1,4 @@
+import type { InteractionMode } from '../study/types';
 import type { Intent, KnowledgeCategory, Language } from '../types';
 import { KNOWLEDGE_NODES, KNOWLEDGE_BY_ID, loc, locList } from '../data/catalog';
 import { KnowledgeScene } from '../scene/knowledgeScene';
@@ -9,7 +10,9 @@ export const COPY = {
     eyebrow: 'Knowledge network',
     title: 'Everything connects',
     lead: 'Pinch a node to open it. Swipe to hop between linked ideas.',
+    pointerLead: 'Drag, pinch or scroll to orbit and zoom. Tap a node to open it.',
     hint: 'Pinch a node · pinch and drag to swipe · left pinch to orbit',
+    pointerHint: 'Drag to orbit · pinch or scroll to zoom · tap a node',
     related: 'Linked ideas',
     facts: 'Key facts',
     openLab: 'Open in Lab',
@@ -25,7 +28,9 @@ export const COPY = {
     eyebrow: 'Réseau de savoirs',
     title: 'Tout est lié',
     lead: 'Pincez un nœud pour l’ouvrir. Balayez pour passer d’une idée à l’autre.',
+    pointerLead: 'Glissez, pincez ou faites défiler pour orbiter et zoomer. Touchez un nœud pour l’ouvrir.',
     hint: 'Pincez un nœud · pincez et glissez pour balayer · pincement gauche pour orbiter',
+    pointerHint: 'Glissez pour orbiter · pincez ou défilez pour zoomer · touchez un nœud',
     related: 'Idées liées',
     facts: 'Points clés',
     openLab: 'Ouvrir au labo',
@@ -60,6 +65,7 @@ export class KnowledgePage implements Page {
   private anchorClock = 0;
   private swipeIndex = 0;
   private language: Language;
+  private mode: InteractionMode;
   private autoRotate = true;
   private reducedMotion = false;
 
@@ -71,6 +77,7 @@ export class KnowledgePage implements Page {
 
   constructor(private readonly ctx: PageContext) {
     this.language = ctx.settings.language;
+    this.mode = ctx.mode;
     this.knowledge = new KnowledgeScene(this.language);
     this.knowledge.autoRotate = true;
     // Leave room for the topbar, the HUD, the key and the overlay at 16:9.
@@ -124,14 +131,19 @@ export class KnowledgePage implements Page {
     this.knowledge.autoRotate = this.autoRotate && !value;
   }
 
+  setMode(mode: InteractionMode): void {
+    this.mode = mode;
+    this.setLanguage(this.language);
+  }
+
   setLanguage(language: Language): void {
     this.language = language;
     const copy = COPY[language];
     this.eyebrow.textContent = copy.eyebrow;
     this.title.textContent = copy.title;
-    this.lead.textContent = copy.lead;
+    this.lead.textContent = this.mode === 'hands' ? copy.lead : copy.pointerLead;
     const hint = this.hint.querySelector('span');
-    if (hint) hint.textContent = copy.hint;
+    if (hint) hint.textContent = this.mode === 'hands' ? copy.hint : copy.pointerHint;
     this.knowledge.setLanguage(language);
     this.renderKey();
     if (this.focused) this.openOverlay(this.focused);

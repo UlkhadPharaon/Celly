@@ -2,14 +2,13 @@ import * as THREE from 'three';
 import type { HandFrame, HandSide, Settings } from '../types';
 import { clamp } from '../core/math';
 import { mapNormalized } from '../gestures/cursor';
-import { SkeletonHand } from './skeletonHand';
+import { RealHand } from './realHand';
 
 /** Distance from the camera along its view ray. The hand stays in front of the cell. */
 const HAND_DISTANCE = 4.35;
-/** MediaPipe world landmarks are metric; this is the on-screen size of a reference hand. */
-const PX_PER_METRE = 1.05;
-const REFERENCE_HAND_SCALE = 0.094;
 const DEPTH_GAIN = 18;
+/** Sleek display scale around the index fingertip so the 3D hand never feels oversized. */
+const HAND_DISPLAY_SCALE = 0.72;
 const NDC = new THREE.Vector3();
 const DIR = new THREE.Vector3();
 const FORWARD = new THREE.Vector3();
@@ -28,12 +27,12 @@ const WORLD_POINTS: THREE.Vector3[] = Array.from({ length: 21 }, () => new THREE
  */
 export class HandLayer {
   readonly group = new THREE.Group();
-  private readonly hands = new Map<HandSide, SkeletonHand>();
+  private readonly hands = new Map<HandSide, RealHand>();
   private readonly map = { width: 0, height: 0, mirrorX: true, mirrorY: false };
 
   constructor() {
     for (const side of ['left', 'right'] as const) {
-      const hand = new SkeletonHand(side);
+      const hand = new RealHand(side);
       hand.container.visible = false;
       this.hands.set(side, hand);
       this.group.add(hand.container);
@@ -56,6 +55,9 @@ export class HandLayer {
     camera.getWorldDirection(FORWARD);
     const tanHalfFov = Math.tan((camera.fov * Math.PI) / 360);
 
+    // The 3D mesh uses the SAME mirror mapping as the cursor and the (CSS-mirrored) webcam
+    // preview, so a hand's mesh, its pointer and its preview skeleton all sit on one side. A
+    // separate unmirrored map put the left hand's mesh on the right, split from its cursor.
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands.get(side);
       if (!hand) continue;
@@ -67,21 +69,15 @@ export class HandLayer {
       }
 
       hand.container.visible = true;
+      hand.setMirrored(settings.mirrorX);
       hand.setResolution(map.width, map.height, pixelRatio);
 
-      // The apparent hand size follows the tracked hand's metric span, but bounded: a hand very
-      // close to the lens should not become a giant skeleton, and one at the back of the room
-      // should not vanish. Using the metric span (not the screen span) keeps the overlay the same
-      // size whichever way the camera is angled.
-      const handScale = frame.handScale > 1e-4 ? frame.handScale : REFERENCE_HAND_SCALE;
-      const pxPerMetre =
-        PX_PER_METRE * map.height * clamp(handScale / REFERENCE_HAND_SCALE, 0.7, 1.4);
       const hasWorld =
         frame.worldMetric !== false &&
         frame.world.length === 21 &&
         frame.handScale > 0.005 &&
         worldIsFinite(frame.world);
-      const indexWorld = hasWorld ? frame.world[8] : null;
+      const wristWorld = hasWorld ? frame.world[0] : null;
 
       let thumbScreenX = frame.cursor.x;
       let thumbScreenY = frame.cursor.y;
@@ -90,29 +86,20 @@ export class HandLayer {
       let thumbDistance = HAND_DISTANCE;
       let indexDistance = HAND_DISTANCE;
 
+      // Map landmarks through the SAME mirrored `map` the cursor uses, so the 3D mesh sits on the
+      // same side as the pointer and the preview skeleton. The anchor (center of scaling) is the
+      // index fingertip mapped through that same map so the hand fans out from its true position.
+      const anchorMapped = mapNormalized(frame.landmarks[8], map);
+      const anchorX = anchorMapped.x;
+      const anchorY = anchorMapped.y;
+
       for (let i = 0; i < 21; i++) {
-        let dx = 0;
-        let dy = 0;
-        let dz = 0;
-        let screenX: number;
-        let screenY: number;
-        if (hasWorld && indexWorld) {
-          // App publishes world landmarks in display orientation (x right, y up), already
-          // mirrored to match the pointer mapping, so the deltas need no extra flip.
-          const point = frame.world[i];
-          dx = point.x - indexWorld.x;
-          dy = point.y - indexWorld.y;
-          dz = point.z - indexWorld.z;
-          screenX = frame.cursor.x + dx * pxPerMetre;
-          screenY = frame.cursor.y - dy * pxPerMetre;
-        } else {
-          // No metric landmarks: use the normalized image positions directly. `mapNormalized`
-          // applies the same mirror and reach mapping as the cursor, so the shape stays glued to
-          // the pointer without a second scale factor.
-          const mapped = mapNormalized(frame.landmarks[i], map);
-          screenX = mapped.x;
-          screenY = mapped.y;
-        }
+        // Normalized image landmarks mapped through the mirrored `map` for 3D placement. Metric
+        // world Z provides realistic 3D depth relative to the wrist.
+        const mapped = mapNormalized(frame.landmarks[i], map);
+        const screenX = anchorX + (mapped.x - anchorX) * HAND_DISPLAY_SCALE;
+        const screenY = anchorY + (mapped.y - anchorY) * HAND_DISPLAY_SCALE;
+        const dz = hasWorld && wristWorld ? frame.world[i].z - wristWorld.z : 0;
 
         const distance = clamp(HAND_DISTANCE - dz * DEPTH_GAIN, 3.2, 5.4);
         worldOnRay(camera, screenX / map.width, screenY / map.height, distance, WORLD_POINTS[i]);
@@ -156,10 +143,10 @@ export class HandLayer {
     const hand = this.hands.get(side);
     return hand
       ? {
-          position: hand.container.position,
-          scale: hand.container.scale,
-          quaternion: hand.container.quaternion
-        }
+        position: hand.container.position,
+        scale: hand.container.scale,
+        quaternion: hand.container.quaternion
+      }
       : null;
   }
 

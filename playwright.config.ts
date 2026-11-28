@@ -25,11 +25,49 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: ['**/mobileLayout.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         // The device preset carries its own 1280x720 viewport; the docs and the specs both
         // assume a roomy 1440x900 desktop, so it has to be set after the spread.
         viewport: { width: 1440, height: 900 },
+        launchOptions: {
+          args: [
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            '--autoplay-policy=no-user-gesture-required',
+            '--enable-unsafe-swiftshader'
+          ]
+        }
+      }
+    },
+    {
+      name: 'phone',
+      testMatch: ['**/mobileLayout.spec.ts', '**/pointerControl.spec.ts'],
+      use: {
+        ...devices['iPhone 13'],
+        defaultBrowserType: 'chromium',
+        browserName: 'chromium',
+        launchOptions: {
+          args: [
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            '--autoplay-policy=no-user-gesture-required',
+            '--enable-unsafe-swiftshader'
+          ]
+        }
+      }
+    },
+    {
+      name: 'smallPhone',
+      testMatch: ['**/mobileLayout.spec.ts'],
+      use: {
+        ...devices['iPhone SE'],
+        defaultBrowserType: 'chromium',
+        browserName: 'chromium',
+        viewport: { width: 320, height: 568 },
+        hasTouch: true,
+        isMobile: true,
         launchOptions: {
           args: [
             '--use-fake-device-for-media-stream',

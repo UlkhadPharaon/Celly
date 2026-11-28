@@ -3,7 +3,7 @@
 //  2. downloads hand_landmarker.task (offline inference, no CDN)
 //  3. removes stale hand mesh assets so the deployed bundle stays small
 // Idempotent: skips anything already present at the expected size.
-import { cpSync, existsSync, mkdirSync, statSync, createWriteStream, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, statSync, createWriteStream } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { get } from 'node:https';
@@ -61,15 +61,18 @@ if (existsSync(modelDst) && statSync(modelDst).size > 1_000_000) {
   dl(MODEL_URL, 0);
 }
 
-// 3) Legacy hand meshes are intentionally not copied. Hands render as a lightweight skeleton, so
-//    the 9 MB of hands_*.glb assets stay out of the deploy bundle.
-const publicDir = join(root, 'public');
-for (const f of readdirSync(publicDir)) {
-  if (!f.startsWith('hands_') || !f.endsWith('.glb')) continue;
-  try {
-    rmSync(join(publicDir, f));
-    console.log(`[fetch-assets] removed stale mesh public/${f}`);
-  } catch {
-    /* locked — harmless, nothing imports it */
+// 3) Real 3D hand mesh — copy hands_rigged.glb into public/models/ for offline runtime loading.
+const handSrc = join(root, 'hands_rigged.glb');
+const handDst = join(root, 'public', 'models', 'hands_rigged.glb');
+if (existsSync(handSrc)) {
+  const srcSize = statSync(handSrc).size;
+  const dstSize = existsSync(handDst) ? statSync(handDst).size : -1;
+  if (srcSize !== dstSize) {
+    cpSync(handSrc, handDst);
+    console.log(`[fetch-assets] hands_rigged.glb (${(srcSize / 1e6).toFixed(2)} MB) -> public/models/`);
+  } else {
+    console.log('[fetch-assets] hands_rigged.glb already present, skipping');
   }
+} else {
+  console.warn('[fetch-assets] hands_rigged.glb not found at repo root — fallback 3D hand will be used');
 }

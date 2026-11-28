@@ -202,16 +202,25 @@ export class WebcamPreview {
         ctx.fill();
       }
 
-      // Pinch cursor on the preview.
+      // Gaze / pointer ring sits on the index fingertip (landmark 8); when pinching, also show
+      // the pinch contact ring at the thumb-index midpoint.
       const thumb = points[4];
       const index = points[8];
-      const mx = (thumb.x + index.x) / 2;
-      const my = (thumb.y + index.y) / 2;
       ctx.beginPath();
-      ctx.strokeStyle = hand.pinching ? '#ffd166' : 'rgba(255,255,255,0.5)';
-      ctx.lineWidth = 1.4;
-      ctx.arc(mx, my, hand.pinching ? 7 : 4.5, 0, Math.PI * 2);
+      ctx.strokeStyle = hand.pinching ? '#ffd166' : 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1.6;
+      ctx.arc(index.x, index.y, hand.pinching ? 6 : 4.5, 0, Math.PI * 2);
       ctx.stroke();
+
+      if (hand.pinching) {
+        const mx = (thumb.x + index.x) / 2;
+        const my = (thumb.y + index.y) / 2;
+        ctx.beginPath();
+        ctx.strokeStyle = '#ff9f45';
+        ctx.lineWidth = 1.4;
+        ctx.arc(mx, my, 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
   }
 

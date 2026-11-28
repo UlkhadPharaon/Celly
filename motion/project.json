@@ -1,0 +1,13 @@
+{
+  "title": "celly-explainer",
+  "slug": "celly-explainer",
+  "format": "16:9",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "renderer": "hyperframes",
+  "remotionProject": null,
+  "hyperframes": "0.8.188",
+  "brand": null,
+  "created": "2026-11-26T21:30:28.719Z"
+}

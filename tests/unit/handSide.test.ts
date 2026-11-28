@@ -8,14 +8,14 @@ const at = (x: number): SideDetection => ({
 });
 
 describe('HandSideResolver', () => {
-  it('flips MediaPipe handedness once (selfie assumption)', () => {
+  it('maps MediaPipe handedness directly (Left -> left, Right -> right)', () => {
     const r = new HandSideResolver();
-    expect(r.resolve([at(0)], { handsSwap: false }, 0)).toEqual(['right']);
+    expect(r.resolve([at(0)], { handsSwap: false }, 0)).toEqual(['left']);
   });
 
-  it('applies the manual swap on top of the flip', () => {
+  it('applies the manual swap when handsSwap is enabled', () => {
     const r = new HandSideResolver();
-    expect(r.resolve([at(0)], { handsSwap: true }, 0)).toEqual(['left']);
+    expect(r.resolve([at(0)], { handsSwap: true }, 0)).toEqual(['right']);
   });
 
   it('treats an unknown label as the primary right hand', () => {
@@ -25,33 +25,33 @@ describe('HandSideResolver', () => {
 
   it('debounces a label switch on the same wrist', () => {
     const r = new HandSideResolver();
-    expect(r.resolve([at(0)], { handsSwap: false }, 0)).toEqual(['right']);
+    expect(r.resolve([at(0)], { handsSwap: false }, 0)).toEqual(['left']);
     // Same slot, opposite label: hold it for less than 150 ms.
-    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 40)).toEqual(['right']);
-    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 140)).toEqual(['right']);
+    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 40)).toEqual(['left']);
+    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 140)).toEqual(['left']);
     // Past the debounce the slot switches.
-    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 200)).toEqual(['left']);
+    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 200)).toEqual(['right']);
   });
 
   it('starts a fresh slot after the hand has been lost', () => {
     const r = new HandSideResolver();
-    expect(r.resolve([at(0)], { handsSwap: false }, 0)).toEqual(['right']);
+    expect(r.resolve([at(0)], { handsSwap: false }, 0)).toEqual(['left']);
     // No detections for longer than the lost window, then the same wrist comes back.
     expect(r.resolve([], { handsSwap: false }, 600)).toEqual([]);
-    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 700)).toEqual(['left']);
+    expect(r.resolve([{ ...at(0), label: 'Right' }], { handsSwap: false }, 700)).toEqual(['right']);
   });
 
   it('never returns the same side for two hands', () => {
     const r = new HandSideResolver();
-    expect(r.resolve([at(0), at(1)], { handsSwap: false }, 0)).toEqual(['right', 'left']);
+    expect(r.resolve([at(0), at(1)], { handsSwap: false }, 0)).toEqual(['left', 'right']);
   });
 
   it('matches slots by nearest wrist', () => {
     const r = new HandSideResolver();
     const left = { label: 'Left' as const, wrist: { x: 0, y: 0, z: 0 }, score: 1 };
     const right = { label: 'Right' as const, wrist: { x: 0.6, y: 0, z: 0 }, score: 1 };
-    expect(r.resolve([left, right], { handsSwap: false }, 0)).toEqual(['right', 'left']);
+    expect(r.resolve([left, right], { handsSwap: false }, 0)).toEqual(['left', 'right']);
     // Hands cross: detections arrive in the opposite order but every wrist stays with its slot.
-    expect(r.resolve([right, left], { handsSwap: false }, 30)).toEqual(['left', 'right']);
+    expect(r.resolve([right, left], { handsSwap: false }, 30)).toEqual(['right', 'left']);
   });
 });

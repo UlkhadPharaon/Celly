@@ -28,8 +28,20 @@ survey, and per-participant profiles that can be exported and compared.
   in one press, so a participant who has spun or zoomed the cell far from home is not stuck.
 - **Isolate** and **Undo** on the organelle card, and a gentle focus dim on the rest of the cell
   when a part is selected.
+- **Mobile & touch support** (`src/core/pointerControls.ts`): one-finger / mouse drag to rotate,
+  two-finger pinch and mouse wheel to zoom, tap to select/dismiss, and horizontal swipe on quiz and
+  flashcard cards.
+- **Responsive phone & tablet shell**: `viewport-fit=cover` for iOS safe areas, two-row top bar
+  below 820 px, 44 × 44 px minimum touch targets under `pointer: coarse`, readable ≥ 12 px intro
+  copy, visible gesture/pointer hint above the structure rail, and landscape phone framing.
 
 ### Fixed
+
+- `CellyApp.dispatch()` now forwards `state` intents to the active page, clearing `rotateAnchor` on
+  release so auto-rotate resumes and preserving `scaleBase` across a zoom gesture instead of
+  compounding.
+- Mouse-mode copy across onboarding, guided tour, mode gate and 3D pages now matches actual
+  pointer/touch controls.
 
 - Switching language mid-quiz or mid-survey no longer discards the answers already given.
 - "Start a new participant" no longer deletes the archive of earlier participants.

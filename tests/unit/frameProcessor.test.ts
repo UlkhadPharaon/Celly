@@ -112,7 +112,7 @@ describe('FrameProcessor — frame building', () => {
     expect(fp.frames).toHaveLength(1);
     const built = fp.frames[0];
     expect(built.present).toBe(true);
-    expect(built.side).toBe('left'); // MediaPipe "Right" is the user's left hand (selfie flip).
+    expect(built.side).toBe('right'); // MediaPipe "Right" maps directly to user's right hand.
     // 0.5 of the reachable band maps to the middle of the viewport.
     expect(built.cursor.x).toBeCloseTo(500, 1);
     expect(built.cursor.y).toBeCloseTo(400, 1);
@@ -136,6 +136,17 @@ describe('FrameProcessor — frame building', () => {
     const frames = fp.buildFrames({ hands: [broken], tMs: 0 }, 1 / 60, 0, VIEWPORT);
     expect(frames).toHaveLength(0);
   });
+
+  it('keeps a present hand even when the handedness score is low', () => {
+    const fp = processor();
+    // `score` is Left/Right confidence, not presence: a momentarily unsure classifier must not
+    // make a physically-present hand blink out (the old < 0.25 gate caused the flashing).
+    const unsure = rawHand();
+    unsure.score = 0.05;
+    const frames = fp.buildFrames({ hands: [unsure], tMs: 0 }, 1 / 60, 0, VIEWPORT);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].present).toBe(true);
+  });
 });
 
 describe('FrameProcessor — hand-loss tolerance', () => {
@@ -153,14 +164,20 @@ describe('FrameProcessor — hand-loss tolerance', () => {
     expect(fp.frames[0].pinchStart).toBe(false);
     expect(fp.frames[0].pinchEnd).toBe(false);
 
-    // Past the window (550 ms): exactly one present:false lost frame.
-    fp.buildFrames(null, 1 / 60, t + 700, VIEWPORT);
+    // A single missed tick past the window is still bridged by the consecutive-miss grace: the
+    // hand must not be retired on one dropped detection (2nd miss here).
+    fp.buildFrames(null, 1 / 60, t + 900, VIEWPORT);
+    expect(fp.frames).toHaveLength(1);
+    expect(fp.frames[0].present).toBe(true);
+
+    // Past the window (850 ms) AND past the miss grace (3rd consecutive miss): one lost frame.
+    fp.buildFrames(null, 1 / 60, t + 1000, VIEWPORT);
     expect(fp.frames).toHaveLength(1);
     expect(fp.frames[0].present).toBe(false);
     expect(fp.frames[0].lost).toBe(true);
 
     // And it is emitted only once.
-    fp.buildFrames(null, 1 / 60, t + 800, VIEWPORT);
+    fp.buildFrames(null, 1 / 60, t + 1100, VIEWPORT);
     expect(fp.frames).toHaveLength(0);
   });
 
@@ -392,9 +409,9 @@ describe('FrameProcessor — gesture stepping', () => {
   it('forgets hand-side calibration on reset', () => {
     const fp = processor();
     fp.buildFrames({ hands: [rawHand()], tMs: 0 }, 1 / 60, 0, VIEWPORT);
-    expect(fp.frames[0].side).toBe('left');
+    expect(fp.frames[0].side).toBe('right');
     fp.resetHandSides();
     fp.buildFrames({ hands: [rawHand()], tMs: 16 }, 1 / 60, 16, VIEWPORT);
-    expect(fp.frames[0].side).toBe('left');
+    expect(fp.frames[0].side).toBe('right');
   });
 });

@@ -1,3 +1,4 @@
+import type { InteractionMode } from '../../study/types';
 import type { Intent, Language, Question } from '../../types';
 import { MCQS, MCQ_BY_ID, QUESTIONNAIRES, FLASHCARDS, loc, shuffled } from '../../data/catalog';
 import { makeRng } from '../../core/math';
@@ -139,10 +140,12 @@ export class TestingPage implements Page {
   private flash: FlashState | null = null;
   private lastMissed: string[] = [];
   private language: Language;
+  private mode: InteractionMode;
   private scrollTick = 0;
 
   constructor(private readonly ctx: PageContext) {
     this.language = ctx.settings.language;
+    this.mode = ctx.mode;
     this.root = document.createElement('section');
     this.root.className = 'page page-test';
 
@@ -465,7 +468,15 @@ export class TestingPage implements Page {
                  </button>
                </div>`
             : `<div class="question-foot">
-                 <span class="question-tip">${this.language === 'fr' ? 'Pincez une réponse' : 'Pinch an answer'}</span>
+                 <span class="question-tip">${
+                   this.mode === 'hands'
+                     ? this.language === 'fr'
+                       ? 'Pincez une réponse'
+                       : 'Pinch an answer'
+                     : this.language === 'fr'
+                       ? 'Touchez une réponse'
+                       : 'Tap an answer'
+                 }</span>
                </div>`
         }
     `;
@@ -477,6 +488,8 @@ export class TestingPage implements Page {
       }
     } else {
       this.wire('test:next', '[data-celly="next"]', () => this.nextQuestion());
+      const card = this.body.querySelector<HTMLElement>('.question');
+      if (card) this.bindCardSwipe(card, (forward) => this.swipeQuestion(forward));
     }
   }
 
@@ -663,6 +676,8 @@ export class TestingPage implements Page {
 
     this.wire('test:home', '[data-celly="home"]', () => this.returnHome());
     this.wire('test:flip', '[data-celly="flip"]', () => this.revealCard());
+    const cardEl = this.body.querySelector<HTMLElement>('[data-celly="flip"]');
+    if (cardEl) this.bindCardSwipe(cardEl, (forward) => this.swipeCard(forward));
     if (state.revealed) {
       this.wire('test:knew', '[data-celly="knew"]', () => this.gradeCard(true));
       this.wire('test:miss', '[data-celly="miss"]', () => this.gradeCard(false));
@@ -751,7 +766,36 @@ export class TestingPage implements Page {
     }
   }
 
+  setMode(mode: InteractionMode): void {
+    this.mode = mode;
+    if (this.view === 'mcq' || this.view === 'flash') this.render();
+  }
+
   // ---------------------------------------------------------------------- wiring
+
+  private bindCardSwipe(el: HTMLElement, onSwipe: (forward: boolean) => void): void {
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+    el.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      tracking = true;
+    });
+    el.addEventListener('pointerup', (e: PointerEvent) => {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) >= 80 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        onSwipe(dx > 0);
+      }
+    });
+    el.addEventListener('pointercancel', () => {
+      tracking = false;
+    });
+  }
 
   private wire(id: string, selector: string, handler: () => void): void {
     const nodes = this.body.querySelectorAll<HTMLElement>(selector);

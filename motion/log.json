@@ -1,0 +1,11 @@
+{
+  "events": [
+    {
+      "at": "2026-11-26T21:30:28.735Z",
+      "cost": 0,
+      "phase": "new-project",
+      "secs": 0,
+      "note": "16:9 1920x1080, renderer hyperframes"
+    }
+  ]
+}

@@ -17,3 +17,6 @@ logs/
 shots/
 .vercel
 .env*
+# Nested agent worktrees/clones — never part of this repo.
+Celly By claude/
+Celly By Hermes/

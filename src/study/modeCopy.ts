@@ -15,7 +15,7 @@ export const MODE_COPY: Record<
     mouse: {
       title: 'Mouse',
       short: 'Mouse · 3D',
-      description: 'The same 3D cell, controlled with clicks and dragging. No camera.'
+      description: 'The same 3D cell, steered by drag, pinch and click. No camera.'
     },
     text: {
       title: 'Textbook',
@@ -32,7 +32,7 @@ export const MODE_COPY: Record<
     mouse: {
       title: 'Souris',
       short: 'Souris · 3D',
-      description: 'La même cellule 3D, pilotée par clics et glissements. Sans caméra.'
+      description: 'La même cellule 3D, pilotée par glissements, pincements et clics. Sans caméra.'
     },
     text: {
       title: 'Manuel',

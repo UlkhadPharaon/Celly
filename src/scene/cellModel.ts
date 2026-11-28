@@ -4,12 +4,17 @@ import type { CellPart, OrganelleId } from './types';
 import {
   blobGeometry,
   centrioleGeometry,
+  chromatinNetworkGeometry,
+  cisternaSheetGeometry,
   ellipsoidGeometry,
   golgiCisternaGeometry,
   granuleCluster,
   microtubuleGeometry,
-  ribbonGeometry,
+  mitochondrionCristaeGeometry,
+  nuclearPoreGeometry,
+  ribosome80SGeometry,
   sphereSurfacePoints,
+  transmembraneChannelGeometry,
   tubeGeometry
 } from './shapes';
 import { cristaeTexture, glowTexture, grainTexture, speckleTexture } from './textures';
@@ -306,6 +311,35 @@ export class CellModel {
     aura.userData.partId = 'membrane';
     group.add(aura);
     this.trackOpacity('membrane', aura.material, 0.022);
+
+    // Embedded transmembrane protein channel complexes (5-helix bundles) across the lipid bilayer.
+    const chGeo = transmembraneChannelGeometry();
+    const chMat = this.standard('#7ce8ff', {
+      roughness: 0.32,
+      metalness: 0.18,
+      emissive: '#38bdf8',
+      emissiveIntensity: 0.32,
+      opacity: 0.55,
+      depthWrite: false
+    });
+    const chPts = sphereSurfacePoints(42, 1.552, 707);
+    const chInst = new THREE.InstancedMesh(chGeo, chMat, 42);
+    chInst.userData.partId = 'membrane';
+    const up = new THREE.Vector3(0, 1, 0);
+    const nrm = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3(1, 1, 1);
+    const mat4 = new THREE.Matrix4();
+    for (let i = 0; i < 42; i++) {
+      nrm.set(chPts[i * 3], chPts[i * 3 + 1], chPts[i * 3 + 2]).normalize();
+      q.setFromUnitVectors(up, nrm);
+      mat4.compose(nrm.clone().multiplyScalar(1.552), q, sc);
+      chInst.setMatrixAt(i, mat4);
+    }
+    chInst.instanceMatrix.needsUpdate = true;
+    group.add(chInst);
+    this.trackOpacity('membrane', chMat, 0.55);
+    this.trackEmissive('membrane', chMat);
   }
 
   private buildCytoplasm(): void {
@@ -414,6 +448,19 @@ export class CellModel {
     group.add(speckle);
     this.trackOpacity('nucleus', speckle.material, 0.5);
 
+    // 3D fibrous chromatin (euchromatin / heterochromatin) coils inside the nucleoplasm.
+    const chromatinMat = this.standard('#8b6eff', {
+      roughness: 0.48,
+      metalness: 0.08,
+      emissive: '#6d4aff',
+      emissiveIntensity: 0.42
+    });
+    const chromatin = new THREE.Mesh(chromatinNetworkGeometry(0.45, 10, 3312), chromatinMat);
+    chromatin.userData.partId = 'nucleus';
+    group.add(chromatin);
+    this.trackOpacity('nucleus', chromatinMat, 1);
+    this.trackEmissive('nucleus', chromatinMat);
+
     // Nuclear envelope sits on its own part so it can be isolated.
     const env = this.newPart('nuclear-envelope');
     env.group.position.copy(group.position);
@@ -450,41 +497,67 @@ export class CellModel {
       (shell.material as THREE.ShaderMaterial).uniforms.uOpacity.value = v;
     });
 
-    const pores = new THREE.Points(
-      new THREE.BufferGeometry().setAttribute(
-        'position',
-        new THREE.BufferAttribute(sphereSurfacePoints(190, 0.552, 91), 3)
-      ),
-      new THREE.PointsMaterial({
-        color: new THREE.Color('#ffd9f2'),
-        size: 0.022,
-        map: glowTexture(),
-        transparent: true,
-        opacity: 0.75,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-      })
-    );
+    // 3D octagonal Nuclear Pore Complex rings oriented along surface normals.
+    const porePts = sphereSurfacePoints(72, 0.552, 91);
+    const poreMat = this.standard('#ffd9f2', {
+      roughness: 0.35,
+      metalness: 0.15,
+      emissive: '#f5a3e0',
+      emissiveIntensity: 0.5,
+      opacity: 0.85,
+      depthWrite: false
+    });
+    const pores = new THREE.InstancedMesh(nuclearPoreGeometry(), poreMat, 72);
+    const up = new THREE.Vector3(0, 1, 0);
+    const nrm = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3(1, 1, 1);
+    const mat4 = new THREE.Matrix4();
+    for (let i = 0; i < 72; i++) {
+      nrm.set(porePts[i * 3], porePts[i * 3 + 1], porePts[i * 3 + 2]).normalize();
+      q.setFromUnitVectors(up, nrm);
+      mat4.compose(nrm.clone().multiplyScalar(0.55), q, sc);
+      pores.setMatrixAt(i, mat4);
+    }
+    pores.instanceMatrix.needsUpdate = true;
     pores.userData.partId = 'nuclear-envelope';
     env.group.add(pores);
-    this.trackOpacity('nuclear-envelope', pores.material, 0.75);
+    this.trackOpacity('nuclear-envelope', poreMat, 0.85);
+    this.trackEmissive('nuclear-envelope', poreMat);
 
     const nucleolus = this.newPart('nucleolus');
     nucleolus.group.position.set(0.02, 0.11, 0.12);
-    const nuc = new THREE.Mesh(
-      blobGeometry(0.19, 3, 0.09, 8),
-      this.standard('#ff3d7f', { roughness: 0.45, emissive: '#ff2f74', emissiveIntensity: 0.55 })
+    const nucOuter = new THREE.Mesh(
+      blobGeometry(0.185, 3, 0.08, 8),
+      this.standard('#ff3d7f', {
+        roughness: 0.42,
+        emissive: '#ff2f74',
+        emissiveIntensity: 0.45,
+        opacity: 0.72,
+        depthWrite: false
+      })
     );
-    nuc.userData.partId = 'nucleolus';
-    nucleolus.group.add(nuc);
-    this.trackOpacity('nucleolus', nuc.material, 1);
-    this.trackEmissive('nucleolus', nuc.material as THREE.MeshStandardMaterial);
+    nucOuter.userData.partId = 'nucleolus';
+    nucleolus.group.add(nucOuter);
+    this.trackOpacity('nucleolus', nucOuter.material, 0.72);
+    this.trackEmissive('nucleolus', nucOuter.material as THREE.MeshStandardMaterial);
+
+    // Dense fibrillar center inside the nucleolus.
+    const nucCore = new THREE.Mesh(
+      blobGeometry(0.095, 2, 0.06, 17),
+      this.standard('#ff8fb8', { roughness: 0.3, emissive: '#ff5c99', emissiveIntensity: 0.7 })
+    );
+    nucCore.userData.partId = 'nucleolus';
+    nucleolus.group.add(nucCore);
+    this.trackOpacity('nucleolus', nucCore.material, 1);
+    this.trackEmissive('nucleolus', nucCore.material as THREE.MeshStandardMaterial);
   }
 
   private buildMitochondria(): void {
     const { group } = this.newPart('mitochondrion');
-    const cristae = cristaeTexture();
-    const geo = ellipsoidGeometry(0.235, 0.115, 0.115, 3);
+    const cristaeMap = cristaeTexture();
+    const outerGeo = ellipsoidGeometry(0.235, 0.115, 0.115, 3);
+    const innerGeo = mitochondrionCristaeGeometry(0.235, 0.115, 0.115);
     const placements: Array<[THREE.Vector3, THREE.Euler, number]> = [
       [new THREE.Vector3(0.66, 0.55, 0.34), new THREE.Euler(0.4, 0.6, 0.3), 1.0],
       [new THREE.Vector3(-0.74, -0.46, 0.5), new THREE.Euler(1.1, -0.4, 0.8), 0.86],
@@ -494,23 +567,41 @@ export class CellModel {
       [new THREE.Vector3(-0.95, 0.14, -0.58), new THREE.Euler(1.4, 0.2, -0.7), 0.8]
     ];
     for (const [pos, rot, scale] of placements) {
-      const mat = this.standard('#ff8a3d', {
-        roughness: 0.42,
-        metalness: 0.2,
-        emissive: '#ff6a1f',
-        emissiveIntensity: 0.22
+      // Translucent smooth outer mitochondrial membrane revealing the 3D folded cristae inside.
+      const outerMat = this.standard('#ff7a2e', {
+        roughness: 0.22,
+        metalness: 0.12,
+        emissive: '#e85d1a',
+        emissiveIntensity: 0.18,
+        opacity: 0.46,
+        depthWrite: false
       });
-      mat.emissiveMap = cristae;
-      mat.bumpMap = cristae;
-      mat.bumpScale = 0.012;
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(pos);
-      mesh.rotation.copy(rot);
-      mesh.scale.setScalar(scale);
-      mesh.userData.partId = 'mitochondrion';
-      group.add(mesh);
-      this.trackOpacity('mitochondrion', mat, 1);
-      this.trackEmissive('mitochondrion', mat);
+      outerMat.bumpMap = cristaeMap;
+      outerMat.bumpScale = 0.004;
+      const outer = new THREE.Mesh(outerGeo, outerMat);
+      outer.position.copy(pos);
+      outer.rotation.copy(rot);
+      outer.scale.setScalar(scale);
+      outer.userData.partId = 'mitochondrion';
+      group.add(outer);
+      this.trackOpacity('mitochondrion', outerMat, 0.46);
+      this.trackEmissive('mitochondrion', outerMat);
+
+      // Folded 3D inner membrane cristae.
+      const innerMat = this.standard('#ffb066', {
+        roughness: 0.38,
+        metalness: 0.15,
+        emissive: '#ff6e24',
+        emissiveIntensity: 0.45
+      });
+      const inner = new THREE.Mesh(innerGeo, innerMat);
+      inner.position.copy(pos);
+      inner.rotation.copy(rot);
+      inner.scale.setScalar(scale);
+      inner.userData.partId = 'mitochondrion';
+      group.add(inner);
+      this.trackOpacity('mitochondrion', innerMat, 1);
+      this.trackEmissive('mitochondrion', innerMat);
     }
   }
 
@@ -525,15 +616,18 @@ export class CellModel {
     ];
     sheets.forEach(([pos, rot, length, width], i) => {
       const mat = this.standard(i % 2 ? '#d78bff' : '#e9a0ff', {
-        roughness: 0.55,
-        metalness: 0.05,
+        roughness: 0.5,
+        metalness: 0.06,
         emissive: '#c77dff',
-        emissiveIntensity: 0.18,
+        emissiveIntensity: 0.2,
         opacity: 0.92,
-        depthWrite: false,
+        depthWrite: true,
         side: THREE.DoubleSide
       });
-      const mesh = new THREE.Mesh(ribbonGeometry(length, width, { waveAmp: 0.05, waveFreq: 2.2, seed: i + 1 }), mat);
+      const mesh = new THREE.Mesh(
+        cisternaSheetGeometry(length, width, 0.024, { waveAmp: 0.05, waveFreq: 2.2, bend: 0.08, seed: i + 1 }),
+        mat
+      );
       mesh.position.copy(pos);
       mesh.rotation.copy(rot);
       mesh.userData.partId = 'rough-er';
@@ -541,18 +635,19 @@ export class CellModel {
       this.trackOpacity('rough-er', mat, 0.92);
       this.trackEmissive('rough-er', mat);
 
-      // Ribosomes studding the sheet.
-      const dots = new THREE.Mesh(granuleCluster(16, Math.min(length, width) * 0.55, 40 + i), this.standard('#ffd166', {
-        roughness: 0.4,
+      // 80S ribosomes studding the cytosolic surface of the ER cisternae.
+      const riboMat = this.standard('#ffd166', {
+        roughness: 0.38,
         emissive: '#ffc23d',
-        emissiveIntensity: 0.45
-      }));
+        emissiveIntensity: 0.48
+      });
+      const dots = new THREE.Mesh(granuleCluster(18, Math.min(length, width) * 0.52, 40 + i), riboMat);
       dots.position.copy(pos);
       dots.rotation.copy(rot);
       dots.userData.partId = 'rough-er';
       group.add(dots);
-      this.trackOpacity('rough-er', dots.material, 1);
-      this.trackEmissive('rough-er', dots.material as THREE.MeshStandardMaterial);
+      this.trackOpacity('rough-er', riboMat, 1);
+      this.trackEmissive('rough-er', riboMat);
     });
   }
 
@@ -638,7 +733,7 @@ export class CellModel {
     const { group } = this.newPart('ribosome');
     const rng = makeRng(8811);
     const count = 460;
-    const geo = new THREE.IcosahedronGeometry(0.0135, 0);
+    const geo = ribosome80SGeometry();
     const mat = this.standard('#f4e285', { roughness: 0.4, emissive: '#ffe066', emissiveIntensity: 0.5 });
     const inst = new THREE.InstancedMesh(geo, mat, count);
     inst.userData.partId = 'ribosome';
@@ -674,18 +769,31 @@ export class CellModel {
     for (let i = 0; i < 7; i++) {
       const p = randomInterior(rng, 0.62, 1.3, new THREE.Vector3(-0.12, 0.08, 0.04), 0.62);
       const r = 0.055 + rng() * 0.045;
+      // Semi-translucent lipid membrane revealing internal hydrolytic enzyme granules.
       const mat = this.standard('#2ec4b6', {
-        roughness: 0.36,
-        metalness: 0.2,
+        roughness: 0.22,
+        metalness: 0.12,
         emissive: '#1fa89c',
-        emissiveIntensity: 0.35
+        emissiveIntensity: 0.28,
+        opacity: 0.54,
+        depthWrite: false
       });
-      const mesh = new THREE.Mesh(blobGeometry(r, 2, 0.16, 120 + i), mat);
+      const mesh = new THREE.Mesh(blobGeometry(r, 2, 0.14, 120 + i), mat);
       mesh.position.copy(p);
       mesh.userData.partId = 'lysosome';
       group.add(mesh);
-      this.trackOpacity('lysosome', mat, 1);
+      this.trackOpacity('lysosome', mat, 0.54);
       this.trackEmissive('lysosome', mat);
+
+      const enzymes = new THREE.Mesh(
+        granuleCluster(8, r * 0.55, 500 + i),
+        this.standard('#7ff5e8', { roughness: 0.35, emissive: '#38e8d6', emissiveIntensity: 0.55 })
+      );
+      enzymes.position.copy(p);
+      enzymes.userData.partId = 'lysosome';
+      group.add(enzymes);
+      this.trackOpacity('lysosome', enzymes.material, 1);
+      this.trackEmissive('lysosome', enzymes.material as THREE.MeshStandardMaterial);
     }
   }
 
@@ -720,14 +828,15 @@ export class CellModel {
     const { group } = this.newPart('centriole');
     group.position.set(0.1, 0.62, -0.34);
     const geo = centrioleGeometry();
-    const mat = this.standard('#9aa0a8', { roughness: 0.3, metalness: 0.75, emissive: '#7f8fa6', emissiveIntensity: 0.2 });
+    const mat = this.standard('#a8b4c4', { roughness: 0.28, metalness: 0.72, emissive: '#7f8fa6', emissiveIntensity: 0.28 });
+    // Mother and daughter centrioles arranged strictly orthogonal (90 deg).
     const a = new THREE.Mesh(geo, mat);
-    a.rotation.set(0.3, 0.2, 0.7);
+    a.rotation.set(0, 0, 0);
     a.userData.partId = 'centriole';
     group.add(a);
     const b = new THREE.Mesh(geo, mat);
-    b.position.set(0.1, 0.02, 0.06);
-    b.rotation.set(1.5, 0.7, 0.1);
+    b.position.set(0.085, 0.015, 0.055);
+    b.rotation.set(Math.PI / 2, 0, 0);
     b.userData.partId = 'centriole';
     group.add(b);
     this.trackOpacity('centriole', mat, 1);
@@ -758,16 +867,18 @@ export class CellModel {
       const p = randomInterior(rng, 0.66, 1.28, new THREE.Vector3(-0.12, 0.08, 0.04), 0.66);
       const r = 0.045 + rng() * 0.03;
       const mat = this.standard('#b5e48c', {
-        roughness: 0.4,
-        metalness: 0.15,
+        roughness: 0.24,
+        metalness: 0.12,
         emissive: '#a3e635',
-        emissiveIntensity: 0.3
+        emissiveIntensity: 0.25,
+        opacity: 0.5,
+        depthWrite: false
       });
-      const mesh = new THREE.Mesh(blobGeometry(r, 2, 0.14, 300 + i), mat);
+      const mesh = new THREE.Mesh(blobGeometry(r, 2, 0.12, 300 + i), mat);
       mesh.position.copy(p);
       mesh.userData.partId = 'peroxisome';
       group.add(mesh);
-      this.trackOpacity('peroxisome', mat, 1);
+      this.trackOpacity('peroxisome', mat, 0.5);
       this.trackEmissive('peroxisome', mat);
 
       const crystal = new THREE.Mesh(

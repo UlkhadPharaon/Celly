@@ -1,3 +1,4 @@
+import type { InteractionMode } from '../study/types';
 import type { Intent, Language, PageId, Settings } from '../types';
 import type { SceneManager } from '../scene/sceneManager';
 import type { ButtonRegistry } from '../ui/buttons';
@@ -17,6 +18,7 @@ export interface PageContext {
   overlay: Overlay;
   shell: Shell;
   settings: Settings;
+  mode: InteractionMode;
   actions: PageActions;
 }
 
@@ -35,6 +37,7 @@ export interface Page {
   pick(x: number, y: number, options?: PickOptions): string | null;
   setHovered(id: string | null): void;
   setLanguage(language: Language): void;
+  setMode?(mode: InteractionMode): void;
   setAutoRotate?(value: boolean): void;
   setReducedMotion?(value: boolean): void;
   closeOverlay(): void;

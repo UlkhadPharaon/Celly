@@ -88,10 +88,10 @@ const STAGE: TourStep = {
   mouse: {
     title: { en: 'The cell — with a mouse', fr: 'La cellule — à la souris' },
     body: {
-      en: 'Drag to rotate the model, scroll to move closer, click an organelle to select it. The camera stays off in this mode: every control the hand version has is reachable from the mouse.',
-      fr: 'Glissez pour tourner le modèle, molettez pour vous rapprocher, cliquez sur un organite pour le sélectionner. La caméra reste éteinte dans ce mode : toutes les commandes de la version mains sont accessibles à la souris.'
+      en: 'Drag to rotate the model, pinch or scroll to move closer, click or tap an organelle to select it. The camera stays off in this mode: every control the hand version has is reachable from mouse or touch.',
+      fr: 'Glissez pour tourner le modèle, pincez ou molettez pour vous rapprocher, cliquez ou touchez un organite pour le sélectionner. La caméra reste éteinte dans ce mode : toutes les commandes de la version mains sont accessibles à la souris ou au tactile.'
     },
-    action: { en: 'Drag to rotate, scroll to zoom, click a part to select it.', fr: 'Glissez pour tourner, molettez pour zoomer, cliquez sur une pièce pour la sélectionner.' }
+    action: { en: 'Drag to rotate, pinch or scroll to zoom, tap or click a part to select it.', fr: 'Glissez pour tourner, pincez ou molettez pour zoomer, touchez ou cliquez une pièce pour la sélectionner.' }
   }
 };
 
@@ -212,7 +212,7 @@ const FINAL: TourStep = {
   }
 };
 
-interface TourStepFull extends TourStep {}
+type TourStepFull = TourStep;
 
 const STEPS: TourStepFull[] = [
   WELCOME,

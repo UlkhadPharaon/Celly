@@ -68,8 +68,8 @@ export class LandmarkFilterBank {
   private readonly size: number;
 
   constructor(
-    private readonly minCutoff = 1.2,
-    private readonly beta = 0.08,
+    private readonly minCutoff = 0.55,
+    private readonly beta = 0.035,
     private readonly dCutoff = 1.0
   ) {
     this.size = 21 * 3;
