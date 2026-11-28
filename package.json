@@ -43,7 +43,7 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.5",
     "@fontsource/space-grotesk": "^5.2.5",
-    "@mediapipe/tasks-vision": "1.1.0",
+    "@mediapipe/tasks-vision": "^1.2.3",
     "three": "0.186.1"
   },
   "devDependencies": {

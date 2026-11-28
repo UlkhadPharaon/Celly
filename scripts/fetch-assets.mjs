@@ -24,7 +24,11 @@ if (!existsSync(wasmSrc)) {
   process.exit(0);
 }
 let copied = 0;
+// tasks-vision 1.2.x ships only the SIMD `vision_wasm_internal` (+ a module variant) and dropped
+// the no-SIMD build. The extra names are kept so the copy still works if a future version adds a
+// multi-thread (`_mt`) or no-SIMD binary — FilesetResolver picks the right one at runtime.
 for (const f of ['vision_wasm_internal.js', 'vision_wasm_internal.wasm',
+                 'vision_wasm_module_internal.js', 'vision_wasm_module_internal.wasm',
                  'vision_wasm_nosimd_internal.js', 'vision_wasm_nosimd_internal.wasm',
                  'vision_wasm_simd_internal.js', 'vision_wasm_simd_internal.wasm',
                  'vision_wasm_simd_mt_internal.js', 'vision_wasm_simd_mt_internal.wasm']) {

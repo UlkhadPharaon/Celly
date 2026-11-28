@@ -14,7 +14,7 @@ export function resolveAssetPath(relative: string): string {
 }
 
 /** Pinned CDN fallback, used only when the local wasm folder cannot be loaded. */
-const CDN_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm';
+const CDN_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm';
 /**
  * The model is always the local copy: it is the larger download and must be available offline
  * even when the wasm runtime had to come from the CDN.
